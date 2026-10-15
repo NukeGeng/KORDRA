@@ -1,0 +1,40 @@
+case_id,phase,module_slug,scenario,mode,expected_evidence,run_status
+LAB-INV-001,P0,infrastructure-inventory,"K8s nodes, namespaces, workloads, images, owners",READ_ONLY,"timestamped inventory, cluster UID, zero writes",NOT_RUN
+LAB-INV-002,P0,infrastructure-inventory,Talos/Proxmox VM/node metadata discovery,READ_ONLY,"version, node owner, no reboot/change",NOT_RUN
+LAB-INV-003,P0,project-environment,profile isolation: non-existing target refuses connect,READ_ONLY,fail closed invalid environment ID,NOT_RUN
+LAB-ART-001,P0,artifact-management,HTTP/HTTPS registry OCI metadata and digest discovery,READ_ONLY,"correct image digest, status, TLS capability",NOT_RUN
+LAB-ART-002,P1,artifact-management,Buildx multi-platform artifact digest contract,SANDBOX_WRITE,platform manifests and immutable digest,NOT_RUN
+LAB-ART-003,P0,artifact-management,FE snapshot hash / release provenance,READ_ONLY,"snapshot hash and origin, no implicit latest",NOT_RUN
+LAB-CI-001,P0,ci-integrations,GitLab source metadata without assuming CI integration,READ_ONLY,explicit unsupported CI trigger if absent,NOT_RUN
+LAB-DEP-001,P0,deployment-drivers,Helm release inventory and writer ownership,READ_ONLY,release revisions and controller owner,NOT_RUN
+LAB-DEP-002,P1,deployment-management,Approval + pinned spec Helm rollout in sandbox,SANDBOX_WRITE,approved hash equals applied digest and audit,NOT_RUN
+LAB-DEP-003,P1,deployment-management,Sandbox Helm rollback version B to A,SANDBOX_WRITE,version A healthy after rollback,NOT_RUN
+LAB-DEP-004,P1,deployment-drivers,Docker Compose deploy and rollback on disposable VM,SANDBOX_WRITE,new version and previous version verified,NOT_RUN
+LAB-DEP-005,P1,deployment-management,Concurrent deployments same target,SANDBOX_WRITE,"one active lease, stale worker fenced",NOT_RUN
+LAB-MSG-001,P0,messaging,VerneMQ node health and topic categories,READ_ONLY,two reported nodes independently observed,NOT_RUN
+LAB-MSG-002,P1,messaging,Synthetic MQTT topic Init/Monitor schema,SANDBOX_WRITE,"test broker/topic, no real serials",NOT_RUN
+LAB-MSG-003,P0,messaging,RabbitMQ 13 queue metadata/ACK/backlog,READ_ONLY,13 verified rows or BLOCKED; no consumer,NOT_RUN
+LAB-MSG-004,P0,messaging,RabbitMQ exchange/binding/event contract map,READ_ONLY,publisher-consumer-schema lineage,NOT_RUN
+LAB-MSG-005,P2,messaging,Classic vs quorum semantics on dedicated test broker,CLONE_DISRUPTIVE,compatibility and failure evidence,NOT_RUN
+LAB-MSG-006,P2,messaging,Duplicate dispatch/ACK lost/worker crash,CLONE_DISRUPTIVE,single effective side effect,NOT_RUN
+LAB-MSG-007,P2,messaging,DLQ poison redrive authorization,CLONE_DISRUPTIVE,"bounded retry, audit, no cross tenant",NOT_RUN
+LAB-DATA-001,P0,infrastructure-inventory,CNPG primary/replica observed state,READ_ONLY,health and replica metrics,NOT_RUN
+LAB-DATA-002,P0,infrastructure-inventory,TimescaleDB/PostGIS extensions capability,READ_ONLY,enabled/unknown with evidence,NOT_RUN
+LAB-DATA-003,P0,infrastructure-inventory,Valkey replication check without admin ACL,READ_ONLY,unknown if unavailable; no false HA,NOT_RUN
+LAB-DATA-004,P0,infrastructure-inventory,PVC RWX/NFS pod health,READ_ONLY,"capacity, mount, one-pod SPOF flag",NOT_RUN
+LAB-DATA-005,P0,audit-compliance,Asset backup CronJob suspended detection,READ_ONLY,suspend=true risk reported and observed,NOT_RUN
+LAB-DATA-006,P2,deployment-management,Sandbox fixture stateful restore drill,CLONE_DISRUPTIVE,integrity check and recovery evidence,NOT_RUN
+LAB-HA-001,P0,observability,HPA min/max CPU target and PDB inventory,READ_ONLY,min2 max6 target70 if verified,NOT_RUN
+LAB-HA-002,P1,observability,Synthetic HPA scale without altering WebAPI,SANDBOX_WRITE,bounded scale and health,NOT_RUN
+LAB-HA-003,P0,observability,Metrics Server kubelet-insecure-tls audit,READ_ONLY,flag detection; no mutation,NOT_RUN
+LAB-OBS-001,P0,observability,Prometheus metric targets and Grafana links,READ_ONLY,"available metrics, no duplicate Prometheus",NOT_RUN
+LAB-OBS-002,P0,observability,Alloy→Loki log discovery and redaction,READ_ONLY,traceable log source with PII excluded,NOT_RUN
+LAB-OBS-003,P0,observability,Alertmanager rule/routing inspection,READ_ONLY,routing status; no test alerts sent,NOT_RUN
+LAB-OBS-004,P1,observability,SignalR synthetic multi-client status fanout,SANDBOX_WRITE,real-time events and auth checked,NOT_RUN
+LAB-OBS-005,P0,observability,OTel/Jaeger capability detection,READ_ONLY,not observed if no workload,NOT_RUN
+LAB-SEC-001,P1,identity-access,Cross-tenant read/write/API/worker/agent denies,SANDBOX_WRITE,deny-by-default and audit evidence,NOT_RUN
+LAB-SEC-002,P1,platform-admin,Super Admin no implicit tenant data grant,SANDBOX_WRITE,scope/delegation tests and denies,NOT_RUN
+LAB-SEC-003,P1,approval-governance,Requester cannot self-approve sensitive deploy,SANDBOX_WRITE,separation of duties,NOT_RUN
+LAB-SEC-004,P1,approval-governance,Spec digest mutation invalidates approval,SANDBOX_WRITE,"blocked replay, new plan required",NOT_RUN
+LAB-AGT-001,P2,execution-agents,"Agent offline, reconnect and unknown outcome",CLONE_DISRUPTIVE,correct workflow convergence and audit,NOT_RUN
+LAB-LEG-001,P0,deployment-management,Existing Python/SQLite tool behavior comparison,OFFLINE,document parity and gap without credentials,NOT_RUN

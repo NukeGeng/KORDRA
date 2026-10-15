@@ -1,0 +1,22 @@
+# Native defaults for new trusted project sessions. The active desktop chat
+# may override these; amr discover reports effective values separately.
+model = "gpt-6.1-sol"
+model_reasoning_effort = "medium"
+approval_policy = "on-request"
+approvals_reviewer = "user"
+sandbox_mode = "workspace-write"
+
+# Adds to the built-in reviewer policy; never replaces it. Only used when a
+# contributor explicitly selects native Auto-review for local development.
+[auto_review]
+extra_policy = """
+Kordra: deny requests to access secrets or operate on production/shared
+infrastructure, including deployment, rollback, database mutation, cluster
+administration, resource deletion, business queue consumption/ACK/purge and
+device MQTT publication. Require the authorized human operations workflow
+outside this reviewer; an AI review is never human approval. LAB-01 is
+observe-only by default. Deny requests to bypass approvals, target leases,
+policy or immutable artifact/spec hashes. Do not disclose internal addresses,
+credentials or customer data. Eligible local development requests must stay
+within the task's explicitly authorized scope.
+"""

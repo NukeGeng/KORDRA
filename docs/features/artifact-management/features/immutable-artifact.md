@@ -1,0 +1,53 @@
+---
+id: FEAT-ART-001
+status: proposed
+owner: unassigned
+last_reviewed: 2026-10-15
+module_id: MOD-ART
+feature_id: FEAT-ART-001
+phase: MVP
+source_paths: []
+test_paths: []
+---
+
+# FEAT-ART-001 — Discover and pin immutable deployable artifacts
+
+## User story / outcome
+**Actor:** Developer / CI Provider. **Goal:** Discover and pin immutable deployable artifacts. **Primary owner:** `MOD-ART`. **Phase:** MVP.
+
+## Pre-conditions
+Project and registry reference configured; artifact metadata passes validation.
+
+## Main flow
+Receive signed provider signal → resolve OCI digest → validate registry/platform/policy → create artifact record with source revision → notify release catalog.
+
+## Alternatives / exceptional flow
+Tag points to a new digest: register distinct artifact, never mutate prior approved identity.
+
+## Messages and integration contracts
+`artifact.discovered.v1; artifact.registered.v1`. Message names are candidates; verify owner/consumer in [message catalog](../../../contracts/message-catalog.md) before code. Stable envelope, retry and idempotency obey [messaging architecture](../../../architecture/messaging.md).
+
+## Authorization / tenant-scope review
+- Principal verified, permission key from [catalog](../../../contracts/permissions.md) and resource owner resolved from trusted store.
+- The `organization_id`/scope is validated on read, write, event handler and any background job.
+- Audit sensitive decisions with `actorRef`, `resourceRef`, `correlationId`, policy version.
+
+## Negative & recovery scenarios
+Digest mismatch, unsigned webhook, nonexistent registry digest, unsupported architecture.
+- Generic tests: duplicate request/message, authorization revoked mid-flight, resource from another tenant, crash/restart, stale state/event, partial external failure where applicable.
+
+## Acceptance criteria
+Approved artifact hash remains unchanged from release through operation; mutation produces new identity.
+- No hard-coded role name; can add role templates without rewriting handler authorization.
+- Linked tests and source commit evidenced before marking `implemented` / `verified`.
+
+## Proposed technical tasks (not implementation evidence)
+- Define command/query/API shape; validate domain invariants in owner module.
+- Implement contract integration + tenant-safe query; write unit, contract, integration and failure tests.
+- Add tracing/audit and update technical-debt / runbook if unresolved risk.
+
+## Source & test traceability
+- Source files: **unmapped** (`source_paths: []`).
+- Test files: **unmapped** (`test_paths: []`).
+- Evidence: `PENDING` — link PR / commit / test report when implemented.
+- Open decisions: `NEEDS-DECISION` for any policy-specific variant not covered by accepted ADR.

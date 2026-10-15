@@ -1,0 +1,22 @@
+{
+  "task_id": "AMR-LOCAL-REVIEW",
+  "objective": "Review the local AMR implementation and its mapped tests",
+  "feature_id": "FEAT-AMR-001",
+  "module_id": "ENG-TOOLING",
+  "actor": "repository-contributor",
+  "scope": "local-development",
+  "permission": "existing repository access",
+  "paths": ["docs/tooling/amr.py", "docs/tooling/amr_native.py"],
+  "consulted": ["AGENTS.md", "WORKFLOW.md", "docs/engineering/ai-orchestration/module.md", "docs/engineering/ai-orchestration/features/quality-first-amr.md", "docs/engineering/ai-orchestration/contract.md"],
+  "invariants": ["No production operations", "No fabricated model or review evidence", "No implicit model fallback"],
+  "decisions": ["Extend existing Python governance tooling; no new backend module"],
+  "tests": [],
+  "findings": [],
+  "next_action": "Run deterministic gates and native local review",
+  "kind": "review",
+  "bounded": true,
+  "spec_verified": false,
+  "tests_known": true,
+  "signals": ["platform"],
+  "failed_repairs": 0
+}

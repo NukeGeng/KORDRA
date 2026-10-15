@@ -1,0 +1,1 @@
+queue_name,vhost,queue_type,durable,exchange,binding_key,publisher,consumer,event_contract,schema_version,ack_mode,prefetch,ready,unacked,retry_or_dlx,observed_at_utc,evidence_ref

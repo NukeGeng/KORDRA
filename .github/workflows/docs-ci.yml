@@ -1,0 +1,27 @@
+name: Documentation integrity
+on:
+  pull_request:
+  push:
+    branches: [main, develop]
+jobs:
+  docs-integrity:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Test AMR routing, contracts and safety boundaries
+        run: python3 -m unittest discover -s docs/tooling/tests -v
+      - name: Validate documentation structure
+        run: python3 docs/tooling/doccheck.py --strict-sources
+      - name: Enforce source-to-feature mapping in PR
+        if: github.event_name == 'pull_request'
+        run: python3 docs/tooling/changeguard.py --base "$BASE_SHA"
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+
+      - name: Validate reference-environment cases
+        run: python3 docs/tooling/scopecheck.py

@@ -1,0 +1,39 @@
+# EXAMPLE ONLY: no actual company addresses or secrets; cannot deploy without approval.
+profileId: lab-01
+organizationId: ORG_TO_BE_BOUND_BY_TRUSTED_AUTH
+referenceEnvironment: true
+classification: shared-observation-target
+phase: P0
+operationMode: observe_only
+changeEnabled: false
+approvalPolicyRef: REQUIRED_BEFORE_WRITES
+connections:
+  kubernetes:
+    endpointRef: secret-store://reference/lab-01/kube-reader
+    clusterUidExpected: REQUIRED_FROM_VERIFIED_DISCOVERY
+    namespacesAllowed: [] # empty = observe approved scope only, not write permission
+    writeOperationsAllowed: []
+  rabbitmqBusiness:
+    managementApiRef: secret-store://reference/lab-01/rabbitmq-reader
+    canConsume: false
+    canPublish: false
+    canPurge: false
+  vernemq:
+    metricsRef: secret-store://reference/lab-01/vernemq-metrics
+    canPublishDeviceTopics: false
+  registry:
+    metadataRef: secret-store://reference/lab-01/registry-reader
+    useImmutableDigest: true
+  prometheus:
+    queryRef: secret-store://reference/lab-01/prom-reader
+  loki:
+    queryRef: secret-store://reference/lab-01/loki-reader
+features:
+  kubeInventory: observe
+  helmDeployment: disabled
+  dockerCompose: disabled
+  mqttPublish: disabled
+  businessQueueConsume: disabled
+  cnpgFailover: disabled
+  talosReboot: disabled
+  backupRestore: disabled
