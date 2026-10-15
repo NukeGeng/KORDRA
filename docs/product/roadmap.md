@@ -2,7 +2,7 @@
 id: PROD-ROADMAP
 status: proposed
 owner: unassigned
-last_reviewed: 2026-10-15
+last_reviewed: 2026-10-16
 ---
 
 # Delivery roadmap & architecture maturity
@@ -20,7 +20,7 @@ Không ước lượng ngày công khi chưa biết team/capacity; mỗi stage c
 ## Current verified inventory and continuation
 Baseline inspected: `d0eff75951d1d587b1d9689c189a8a62bae18d58`, clean `main` before branch `feat/artifact-identity-foundation`. AMR Python tooling exists with 43 passing tests and a successful initial GitHub docs CI run. There was no product source, host, persistence or application test project. All architecture ADRs and product feature specs were proposed, not accepted. The installed SDK is .NET 10.0.400; this observation is not an architectural approval.
 
-Current milestone: **Stage 0 Foundation**. Active task: **F0-ART-I1 / FEAT-ART-001/I1**, local artifact digest validation; implementation and local validation complete (48 .NET tests, 47 Python tests, format/build/docs gates, independent native review), with remote CI and human ADR/owner acceptance tracked through the PR. Product runtime readiness: **not ready**. ADR-0008 is a reviewable bootstrap proposal; other stack/policy choices remain open. Never infer a completed module from a scalar domain library.
+Current milestone: **Stage 0 Foundation**. Active task: **F0-ART-I1 / FEAT-ART-001/I1**, local artifact digest validation; implementation and local validation complete (48 .NET tests, 47 Python tests, format/build/docs gates, independent native review), with remote CI and human code/owner review tracked through the PR. Product runtime readiness: **not ready**. ADR-0008 is accepted by explicit user approval for the scoped .NET/test bootstrap; other stack/policy choices remain open. Never infer a completed module from a scalar domain library.
 
 | Module | Feature | Actual product implementation |
 |---|---|---|
@@ -30,7 +30,7 @@ Current milestone: **Stage 0 Foundation**. Active task: **F0-ART-I1 / FEAT-ART-0
 | MOD-PRJ | FEAT-PRJ-001 | Not implemented; trusted tenant ownership prerequisite |
 | MOD-INV | FEAT-INV-001 | Not implemented; target registration/capability policies open |
 | MOD-SEC | FEAT-SEC-001 | Not implemented; secret provider binding and access policy open |
-| MOD-ART | FEAT-ART-001 | I1 locally validated: 48 tests/build/format/native review; registry-backed registration not implemented |
+| MOD-ART | FEAT-ART-001 | I1 locally validated: 48 tests/build/format/native review; scoped ADR-0008 accepted; registry-backed registration not implemented |
 | MOD-REL | FEAT-REL-001 | Not implemented; artifact/catalog/approval dependencies unmet |
 | MOD-APR | FEAT-APR-001 | Not implemented; policy/SoD/expiry/spec binding prerequisites unmet |
 | MOD-MSG | FEAT-MSG-001 | Not implemented; durable transport/storage ADR open |
@@ -52,7 +52,7 @@ The module summaries contain cycles (IAM ↔ TEN; ART ↔ CI; REL ↔ APR). They
 |---|---|---|
 | F0-A — repository/source/docs audit | Existing Git revision and governance | Inventory above, drift/debt and scope identified |
 | F0-ART-I1 — immutable digest domain | Existing OCI invariant; isolated validation scope | Build, known hash vectors, malformed input, content/size mismatch, immutability, concurrency and module-boundary tests; independent review; proposed ADR |
-| F0-B — accept development baseline | Human ADR-0008 decision; owner assignment | Approved .NET/testing bootstrap; no implied acceptance of all proposed ADRs |
+| F0-B — accept development baseline | Human ADR-0008 decision; owner assignment | Scoped ADR-0008 accepted; product owner assignment pending; no implied acceptance of all other ADRs |
 | F0-C — identity and audit contract seams | ADR-0003, identity provider, scope/deny/expiry and audit decisions | Tenant/platform isolation, revocation and scoped authorization contracts and tests agreed |
 | M1-A — IAM/TEN then project/environment/target/secret references | F0-C, persistence/credential decisions | Trusted ownership and negative access tests before registration or API exposure |
 | M1-B — artifact registration and signed CI intake | M1-A, registry adapter/SSRF/credential policy, signed webhook contract | Registry metadata/content verified; immutable tenant-owned record; dedup/audit; no mutable-tag substitution |
@@ -62,4 +62,4 @@ The module summaries contain cycles (IAM ↔ TEN; ART ↔ CI; REL ↔ APR). They
 | M3 — observation/reconciliation/CI/notifications/scheduler | Trusted scoped state and durable workflow; ADR-0004 | Freshness, single-writer, signed provider, recovery, timezone and permission regressions |
 | M4 — operational/enterprise hardening | Measured product behavior, explicit authorized test environment | HA/DR/backup restore, support elevation and on-call evidence; separate human operation approvals |
 
-Continuation state lives here and in each owning feature/traceability entry, not a second task-management system. Before the next session, check Git revision, dirty paths, exact feature evidence and current review/CI status. Next action after I1 validation: human decision on ADR-0008 and identity/persistence prerequisites; do not auto-accept them or move to production.
+Continuation state lives here and in each owning feature/traceability entry, not a second task-management system. Before the next session, check Git revision, dirty paths, exact feature evidence and current review/CI status. Next action after I1 validation: product owner/code review and identity/persistence decisions; do not auto-accept them or move to production.

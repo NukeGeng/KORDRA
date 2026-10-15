@@ -16,7 +16,7 @@ Bộ đặc tả dùng để khởi tạo một **nền tảng điều phối tr
 Use [LAB-01 documentation](docs/reference-environments/lab-01/README.md) and [test coverage](docs/reference-environments/lab-01/experiments/README.md) when validating drivers on Talos/Kubernetes/Docker/MQTT/RabbitMQ/observability. **Reported baseline only; never treat these files as active cluster measurements.**
 
 ## First product validation increment
-[FEAT-ART-001/I1](docs/features/artifact-management/features/immutable-artifact.md) adds a pure immutable OCI digest domain library and its tests. It is a local validation increment under [proposed ADR-0008](docs/decisions/0008-domain-bootstrap-validation.md), not a deployed backend or complete artifact-registration feature. Development order and actual module status are tracked in the existing [roadmap](docs/product/roadmap.md).
+[FEAT-ART-001/I1](docs/features/artifact-management/features/immutable-artifact.md) adds a pure immutable OCI digest domain library and its tests. It is a local validation increment under [accepted scoped ADR-0008](docs/decisions/0008-domain-bootstrap-validation.md), not a deployed backend or complete artifact-registration feature. Development order and actual module status are tracked in the existing [roadmap](docs/product/roadmap.md).
 
 ```bash
 dotnet restore Kordra.slnx --locked-mode
@@ -25,4 +25,4 @@ dotnet test Kordra.slnx --configuration Release --no-build --no-restore
 python3 docs/tooling/amr.py gates
 ```
 
-The SDK is pinned in global.json. Runtime library dependencies remain limited to the .NET framework; pinned test-only dependencies and lock files are described in ADR-0008. No production infrastructure is needed for these checks. Human acceptance of technology/policy ADRs is required before adoption and subsequent integration.
+The SDK is pinned in global.json. Runtime library dependencies remain limited to the .NET framework; pinned test-only dependencies and lock files are described in ADR-0008. No production infrastructure is needed for these checks. The user accepted ADR-0008 for this narrow bootstrap. Other technology/policy ADRs and human merge approval remain required before subsequent integration.
