@@ -17,7 +17,7 @@ last_reviewed: 2026-10-15
 | Use case | Feature | Module | Contract / evidence | Implementation status |
 |---|---|---|---|---|
 | UC-001 | FEAT-TEN-001 | MOD-TEN | permissions.md | proposed/unmapped |
-| UC-002 | FEAT-ART-001 | MOD-ART | message-catalog.md | proposed/unmapped |
+| UC-002 / GOAL outcome 2 / F0-ART-I1 | FEAT-ART-001/I1 | MOD-ART | [digest domain contract](../contracts/artifact-identity.md), [feature evidence](../features/artifact-management/features/immutable-artifact.md) | Module-local validation increment; full registration and ADR acceptance pending |
 | UC-003 | FEAT-REL-001 | MOD-REL | message-envelope.md | proposed/unmapped |
 | UC-004 | FEAT-APR-001 | MOD-APR | permissions.md | proposed/unmapped |
 | UC-005/006 | FEAT-DEP-001 | MOD-DEP | driver-contract.md | proposed/unmapped |
@@ -25,7 +25,7 @@ last_reviewed: 2026-10-15
 | UC-008 | FEAT-MSG-001 | MOD-MSG | message-catalog.md | proposed/unmapped |
 | UC-009 | FEAT-REC-001 | MOD-REC | messaging.md | proposed/unmapped |
 | UC-010 | FEAT-PAD-001 | MOD-PAD | permissions.md | proposed/unmapped |
-| Developer quality-first workflow | [FEAT-AMR-001](ai-orchestration/features/quality-first-amr.md) | ENG-TOOLING (engineering only) | [local artifact contract](ai-orchestration/contract.md), [evidence](ai-orchestration/testing-and-evidence.md) | working-tree implementation; commit/owner acceptance pending |
+| Developer quality-first workflow | [FEAT-AMR-001](ai-orchestration/features/quality-first-amr.md) | ENG-TOOLING (engineering only) | [local artifact contract](ai-orchestration/contract.md), [evidence](ai-orchestration/testing-and-evidence.md) | Tooling present in d0eff75; product-gate extension in current branch; owner acceptance pending |
 
 ## File mapping after source exists
 Set feature frontmatter `source_paths` and `test_paths` to actual repository-relative paths verified through `git ls-files`, then add `evidence` link in spec. The checker can validate existence in strict mode; review still validates semantic traceability.

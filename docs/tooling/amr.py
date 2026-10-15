@@ -14,7 +14,7 @@ from amr_native import NativeError, discover, local_review, probe_auto_review, p
 from changeguard import frontmatter, matches
 
 ROOT = Path(__file__).resolve().parents[2]
-EXCLUDED_PARTS = {'.git', '.amr-local', '__pycache__'}
+EXCLUDED_PARTS = {'.git', '.amr-local', '__pycache__', 'bin', 'obj', 'TestResults'}
 PROFILES = {'ROUTINE': ('gpt-6-luna', 'high'),
             'ENGINEERING': ('gpt-6.1-sol', 'medium'),
             'CRITICAL': ('gpt-6.1-sol', 'high')}
@@ -149,8 +149,8 @@ def tree_identity(root):
                 safe_path(root, p.relative_to(root).as_posix())
                 files[p.relative_to(root).as_posix()] = hashlib.sha256(
                     os.readlink(p).encode()).hexdigest()
-        dirs[:] = sorted(d for d in dirs if d not in (
-            '.git', '.amr-local', '__pycache__') and not (Path(parent)/d).is_symlink())
+        dirs[:] = sorted(d for d in dirs if d not in EXCLUDED_PARTS
+                         and not (Path(parent)/d).is_symlink())
         for name in sorted(names):
             p = Path(parent)/name
             if p.suffix == '.pyc':
@@ -219,10 +219,22 @@ def gates(root, base=None):
         ('docs', [sys.executable, 'docs/tooling/doccheck.py', '--strict-sources']),
         ('scope', [sys.executable, 'docs/tooling/scopecheck.py']),
         ('unit', [sys.executable, '-m', 'unittest', 'discover', '-s', 'docs/tooling/tests', '-v'])]
+    has_product = (root/'Kordra.slnx').is_file()
+    if has_product:
+        commands.extend([
+            ('product-restore', ['dotnet', 'restore', 'Kordra.slnx', '--locked-mode']),
+            ('product-build', ['dotnet', 'build', 'Kordra.slnx', '--configuration', 'Release', '--no-restore']),
+            ('product-test', ['dotnet', 'test', 'Kordra.slnx', '--configuration', 'Release',
+                              '--no-build', '--no-restore', '--logger', 'trx'])])
     if base:
         commands.append(('mapping', [sys.executable, 'docs/tooling/changeguard.py', '--base', base]))
     results = []
+    product_ready = True
     for name, cmd in commands:
+        if name.startswith('product-') and not product_ready:
+            results.append({'name': name, 'command': cmd, 'status': 'blocked',
+                            'reason': 'prior product stage failed; do not test stale binaries'})
+            continue
         try:
             p = subprocess.run(cmd, cwd=root, text=True, capture_output=True, timeout=90)
             results.append({'name': name, 'command': cmd, 'status': 'passed' if p.returncode == 0
@@ -230,16 +242,20 @@ def gates(root, base=None):
                             'output': p.stdout+p.stderr})
         except subprocess.TimeoutExpired:
             results.append({'name': name, 'command': cmd, 'status': 'failed', 'reason': 'timeout'})
+        except OSError as exc:
+            results.append({'name': name, 'command': cmd, 'status': 'failed', 'reason': str(exc)})
+        if name.startswith('product-'):
+            product_ready = results[-1]['status'] == 'passed'
     after = tree_identity(root)['digest']
     stable = before == after
     return {'schemaVersion': 1, 'created_at': now(), 'content': before, 'source_stable': stable,
             'checks': results, 'local_status': 'passed' if all(
                 x['status'] == 'passed' for x in results) and stable else 'failed',
             'source_mapping': 'executed' if base else 'not_configured',
-            'product_tests': 'not_configured: define applicable product gates in the owning module'}
+            'product_tests': 'executed' if has_product else 'not_configured: no product solution'}
 
 
-def completion_errors(receipt, digest, critical=False):
+def completion_errors(receipt, digest, critical=False, product_required=False):
     """Validate a human-authored review ledger; it is not proof of provider identity."""
     errors = []
     if receipt.get('schemaVersion') != 1 or receipt.get('content') != digest:
@@ -251,6 +267,9 @@ def completion_errors(receipt, digest, critical=False):
         errors.append('required checks missing or not passed')
     if not {'docs', 'scope', 'unit'} <= {x.get('name') for x in checks}:
         errors.append('mandatory repository gates missing')
+    if product_required and (receipt.get('product_tests') != 'executed' or not {
+            'product-restore', 'product-build', 'product-test'} <= {x.get('name') for x in checks}):
+        errors.append('product solution exists but required product checks are missing')
     review = receipt.get('review', {})
     if critical and (review.get('status') != 'verified' or review.get('independent') is not True
                      or review.get('content') != digest or not review.get('evidence')):
@@ -378,7 +397,8 @@ def main():
         code = 0 if result['status'] == 'verified' else 1
     else:
         receipt = json.loads(args.receipt.read_text())
-        errors = completion_errors(receipt, tree_identity(ROOT)['digest'], args.critical)
+        errors = completion_errors(receipt, tree_identity(ROOT)['digest'], args.critical,
+                                   product_required=(ROOT/'Kordra.slnx').is_file())
         result = {'status': 'blocked' if errors else 'ledger_valid', 'errors': errors,
                   'limitation': 'structural ledger validation, not provider or human identity attestation'}
         code = 1 if errors else 0

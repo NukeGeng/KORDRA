@@ -1,3 +1,6 @@
 __pycache__/
 *.pyc
 .amr-local/
+**/bin/
+**/obj/
+**/TestResults/

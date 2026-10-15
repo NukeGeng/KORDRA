@@ -137,6 +137,15 @@ class Context(unittest.TestCase):
         self.assertEqual(p.stat().st_mode & 0o777,0o600)
         amr.validate_snapshot(self.root,h)
 
+    def test_generated_dotnet_outputs_do_not_replace_source_identity(self):
+        before=amr.tree_identity(self.root)
+        for directory in ('bin','obj','TestResults'):
+            output=self.root/directory;output.mkdir()
+            (output/'generated').write_text('derived output')
+            with self.assertRaisesRegex(ValueError,'excluded'):
+                amr.safe_path(self.root,directory+'/generated')
+        self.assertEqual(before,amr.tree_identity(self.root))
+
     def test_escape_absolute_and_external_symlink_rejected(self):
         for p in ('../outside','/etc/passwd'):
             with self.assertRaises(ValueError): amr.safe_path(self.root,p)
@@ -222,6 +231,14 @@ class ReviewLedger(unittest.TestCase):
     def test_stale_receipt_rejected(self):
         self.assertTrue(amr.completion_errors(self.ledger(),'changed'))
 
+    def test_product_solution_requires_product_checks_in_completion_ledger(self):
+        r=self.ledger()
+        self.assertTrue(amr.completion_errors(r,'hash',product_required=True))
+        r['product_tests']='executed'
+        r['checks'] += [dict(name=n,status='passed') for n in
+                       ('product-restore','product-build','product-test')]
+        self.assertEqual(amr.completion_errors(r,'hash',product_required=True),[])
+
 
 class NativeContract(unittest.TestCase):
     def test_actual_selection_mismatch_rejected(self):
@@ -297,6 +314,15 @@ class Mapping(unittest.TestCase):
         _,errors=changeguard.check_changes(amr.ROOT,{'src/Unknown.cs'})
         self.assertTrue(any('UNMAPPED' in e for e in errors))
 
+    def test_product_tests_and_bootstrap_files_need_feature_ownership(self):
+        spec='docs/features/artifact-management/features/immutable-artifact.md'
+        paths={'global.json','Kordra.slnx','tests/ArtifactManagement.Domain.Tests/OCIImageDigestTests.cs',
+               '.github/workflows/product-ci.yml'}
+        _,errors=changeguard.check_changes(amr.ROOT,paths|{spec})
+        self.assertEqual(errors,[])
+        _,errors=changeguard.check_changes(amr.ROOT,{'tests/UnownedTests.cs'})
+        self.assertTrue(any('UNMAPPED' in e for e in errors))
+
     def test_product_and_engineering_feature_roots_remain_checked(self):
         self.assertIn('docs/features/',doccheck.FEATURE_ROOTS)
         self.assertIn('docs/engineering/ai-orchestration/',doccheck.FEATURE_ROOTS)
@@ -326,6 +352,18 @@ class Mapping(unittest.TestCase):
 
 
 class Gates(unittest.TestCase):
+    def test_failed_product_restore_blocks_build_and_stale_binary_tests(self):
+        with tempfile.TemporaryDirectory() as d:
+            root=Path(d);(root/'Kordra.slnx').write_text('<Solution />')
+            def command(cmd,**kwargs):
+                return subprocess.CompletedProcess(cmd,1 if cmd[0]=='dotnet' else 0,'','')
+            with patch.object(amr.subprocess,'run',side_effect=command) as run:
+                result=amr.gates(root)
+            stages=[x['status'] for x in result['checks'] if x['name'].startswith('product-')]
+            self.assertEqual(stages,['failed','blocked','blocked'])
+            self.assertEqual(sum(x.args[0][0]=='dotnet' for x in run.call_args_list),1)
+            self.assertEqual(result['local_status'],'failed')
+
     def test_real_failing_commands_cannot_pass(self):
         with tempfile.TemporaryDirectory() as d:
             result=amr.gates(Path(d))

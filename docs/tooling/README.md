@@ -11,7 +11,7 @@ Tool chỉ dùng Python stdlib. Kiểm tra: YAML frontmatter lightweight; module
 ```bash
 python3 docs/tooling/changeguard.py --base origin/main
 ```
-Guard dùng `git diff <base>...HEAD`, kiểm tra `src/`, `docs/tooling/`, `.codex/`, `.github/workflows/` thay đổi, và yêu cầu mỗi source/test/config thuộc một feature có `source_paths` hoặc `test_paths` mapping + feature spec update cùng PR. Cập nhật mapping với file thật và commit spec. Nếu team có generated code, thống nhất explicit exception trong tool và review, không ignore tất cả.
+Guard dùng `git diff <base>...HEAD`, kiểm tra `src/`, `tests/`, `docs/tooling/`, `.codex/`, `.github/workflows/`, `global.json`, `Kordra.slnx` thay đổi, và yêu cầu mỗi source/test/config thuộc một feature có `source_paths` hoặc `test_paths` mapping + feature spec update cùng PR. Cập nhật mapping với file thật và commit spec. Nếu team có generated code, thống nhất explicit exception trong tool và review, không ignore tất cả.
 
 ## Reference experiment registry checks
 Run `python3 docs/tooling/scopecheck.py`; validates case IDs, phase/mutation safety mapping, owning modules and observe-only sample profile. **Does not run live infrastructure tests.**

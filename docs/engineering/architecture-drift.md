@@ -14,6 +14,7 @@ Dùng khi source, hạ tầng và các ADR/spec được duyệt không còn tr�
 |---|---|---|---|---|---|---|---|
 | DRIFT-000 | Sample only | Replace with actual verified evidence | — | low | unassigned | remove sample | example |
 | DRIFT-AMR-001 | v2.1 request expects an existing AMR; model defaults must be verified | Initial directory inventory: docs/tooling had only doccheck/changeguard/scopecheck; no AMR/.codex/.git/product code. Native config/read returned user Sol High, ignoring project defaults in this folder | FEAT-AMR-001 / ENG-TOOLING | medium | engineering-maintainers | Extend existing tooling; explicit native model/effort arguments and live probes; user must establish trusted checkout/provider identity | observed; product architecture unchanged |
+| DRIFT-BOOT-001 | Proposed module dependency summaries are not an accepted acyclic source dependency graph | identity-access ↔ tenant-management; artifact-management ↔ ci-integrations; release-management ↔ approval-governance in module docs; zero product projects at baseline d0eff75 | Foundation / IAM, TEN, ART, CI, REL, APR | medium | architecture owner (unassigned) | Use pure module-local I1; resolve contract/task seams and approve cross-module wiring before project references | proposed design ambiguity; no accepted baseline/code conflict asserted |
 
 ## Workflow
 1. Phát hiện từ PR review, AI review, test, incident hoặc ops. Bắt buộc ghi **expected vs actual** và bằng chứng định danh được.

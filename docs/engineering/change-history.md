@@ -16,6 +16,7 @@ Thay đổi nghiệp vụ được ghi ở chính feature doc với evidence (PR
 | 2026-10-15 | BOOTSTRAP-DOCS | All proposed docs | initial scaffold | proposed ADRs | none | unassigned |
 | 2026-10-15 | AMR-2.1 | ENG-TOOLING / FEAT-AMR-001 | Local working tree, no Git metadata; [evidence](ai-orchestration/testing-and-evidence.md) | New local artifact schema v1; no product ADR/contract changes | None; no public API/data migration | engineering-maintainers |
 | 2026-10-15 | GIT-BOOTSTRAP | Repository / ENG-TOOLING | User-supplied [GitHub repository](https://github.com/NukeGeng/KORDRA); initial `main` history and `origin` setup | No product contract or ADR change | Local files preserved; private receipts excluded | engineering-maintainers |
+| 2026-10-15 | F0-ART-I1 | MOD-ART / FEAT-ART-001 increment I1 | Branch feat/artifact-identity-foundation; local Release build/format, 48 domain tests, 47 Python tests, native diff review completed | Proposed ADR-0008; new local digest contract; public APIs/messages unchanged | No storage, registration, infrastructure or data migration | engineering-maintainers pending product owner assignment |
 
 ## Commit convention suggestion
 `feat(module): ... [FEAT-XXX]`, `fix(module): ... [FEAT-XXX]`, `docs(module): ... [FEAT-XXX]` (workflow hỗ trợ GitHub/CI, không bắt buộc conventional commits nếu team có quy tắc khác).

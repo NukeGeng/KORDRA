@@ -40,6 +40,7 @@ No new product permission, role checks or tenant input. Tooling never dispatches
 Missing capability/catalog model, unsupported effort, silent model reroute, stale handoff, file escape/symlink, duplicate/stale review, missing terminal review, failed/timed-out check, unknown outcome and missing Git/provider all prevent a false passing claim. Expired/missing production approval and wrong tenant remain product test obligations; no backend exists here to execute them. Native probe crashes/timeouts are failures; never retry an unknown side effect automatically.
 
 ## Acceptance criteria
+- Product bootstrap follow-up: when Kordra.slnx exists, the existing gates also run locked restore, build and product tests; failed restore/build blocks dependent stages to prevent stale-binary passes. Build outputs are excluded from source snapshots and cannot be mapped as source. Product test/bootstrap file changes require owner feature updates through changeguard.
 - AMR-01–09: deterministic lookup, risk routing, explicit unavailable result, bounded escalation and source-validated handoff covered offline; enabled profiles receive real native invocation tests.
 - AMR-10–13: distinguish native sandbox decision, local native review and provider automatic review; absent provider/approval support reported honestly.
 - AMR-14–15: fixes require reproduction rerun and a current review; dismissals require evidence; unresolved blockers prevent completion.
