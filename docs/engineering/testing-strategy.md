@@ -32,3 +32,5 @@ Store test identifier/report link, target build SHA, observed timestamp; no gree
 
 ## Suggested CI stages
 `docs-check → format/lint → unit → contract → integration → security isolation → driver conformance → build/package → staging smoke`. Slow chaos tests may run nightly/pre-release but must be recorded and cannot be silently skipped for relevant risk.
+
+The detailed project-reference, assembly-boundary and host-composition test proposal is in [architecture-test-rules.md](architecture-test-rules.md). It is not an active CI gate until the rules are accepted, real project edges exist, and an executable test plus CI result is recorded.

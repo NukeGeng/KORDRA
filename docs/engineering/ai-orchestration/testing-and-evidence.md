@@ -2,46 +2,62 @@
 id: ENG-AMR-EVIDENCE
 status: proposed
 owner: engineering-maintainers
-last_reviewed: 2026-10-15
+last_reviewed: 2026-10-16
 ---
 
 # Runtime capabilities and validation evidence
 
-Observed 2026-10-15 on macOS, Codex desktop with bundled `codex-cli 0.162.0-alpha.17.2`; Python 3.14 locally, CI pinned to 3.11. This is local working-tree evidence, not a commit or released product verification. No Git metadata, branch, remote, PR/MR, backend source, build manifest, existing AMR implementation or AI config was present initially. Existing doccheck/changeguard/scopecheck and the AI review protocol were extended. All architecture ADRs remain proposed.
+Evidence observed on 2026-10-16 in the Kordra checkout on macOS with Codex desktop/CLI and Python 3.14. The checked-out branch is `feat/artifact-identity-foundation` at `2d72e7cd7c3c7340d749b2def8f03d0e07b1618c`; local changes are not yet part of that commit. No production or LAB-01 resource was accessed. Native selections below come from the app-server `thread/start` response and matching terminal turn, not policy text or agent self-report.
 
-| Capability | Support / evidence | Limit |
+## Runtime capability results
+
+| Capability | Observed result | Limit / follow-up |
 |---|---|---|
-| Native configuration/schema | Supported: installed help, app-server generated JSON Schema and strict-config live startup | Schema is version specific; incompatible runtimes fail explicitly |
-| Model discovery | Supported: live native model/list advertises Luna and Sol with required efforts | Discovery alone is not invocation |
-| ROUTINE | Verified invocation: gpt-6-luna / high, completed, `KORDRA_AMR_OK`, no reroute | Native start response observes selection; no server-internal attestation |
-| ENGINEERING | Verified invocation: gpt-6.1-sol / medium, completed, same expected output, no reroute | Same limit |
-| CRITICAL | Verified invocation: gpt-6.1-sol / high, completed, same expected output, no reroute | Same limit |
-| Project defaults | Configuration written; effective config/read still returned user Sol High with null approval/sandbox values; native layer reports project config disabled because folder is not trusted | Requires trusted project/runtime configuration; active desktop chat overrides remain |
-| Native Auto-review | Verified in isolated read-only probe: `item/autoApprovalReview/started` and `/completed`, native decision approved, risk low; disposable marker created | Only a local marker test; this chat remains full-access/never, which cannot exercise sandbox approval |
-| Provider automatic Code Review | Git setup follow-up identified GitHub repository NukeGeng/KORDRA; no PR review execution verified | Requires Codex repository connection, automatic review settings, exact head revision evidence |
-| GitLab automatic MR review | Not tested; provider and integration eligibility unknown | Do not assume GitHub parity |
-| Native local Code Review | Implemented native review/start adapter; actual attempts at 180 and 300 seconds both timed out without a terminal turn/review-exit event. Not verified; failures retained privately | Stop repeated same-cause attempts; inspect runtime/protocol before further retry. Provider automatic review remains separately unconfigured |
-| Independent local correctness review | Separate read-only Codex CLI invocation completed, found five concrete defects with in-memory reproductions; all five repaired with regression tests. Follow-up verdict and findings ledger are private current-content artifacts | This is independent local review, not native/provider Code Review verification |
-| Deterministic checks / routing / handoff / triage | 43 offline tests passed, strict docs: 144 files / zero errors or warnings, LAB registry: 39 cases / zero errors. Source changes during gates invalidate results | Product integration, tenant isolation and production approvals cannot be validated against absent product code; rerun gates after any later fix |
-| Usage | Native tokenUsage events present for successful probes | No cost/savings comparison claimed; other stages remain unknown unless events exist |
+| Native schema and configuration | `app-server` strict startup, `config/read`, generated schema and `model/list` work. The catalog advertises the exact required Luna and GPT-6.1 Sol efforts. | Protocol is version-specific; unsupported fields/models fail closed. |
+| ROUTINE smoke (`AMR-LIVE-A`) | Requested and observed `gpt-6-luna/high`; native turn completed without reroute. It checked AMR document links and Sol naming. | Source identity changed during the task (`source_stable=false`), so this is runtime-selection evidence, not a stable review of the current patch. |
+| ENGINEERING smoke (`AMR-LIVE-B`) | Requested and observed `gpt-6.1-sol/medium`; native turn completed without reroute and source identity stayed stable. It analyzed changeguard ownership and exercised its negative mapping case. | Read-only task; no implementation was delegated to this thread. |
+| CRITICAL smoke (`AMR-LIVE-C`) | Requested and observed `gpt-6.1-sol/high`; native turn completed without reroute. It found missing route evidence, incomplete working-tree mapping, staged-index freshness and historical gate-receipt defects; regression tests now cover the findings. | Source identity changed during this task (`source_stable=false`); findings informed fixes but this was not the final code review. |
+| Collaboration sub-agents | Three collaboration agents were created for Routine, Engineering and Critical work. | The collaboration tool returned no authoritative actual model/effort metadata. Their requested profiles are not reported as verified; native smoke rows above are the separate selection evidence. |
+| Native Auto-review | Verified in a disposable directory: native `item/autoApprovalReview/started` and `/completed`, decision `approved`, risk `low`, exact marker created; `gpt-6.1-sol/medium`, no reroute, network disabled. The project review policy was explicitly loaded for the probe. | This validates a local eligible sandbox decision only. It does not exercise this full-access chat or authorize production work. |
+| Native source-architecture assessment | Read-only review completed on the integrated source/docs snapshot; app-server route and terminal turn both observed `gpt-6.1-sol/high`, terminal status `completed`, `source_stable=true`. It identified the existing Domain assembly boundary test, root-solution migration dependencies, AMR path ownership, module assembly granularity and messaging ownership issues; the documentation now records these findings. | This is an architecture impact assessment, not a native Code Review approval of the AMR patch and not human acceptance of ADR-0009. |
+| Native local Code Review | A prior goal E2E produced a terminal `review/start` result on `gpt-6.1-sol/high`. Its `source_stable` flag was false because repository edits overlapped, so it cannot satisfy review for the current patch. The newer E2E's native review timed out without a matching terminal event. | Adapter is implemented; a verified review of the final stable patch is still missing. Same-cause retries are paused pending a runtime/protocol or provider-path change. |
+| Provider PR Code Review | PR #1 is a draft on GitHub at the old head `2d72e7cd7c3c7340d749b2def8f03d0e07b1618c`; GitHub returned no reviews for that head. | Automatic provider review is not verified. The repository connection/review setting and evidence on the eventual current PR head still need confirmation. |
+| Project configuration | `.codex/config.toml` declares the AMR sub-agent defaults. Native `config/read` reports the project config layer disabled because this checkout is not trusted. Explicit per-task native model/effort overrides still succeeded and were observed. | To load project defaults in future desktop tasks, the user must trust this project in Codex settings. This work did not change global user configuration. |
+| Native desktop GOAL | The Codex Goal runtime reports `paused`. | This session has no supported resume operation. Repository checkpoint state does not resume the native Goal, and no resume is claimed. |
 
-## Commands and receipts
-`codex --version`, native `--help`, installed `app-server generate-json-schema`, then actual `model/list`, `config/read`, `thread/start`, `turn/start`. `python3 docs/tooling/amr.py probe-models` completed all three profiles with exit 0. `python3 docs/tooling/amr.py probe-auto-review` completed with exit 0. No simulated review decision was used. The client rejects any human approval request; Auto-review's decision came from the native runtime.
+## Persistent goal execution
 
-Both probes were rerun successfully. Native start responses confirmed `readOnly`, `networkAccess=false`, on-request policy and the expected reviewer. The Auto-review rerun explicitly loaded this project's `auto_review.extra_policy` as a strict native config override, so project trust could not silently skip it. CLI dry-run resolved the mapped AMR task to Sol High, generated real model/effort arguments and preserved human review; this dry-run is not counted as a live model invocation. The saved handoff passed source/Git validation.
+The executable local coordinator is `python3 docs/tooling/amr.py goal`; it persists a private, atomic task DAG/checkpoint, validates ownership and dependencies, records dispatch before invoking the native model, verifies the actual model/effort/thread/turn, runs gates, and requests a separate native review. It does not control native Goal status, merge a PR or approve production work.
 
-`python3 -m unittest discover -s docs/tooling/tests -v`, `python3 docs/tooling/doccheck.py --strict-sources` and `python3 docs/tooling/scopecheck.py` executed locally. A disposable real Git range test verified changeguard rejects a stale feature spec and accepts the updated spec. No Git history was initialized in this supplied folder. A failed timeout fixture after diagnostic changes was corrected by initializing its event list; the same timeout assertion then passed. No test was removed or weakened.
+`KORDRA-FOUNDATION-AMR-002` executed its documentation worker on `gpt-6-luna/high`. The worker changed only its declared feature file; the recorded full gates passed for that content snapshot, including 89 AMR tests, locked .NET restore/build, 48 product tests and working-tree ownership checks. The later native Code Review timed out before returning a terminal review identity. The checkpoint was reconciled to `validation_failed`, with no automatic worker replay. Additional `.temp` source files and later documentation edits changed the content identity; that old gate receipt does not certify the final integrated documentation.
 
-The native local review exhausted a bounded 300-second retry after the initial timeout; results and source identity are recorded in `.amr-local/native-review.json`, with the initial failure retained in `.amr-local/native-review-attempt-1.json`. No terminal native event was observed, so neither attempt counts as a completed review. The separate independent CLI review completed and reproduced: unstable gate receipt acceptance, source symlink into excluded storage, previous-turn completion reuse, unrelated review-exit acceptance and string `false` accepted as a boolean. Regression cases cover each fix; `.amr-local/review-triage.json` records final source identity, rerun checks and follow-up references. Native model/approval probes are rerun after the exact-turn matching fix. No false positive was dismissed blindly.
+The earlier `KORDRA-FOUNDATION` run also remains `validation_failed`: its native review completed on `gpt-6.1-sol/high`, but its source identity was unstable. Neither checkpoint is accepted as a completed E2E task. Private receipts are stored under `.amr-local/` and are excluded from public evidence.
 
-A native exit proves execution only: triage must still reproduce/fix or dismiss findings with evidence and rerun checks and follow-up review. Do not read the existence of a receipt as a passing verdict. Current completion status is determined from matching receipts, not this historical narrative.
+## GitHub identity and branch protection
 
-Private receipts: `.amr-local/model-probes.json`, `.amr-local/auto-review.json`, `.amr-local/gates.json`, `.amr-local/native-review.json`. These may contain runtime-derived information; they are ignored and private, not public evidence files. The committed evidence here is sanitized. Content hashes bind local review/gate receipts to source; subsequent documentation/source edits require rerunning gates and review. No commit SHA is invented.
+`ssh -T git@github-nukegeng` authenticated as **NukeGeng**; `origin` uses `git@github-nukegeng:NukeGeng/KORDRA.git`, and `gh auth status` reported the active NukeGeng account using SSH. GitHub's branch-protection API confirmed for `main`: pull requests required, one approval, stale reviews dismissed, last-push approval required, `docs-integrity` and `artifact-domain` required in strict mode, conversation resolution required, admin enforcement enabled, and force-push/deletion disabled. This does not approve or merge PR #1.
 
-## Acceptance coverage
-Offline tests map AMR-01–09, 11, 13–18 to routing, ownership, unsupported model/effort, escalation limits, content staleness, path escape, approval separation and finding/gate validation. Native protocol contracts test timeout/crash, selection mismatch, reroute and required review-exit evidence. AMR-10 is exercised by the actual local native Auto-review probe. AMR-12 provider review is unavailable; local review is separate evidence. Product wrong-tenant, expired approval, duplicate dispatch, worker crash and unknown agent outcome remain required product tests; no application exists here to run them. No LAB resources were accessed.
+## Final validation after v1.2 integration
 
-## Remaining setup and decision owners
-Git setup follow-up: the user supplied [NukeGeng/KORDRA](https://github.com/NukeGeng/KORDRA). GitHub reported an empty repository and authenticated administrative access; the existing local directory was initialized on `main` with that repository as `origin`, preserving all local files and excluding private receipts. Initial commit/push identity must be verified through Git rather than inferred from this note. Earlier statements about absent Git describe the original AMR validation environment. Git initialization invalidates earlier Git-bound handoff snapshots; regenerate before reuse.
+On 2026-10-16, with checkout HEAD `2d72e7cd7c3c7340d749b2def8f03d0e07b1618c`, the verified base was `d0eff75951d1d587b1d9689c189a8a62bae18d58` (`origin/main` matched the remote branch). The final local AMR gate command `python3 docs/tooling/amr.py gates --base d0eff75951d1d587b1d9689c189a8a62bae18d58` completed with `source_stable=true` and `local_status=passed`:
 
-Engineering maintainers must still confirm Codex project trust, enable automatic review if supported, require CI/human approval through branch protection, and obtain independent owner acceptance. DEBT-AMR-001 and DRIFT-AMR-001 retain the remaining verification obligations. Human approval for sensitive infrastructure remains mandatory and was not exercised against any real target.
+| Check | Result |
+|---|---|
+| `python3 docs/tooling/doccheck.py` and strict source validation | Passed: 157 Markdown files, 139 tracked IDs, 21 module metadata entries, zero errors/warnings. |
+| Scope cases | Passed: 39 cases, 39 unique IDs, zero errors. |
+| AMR Python unit suite | Passed: 89 tests. |
+| Locked .NET restore | Passed for root `Kordra.slnx`. |
+| Release build | Passed with zero warnings and zero errors. |
+| Product tests | Passed: 48, zero failed/skipped. |
+| Working-tree source ownership | Passed: 17 changed source/config/test paths, zero mapping problems. |
+| `git diff --check` | Passed. |
+
+The gate receipt is private under `.amr-local/`. Product validation was run locally and did not access a cluster, production service or LAB-01 resource. The earlier pre-import receipt is historical and does not certify this integrated snapshot.
+
+## Remaining validation and decisions
+
+- Obtain a native or provider Code Review on one stable current revision. Local review timeouts do not count as success; provider review requires the current PR head and configured repository integration.
+- Architecture-owner, security-reviewer and maintainer decisions and the acceptance evidence listed by ADR-0009 remain outstanding; the source architecture proposal is not an accepted baseline.
+- Keep architecture tests described by [the v1.2 rules](../architecture-test-rules.md) proposed until ADR-0009 and real project edges are accepted and executable checks are added to CI.
+- Product wrong-tenant, expired-approval, duplicate side-effect and worker-recovery tests remain future product obligations; the present checkout has no product hosts or persistence layer to run them.
+- Human review for merge and explicit approval for sensitive production operations remain mandatory.

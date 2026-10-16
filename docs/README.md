@@ -13,6 +13,7 @@ last_reviewed: 2026-10-15
 |---|---|
 | Tầm nhìn / phạm vi | [`GOAL.md`](../GOAL.md), [`product/scope.md`](product/scope.md) |
 | Kiến trúc / component | [`architecture/`](architecture/README.md) |
+| Source tree / .NET solution structure | [Architecture proposal and repository audit](architecture/README.md), [ADR-0009](decisions/0009-source-architecture.md) |
 | Tại sao đã chọn X? | [`decisions/`](decisions/README.md) |
 | Module nào sở hữu nghiệp vụ? | [`governance/module-feature-definition.md`](governance/module-feature-definition.md), [`features/`](features/README.md) |
 | Thay đổi permission hoặc Super Admin | [`architecture/security-multitenancy.md`](architecture/security-multitenancy.md), [`contracts/permissions.md`](contracts/permissions.md) |

@@ -1,0 +1,35 @@
+{
+  "schemaVersion": 1,
+  "goal_id": "KORDRA-FOUNDATION-AMR-002",
+  "objective_path": "GOAL.md",
+  "objective": "Continue the current Kordra Stage 0 Foundation milestone using quality-first AMR. This bounded end-to-end smoke task must not be mistaken for completion of the product milestone.",
+  "milestone": "Stage 0 Foundation",
+  "progress_path": "docs/product/roadmap.md",
+  "base": "origin/main",
+  "tasks": [
+    {
+      "task_id": "AMR-E2E-DOC-002",
+      "objective": "Execute a safe local documentation exercise. In docs/engineering/ai-orchestration/features/quality-first-amr.md replace exactly 'Goal execution exercise 2: pending.' with 'Goal execution exercise 2: worker completed; gates and native review recorded separately.' If the original line is absent, report it and do not change anything. Change no other line or file. Do not commit. Return the exact changed line and any actual checks; do not claim gates or review ran.",
+      "feature_id": "FEAT-AMR-001",
+      "module_id": "ENG-TOOLING",
+      "milestone": "Stage 0 Foundation",
+      "actor": "repository-contributor",
+      "scope": "local-development",
+      "permission": "existing repository access",
+      "paths": ["docs/engineering/ai-orchestration/features/quality-first-amr.md"],
+      "consulted": ["AGENTS.md", "WORKFLOW.md", "docs/engineering/ai-orchestration/module.md", "docs/engineering/ai-orchestration/features/quality-first-amr.md", "docs/engineering/ai-orchestration/contract.md"],
+      "invariants": ["Local documentation only", "No production operations", "No fabricated tests or review", "No commits or undeclared file changes"],
+      "decisions": ["Reuse existing AMR native adapter and private checkpoint storage"],
+      "tests": ["python3 docs/tooling/amr.py gates --base origin/main"],
+      "findings": [],
+      "next_action": "Run gates and independent native review, then inspect and triage findings",
+      "kind": "docs",
+      "bounded": true,
+      "spec_verified": true,
+      "tests_known": true,
+      "signals": [],
+      "depends_on": [],
+      "write_paths": ["docs/engineering/ai-orchestration/features/quality-first-amr.md"]
+    }
+  ]
+}

@@ -30,9 +30,16 @@ Use `.github/pull_request_template.md`. Reviewer checks the docs-to-code mapping
 `docs/engineering/definition-of-done.md`.
 
 ## AI-assisted engineering and native review
+Goal runs follow [persistent goal execution](docs/engineering/ai-orchestration/goal-execution.md): GOAL → milestone → module → feature → dependency-ordered task → routing → actual execution → gates → independent review → triage → progress. Use `amr.py goal status` at session start. The local checkpoint does not resume the desktop's native GOAL; inspect its actual status separately. After validation, continue the current product milestone within accepted ADR scope.
+
 Use the existing [AI review protocol](docs/governance/ai-review-protocol.md) and [AMR v2.1 guide](docs/engineering/ai-orchestration/README.md). Discover runtime capabilities → classify with source/owner evidence → resolve supported model/effort → preserve context → implement → execute deterministic gates → independent review for CRITICAL → provider native review when configured → triage/fix/retest/re-review → reconcile docs/evidence → required human approval. Keep a capable session rather than switching at every stage.
 
 Record exact model/effort observations, gate commands/results, review channel and content hash/head SHA. Escalate immediately for security/state risks, at two failed repairs of one root cause, and stop at four pending investigation. Missing infrastructure or native integration is an explicit limitation, never a passing gate. Auto-review and code review cannot grant production approval. Provider automatic review must be observed on the current PR/MR revision before it is claimed verified.
+
+## Source architecture governance (v1.2 proposal)
+Before creating a project/module/host, identify the owner and current Git/source state, then compare the proposed [repository](docs/architecture/repository-structure.md), [solution](docs/architecture/solution-architecture.md), [module](docs/architecture/module-internal-structure.md), [dependency](docs/architecture/dependency-rules.md) and [host](docs/architecture/host-composition.md) specifications. Do not treat them as accepted architecture.
+
+Use [ADR-0009](docs/decisions/0009-source-architecture.md) for review of the proposed source baseline. ADR-0008 remains the accepted scoped .NET/test bootstrap and is not replaced by this proposal. Any large source move, host/trust-boundary change or new dependency waits for explicit decision. Implement approved structure incrementally, update source/test mappings with the feature docs, and distinguish real architecture-test/CI execution from the proposed [test rules](docs/engineering/architecture-test-rules.md).
 
 ## Additional workflow for reference-environment experiments
 1. Register case in [LAB-01 coverage matrix](docs/reference-environments/lab-01/experiments/coverage-matrix.csv).

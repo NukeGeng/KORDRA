@@ -71,6 +71,20 @@ class Routing(unittest.TestCase):
         good=amr.resolve(route,{'models':[{'model':'gpt-6.1-sol','efforts':['medium']}]})
         self.assertEqual(good['support'],'advertised')
 
+    def test_sol_profiles_reject_older_sol_even_when_available(self):
+        for signals, effort in (([], 'medium'), (['auth'], 'high')):
+            with self.subTest(effort=effort):
+                t=task(); t['signals']=signals
+                route=amr.classify(t)
+                older={'models':[{'model':'gpt-6-sol','efforts':['medium','high']}]}
+                self.assertEqual(amr.resolve(route,older)['action'],'blocked')
+                exact={'models':[{'model':'gpt-6.1-sol','efforts':[effort]}]}
+                resolved=amr.resolve(route,exact)
+                self.assertEqual(resolved['model'],'gpt-6.1-sol')
+                self.assertEqual(resolved['effort'],effort)
+                self.assertEqual(resolved['support'],'advertised')
+                self.assertNotEqual(resolved['action'],'blocked')
+
     def test_amr11_sensitive_scope_not_launched(self):
         t=task(); t['scope']='production'
         r=dict(action='continue',support='advertised',model='gpt-6.1-sol',effort='high')
@@ -174,6 +188,39 @@ class Context(unittest.TestCase):
     def test_amr18_unknown_usage_is_not_invented(self):
         h=amr.snapshot(self.root,task(),amr.classify(task()))
         self.assertEqual(h['usage'],'unknown'); self.assertEqual(h['actual_model'],'unknown')
+
+    def test_staged_index_content_changes_are_part_of_git_identity(self):
+        def git(*args):
+            return subprocess.run(['git',*args],cwd=self.root,capture_output=True,
+                                  text=True,check=True).stdout.strip()
+        git('init','-q'); git('config','user.name','AMR fixture')
+        git('config','user.email','amr@example.invalid'); git('add','.')
+        git('commit','-qm','baseline')
+        (self.root/'source.py').write_text('x=2\n'); git('add','source.py')
+        first=amr.git_identity(self.root)
+        (self.root/'source.py').write_text('x=3\n'); git('add','source.py')
+        second=amr.git_identity(self.root)
+        self.assertEqual(first['status'],second['status'])
+        self.assertNotEqual(first['index'],second['index'])
+
+
+class Changeguard(unittest.TestCase):
+    def test_working_tree_paths_includes_unstaged_staged_and_untracked(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root=Path(directory)
+            for name in ('staged.py','unstaged.py','tracked.py'):
+                (root/name).write_text('value = 1\n')
+            def git(*args):
+                return subprocess.run(['git',*args],cwd=root,capture_output=True,
+                                      text=True,check=True).stdout.strip()
+            git('init','-q'); git('config','user.name','AMR fixture')
+            git('config','user.email','amr@example.invalid'); git('add','.')
+            git('commit','-qm','baseline')
+            (root/'staged.py').write_text('value = 2\n'); git('add','staged.py')
+            (root/'unstaged.py').write_text('value = 2\n')
+            (root/'untracked.py').write_text('value = 1\n')
+            self.assertTrue({'staged.py','unstaged.py','untracked.py'}
+                            <= changeguard.working_tree_paths(root))
 
 
 class ReviewLedger(unittest.TestCase):

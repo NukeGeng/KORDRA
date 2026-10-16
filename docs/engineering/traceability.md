@@ -26,6 +26,11 @@ last_reviewed: 2026-10-15
 | UC-009 | FEAT-REC-001 | MOD-REC | messaging.md | proposed/unmapped |
 | UC-010 | FEAT-PAD-001 | MOD-PAD | permissions.md | proposed/unmapped |
 | Developer quality-first workflow | [FEAT-AMR-001](ai-orchestration/features/quality-first-amr.md) | ENG-TOOLING (engineering only) | [local artifact contract](ai-orchestration/contract.md), [evidence](ai-orchestration/testing-and-evidence.md) | Tooling present in d0eff75; product-gate extension in current branch; owner acceptance pending |
+| Source and solution architecture baseline | [ADR-0009](../decisions/0009-source-architecture.md) | Architecture governance (proposal) | [six source specs](../architecture/README.md), [integration audit](source-architecture-adoption.md) | Proposed documentation only; no source migration or broad graph/host checks are accepted. One narrow Domain assembly dependency test already runs in product CI. |
 
 ## File mapping after source exists
+Goal-driven execution maps the existing FEAT-AMR-001 source/test registry to [goal workflow](ai-orchestration/goal-execution.md). Runtime smoke, E2E execution and review evidence are distinguished from policy/configuration in [runtime evidence](ai-orchestration/testing-and-evidence.md). Product milestone continuation remains in [roadmap](../product/roadmap.md).
+
+The v1.2 source architecture files are proposals, not code mappings. Existing project paths remain owned by the current feature specs until an explicit decision and incremental migration update those mappings.
+
 Set feature frontmatter `source_paths` and `test_paths` to actual repository-relative paths verified through `git ls-files`, then add `evidence` link in spec. The checker can validate existence in strict mode; review still validates semantic traceability.

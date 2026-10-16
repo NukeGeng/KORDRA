@@ -10,6 +10,10 @@ last_reviewed: 2026-10-15
 Owner: [developer engineering tooling](module.md), [FEAT-AMR-001](features/quality-first-amr.md). The existing [AI review protocol](../../governance/ai-review-protocol.md) remains authoritative for source/docs reconciliation. Correctness, architecture, security, reliability and maintainability precede efficiency and tokens. This checkout had no previous AMR implementation; this extends `docs/tooling`, AGENTS, WORKFLOW and existing CI rather than adding a product service.
 
 ## Routing and context continuity
+For persistent GOAL execution, use the [coordinator and executable workflow](goal-execution.md); `amr.py goal` extends this implementation with dependency scheduling, actual execution, current gates/review and private checkpoints.
+
+“Sol” means GPT-6.1 Sol (`gpt-6.1-sol`) throughout Kordra AMR. Medium and High select reasoning effort on that same model. An unavailable exact model/effort blocks execution; GPT-6 Sol (`gpt-6-sol`) is not a fallback.
+
 | Risk | Profile | Native model / effort | Evidence required |
 |---|---|---|---|
 | Mechanical lookup | deterministic | `rg` / enumeration | No source interpretation |

@@ -148,7 +148,7 @@ def tree_identity(root):
             if p.is_symlink() and name not in EXCLUDED_PARTS:
                 safe_path(root, p.relative_to(root).as_posix())
                 files[p.relative_to(root).as_posix()] = hashlib.sha256(
-                    os.readlink(p).encode()).hexdigest()
+                    os.readlink(p).encode()+b'\0mode='+str(p.lstat().st_mode).encode()).hexdigest()
         dirs[:] = sorted(d for d in dirs if d not in EXCLUDED_PARTS
                          and not (Path(parent)/d).is_symlink())
         for name in sorted(names):
@@ -159,7 +159,7 @@ def tree_identity(root):
             if p.is_symlink():
                 safe_path(root, rel)
             data = os.readlink(p).encode() if p.is_symlink() else p.read_bytes()
-            files[rel] = hashlib.sha256(data).hexdigest()
+            files[rel] = hashlib.sha256(data+b'\0mode='+str(p.lstat().st_mode).encode()).hexdigest()
     digest = hashlib.sha256(json.dumps(files, sort_keys=True).encode()).hexdigest()
     return {'digest': digest, 'files': files}
 
@@ -169,9 +169,16 @@ def git_identity(root):
         p = subprocess.run(['git', *args], cwd=root, text=True,
                            capture_output=True, timeout=15)
         return p.stdout.strip() if p.returncode == 0 else None
+    # `ls-files --stage` captures the index's selected blob and file mode without
+    # relying on HEAD, so this also works in fresh repositories and detects
+    # staged-content changes that leave porcelain status unchanged.
+    index = subprocess.run(['git','ls-files','--stage','-z'],cwd=root,
+                           capture_output=True,timeout=30)
+    index_bytes = index.stdout if index.returncode == 0 else b''
     return {'head': read('rev-parse', 'HEAD'),
             'branch': read('branch', '--show-current'),
-            'status': read('status', '--porcelain')}
+            'status': read('status', '--porcelain'),
+            'index': hashlib.sha256(index_bytes).hexdigest()}
 
 
 def snapshot(root, task, route):
@@ -227,7 +234,7 @@ def gates(root, base=None):
             ('product-test', ['dotnet', 'test', 'Kordra.slnx', '--configuration', 'Release',
                               '--no-build', '--no-restore', '--logger', 'trx'])])
     if base:
-        commands.append(('mapping', [sys.executable, 'docs/tooling/changeguard.py', '--base', base]))
+            commands.append(('mapping', [sys.executable, 'docs/tooling/changeguard.py', '--base', base, '--working-tree']))
     results = []
     product_ready = True
     for name, cmd in commands:
@@ -311,6 +318,7 @@ def launch_command(root, task, route):
 
 
 def main():
+    import amr_goal
     parser = argparse.ArgumentParser(description=__doc__)
     sub = parser.add_subparsers(dest='command', required=True)
     sub.add_parser('discover')
@@ -327,10 +335,13 @@ def main():
     p = sub.add_parser('validate-review')
     p.add_argument('--receipt', type=Path, required=True)
     p.add_argument('--critical', action='store_true')
+    amr_goal.add_parser(sub)
     args = parser.parse_args()
     result = {}
     code = 0
-    if args.command == 'discover':
+    if args.command == 'goal':
+        result = amr_goal.main(ROOT, args)
+    elif args.command == 'discover':
         result = discover(ROOT)
         save_private(ROOT, 'capabilities.json', result)
     elif args.command in ('route', 'context', 'launch'):
@@ -380,7 +391,7 @@ def main():
             'doccheck.py, changeguard.py, tests, .codex/config.toml and related docs. '
             'Read AGENTS.md. Focus on runtime correctness, fail-closed model/effort '
             'selection, stale evidence, approval boundaries and false passing gates. '
-            'No Git repository exists; review current files as a local snapshot. '
+            'Review the current repository content and Git diff when available. '
             'Use read-only tools. Return actionable defects with paths/lines; '
             'do not claim provider PR review or modify files.')
         try:

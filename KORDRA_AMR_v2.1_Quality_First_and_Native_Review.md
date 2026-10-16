@@ -43,6 +43,8 @@ Use native runtime capabilities when available. Build a lightweight orchestrator
 
 ## 4. Model profiles — Quality First
 
+User clarification: “Sol” always means GPT-6.1 Sol, exact native model ID `gpt-6.1-sol`. Medium/High denote reasoning effort on this model. Never silently substitute GPT-6 Sol (`gpt-6-sol`) or another model when the exact requested model/effort is unavailable; report blocked execution.
+
 | Profile | Intended model | When to choose |
 |---|---|---|
 | ROUTINE | GPT-6 Luna High | Narrow, clearly specified tasks with known ownership and low risk: CRUD, DTO, mapping, formatting, straightforward tests and docs |

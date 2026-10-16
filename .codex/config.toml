@@ -6,6 +6,14 @@ approval_policy = "on-request"
 approvals_reviewer = "user"
 sandbox_mode = "workspace-write"
 
+# Native delegation defaults for trusted future sessions. Explicit risk-based
+# spawn requests override these; executable goal receipts observe actual starts.
+[agents]
+enabled = true
+max_concurrent_threads_per_session = 3
+default_subagent_model = "gpt-6.1-sol"
+default_subagent_reasoning_effort = "medium"
+
 # Adds to the built-in reviewer policy; never replaces it. Only used when a
 # contributor explicitly selects native Auto-review for local development.
 [auto_review]

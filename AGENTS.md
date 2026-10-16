@@ -37,12 +37,21 @@
 Báo cáo theo mẫu: `Feature ID | Module | Files changed | Behavior | Contracts | Authorization scope | Tests & results | Docs updated | Debt added/closed | ADR | Remaining risks`.
 
 ## AI engineering and review
+- Goal runs use the existing [goal execution workflow](docs/engineering/ai-orchestration/goal-execution.md). The coordinator may delegate suitable independent tasks to native sub-agents using the AMR profiles, with explicit model/effort and bounded context. Keep tasks serial in a shared checkout when writing. Separate policy, native delegation and executable `amr.py goal` checkpoints; verify selection through runtime evidence, never self-report.
+- Continue the next eligible milestone task only after current gates, risk-based independent review and finding triage. Persist local execution state, reconcile interrupted work without automatic replay, and update the existing roadmap/feature evidence. Never infer native GOAL resume from a local checkpoint.
+- “Sol” always means GPT-6.1 Sol (`gpt-6.1-sol`): ENGINEERING uses medium reasoning, CRITICAL uses high. Never silently substitute GPT-6 Sol (`gpt-6-sol`) or another model; block and report unavailable exact model/effort.
 - Follow [FEAT-AMR-001](docs/engineering/ai-orchestration/features/quality-first-amr.md) and the [AMR guide](docs/engineering/ai-orchestration/README.md). Default substantive source work to ENGINEERING; security, tenant/platform scope, state integrity and production risk to CRITICAL. Verify native model/effort selection; configuration alone is not execution evidence.
 - Preserve structured, source-validated context across real model/session switches. Run `python3 docs/tooling/amr.py gates`; on a Git PR also supply `--base <verified-base-SHA>`. Failed/missing applicable checks and blocking findings prevent completion. CRITICAL requires independent review; self-check does not count.
 - Auto-review decides eligible sandbox requests only. Native Code Review is advisory. Neither is human production approval. Record unsupported/unconfigured capabilities honestly and retain all existing LAB-01 restrictions.
 
 ### Code review focus
 Prioritize actionable tenant/permission leaks; duplicate side effects after retries/ACK loss; breaking contracts without consumer migration; mutable approved spec/artifact at dispatch; secret disclosure; and source/docs ownership drift. Validate findings against the current content/revision, rerun reproductions after fixes and document evidence for dismissals. Mechanical checks belong in CI.
+
+## Source & solution architecture
+- Before creating or moving source, read the proposed [repository structure](docs/architecture/repository-structure.md), [solution architecture](docs/architecture/solution-architecture.md), [module structure](docs/architecture/module-internal-structure.md), [dependency rules](docs/architecture/dependency-rules.md), [host composition](docs/architecture/host-composition.md) and [project conventions](docs/engineering/project-conventions.md).
+- Those v1.2 documents and [ADR-0009](docs/decisions/0009-source-architecture.md) remain proposed. FullStackHero is a structural reference only, never a required dependency. Do not refactor existing source to match a proposed tree or add speculative projects/packages before explicit ADR acceptance.
+- Keep the existing AMR implementation in its current owner paths; do not create a second tool under `tools/amr`. Agent must remain isolated from Control Plane persistence and domain if/when that host is approved.
+- Map every new source/test path to its owning feature. Architecture-test rules are design guidance until executable tests and CI evidence exist.
 
 ## Rule hierarchy
 Security invariants > Accepted ADR & contracts > Module/feature specs > Existing code observations > Proposed design. Nếu xung đột giữa accepted docs và code, **không âm thầm chọn một phía**: mở architecture drift record và đối chiếu bằng chứng.
