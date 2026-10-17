@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Kordra AMR v2.1: routing and evidence alongside existing governance checks."""
+"""Kordra AMR v3: single-agent routing and evidence alongside existing governance checks."""
 import argparse
 import datetime
 import hashlib
@@ -14,7 +14,7 @@ from amr_native import NativeError, discover, local_review, probe_auto_review, p
 from changeguard import frontmatter, matches
 
 ROOT = Path(__file__).resolve().parents[2]
-EXCLUDED_PARTS = {'.git', '.amr-local', '__pycache__'}
+EXCLUDED_PARTS = {'.git', '.amr-local', '__pycache__', 'bin', 'obj', 'TestResults'}
 PROFILES = {'ROUTINE': ('gpt-6-luna', 'high'),
             'ENGINEERING': ('gpt-6.1-sol', 'medium'),
             'CRITICAL': ('gpt-6.1-sol', 'high')}
@@ -38,7 +38,7 @@ def safe_path(root, relative):
     return path
 
 
-def validate_task(task, root):
+def validate_task(task, root, *, require_inputs=True):
     for key in REQUIRED_TASK:
         if key not in task:
             raise ValueError(f'missing task field: {key}')
@@ -51,19 +51,27 @@ def validate_task(task, root):
     if not task['paths'] or not task['consulted'] or not task['invariants']:
         raise ValueError('paths, consulted documents and invariants must be explicit')
     for rel in task['paths'] + task['consulted']:
-        if not safe_path(root, rel).is_file():
+        path = safe_path(root, rel)
+        if require_inputs and not path.is_file():
             raise ValueError(f'missing input file: {rel}')
     specs = [(rel, frontmatter(safe_path(root, rel).read_text('utf-8')))
-             for rel in task['consulted'] if rel.endswith('.md')]
+             for rel in task['consulted'] if rel.endswith('.md')
+             and safe_path(root, rel).is_file()]
     owners = [(rel, meta) for rel, meta in specs
               if meta.get('feature_id') == task['feature_id']
               and meta.get('module_id') == task['module_id']]
-    if len(owners) != 1:
+    if len(owners) > 1 or (require_inputs and len(owners) != 1):
         raise ValueError('consult exactly one matching owner feature spec')
-    spec_path, meta = owners[0]
-    mappings = json.loads(meta.get('source_paths', '[]')) + json.loads(meta.get('test_paths', '[]'))
-    if any(p != spec_path and not any(matches(m, p) for m in mappings) for p in task['paths']):
-        raise ValueError('task paths not mapped to owner feature')
+    if owners:
+        spec_path, meta = owners[0]
+        mappings = json.loads(meta.get('source_paths', '[]')) + json.loads(meta.get('test_paths', '[]'))
+        if any(p != spec_path and not any(matches(m, p) for m in mappings) for p in task['paths']):
+            raise ValueError('task paths not mapped to owner feature')
+    else:
+        # Checkpoint reads may outlive an explicitly declared deletion. The
+        # immutable plan digest preserves the task metadata validated at init;
+        # dispatch still uses the strict default and requires the owner file.
+        meta = {'status': 'proposed', 'test_paths': '[]'}
     if task.get('kind', 'source') not in KINDS:
         raise ValueError('unknown task kind')
     for key in ('bounded', 'spec_verified', 'tests_known'):
@@ -148,9 +156,9 @@ def tree_identity(root):
             if p.is_symlink() and name not in EXCLUDED_PARTS:
                 safe_path(root, p.relative_to(root).as_posix())
                 files[p.relative_to(root).as_posix()] = hashlib.sha256(
-                    os.readlink(p).encode()).hexdigest()
-        dirs[:] = sorted(d for d in dirs if d not in (
-            '.git', '.amr-local', '__pycache__') and not (Path(parent)/d).is_symlink())
+                    os.readlink(p).encode()+b'\0mode='+str(p.lstat().st_mode).encode()).hexdigest()
+        dirs[:] = sorted(d for d in dirs if d not in EXCLUDED_PARTS
+                         and not (Path(parent)/d).is_symlink())
         for name in sorted(names):
             p = Path(parent)/name
             if p.suffix == '.pyc':
@@ -159,7 +167,7 @@ def tree_identity(root):
             if p.is_symlink():
                 safe_path(root, rel)
             data = os.readlink(p).encode() if p.is_symlink() else p.read_bytes()
-            files[rel] = hashlib.sha256(data).hexdigest()
+            files[rel] = hashlib.sha256(data+b'\0mode='+str(p.lstat().st_mode).encode()).hexdigest()
     digest = hashlib.sha256(json.dumps(files, sort_keys=True).encode()).hexdigest()
     return {'digest': digest, 'files': files}
 
@@ -169,9 +177,16 @@ def git_identity(root):
         p = subprocess.run(['git', *args], cwd=root, text=True,
                            capture_output=True, timeout=15)
         return p.stdout.strip() if p.returncode == 0 else None
+    # `ls-files --stage` captures the index's selected blob and file mode without
+    # relying on HEAD, so this also works in fresh repositories and detects
+    # staged-content changes that leave porcelain status unchanged.
+    index = subprocess.run(['git','ls-files','--stage','-z'],cwd=root,
+                           capture_output=True,timeout=30)
+    index_bytes = index.stdout if index.returncode == 0 else b''
     return {'head': read('rev-parse', 'HEAD'),
             'branch': read('branch', '--show-current'),
-            'status': read('status', '--porcelain')}
+            'status': read('status', '--porcelain'),
+            'index': hashlib.sha256(index_bytes).hexdigest()}
 
 
 def snapshot(root, task, route):
@@ -219,10 +234,22 @@ def gates(root, base=None):
         ('docs', [sys.executable, 'docs/tooling/doccheck.py', '--strict-sources']),
         ('scope', [sys.executable, 'docs/tooling/scopecheck.py']),
         ('unit', [sys.executable, '-m', 'unittest', 'discover', '-s', 'docs/tooling/tests', '-v'])]
+    has_product = (root/'Kordra.slnx').is_file()
+    if has_product:
+        commands.extend([
+            ('product-restore', ['dotnet', 'restore', 'Kordra.slnx', '--locked-mode']),
+            ('product-build', ['dotnet', 'build', 'Kordra.slnx', '--configuration', 'Release', '--no-restore']),
+            ('product-test', ['dotnet', 'test', 'Kordra.slnx', '--configuration', 'Release',
+                              '--no-build', '--no-restore', '--logger', 'trx'])])
     if base:
-        commands.append(('mapping', [sys.executable, 'docs/tooling/changeguard.py', '--base', base]))
+            commands.append(('mapping', [sys.executable, 'docs/tooling/changeguard.py', '--base', base, '--working-tree']))
     results = []
+    product_ready = True
     for name, cmd in commands:
+        if name.startswith('product-') and not product_ready:
+            results.append({'name': name, 'command': cmd, 'status': 'blocked',
+                            'reason': 'prior product stage failed; do not test stale binaries'})
+            continue
         try:
             p = subprocess.run(cmd, cwd=root, text=True, capture_output=True, timeout=90)
             results.append({'name': name, 'command': cmd, 'status': 'passed' if p.returncode == 0
@@ -230,16 +257,20 @@ def gates(root, base=None):
                             'output': p.stdout+p.stderr})
         except subprocess.TimeoutExpired:
             results.append({'name': name, 'command': cmd, 'status': 'failed', 'reason': 'timeout'})
+        except OSError as exc:
+            results.append({'name': name, 'command': cmd, 'status': 'failed', 'reason': str(exc)})
+        if name.startswith('product-'):
+            product_ready = results[-1]['status'] == 'passed'
     after = tree_identity(root)['digest']
     stable = before == after
     return {'schemaVersion': 1, 'created_at': now(), 'content': before, 'source_stable': stable,
             'checks': results, 'local_status': 'passed' if all(
                 x['status'] == 'passed' for x in results) and stable else 'failed',
             'source_mapping': 'executed' if base else 'not_configured',
-            'product_tests': 'not_configured: define applicable product gates in the owning module'}
+            'product_tests': 'executed' if has_product else 'not_configured: no product solution'}
 
 
-def completion_errors(receipt, digest, critical=False):
+def completion_errors(receipt, digest, critical=False, product_required=False):
     """Validate a human-authored review ledger; it is not proof of provider identity."""
     errors = []
     if receipt.get('schemaVersion') != 1 or receipt.get('content') != digest:
@@ -251,6 +282,9 @@ def completion_errors(receipt, digest, critical=False):
         errors.append('required checks missing or not passed')
     if not {'docs', 'scope', 'unit'} <= {x.get('name') for x in checks}:
         errors.append('mandatory repository gates missing')
+    if product_required and (receipt.get('product_tests') != 'executed' or not {
+            'product-restore', 'product-build', 'product-test'} <= {x.get('name') for x in checks}):
+        errors.append('product solution exists but required product checks are missing')
     review = receipt.get('review', {})
     if critical and (review.get('status') != 'verified' or review.get('independent') is not True
                      or review.get('content') != digest or not review.get('evidence')):
@@ -287,11 +321,13 @@ def launch_command(root, task, route):
               'operations under explicit human approval. Task: '+task['objective'])
     return ['codex', '--strict-config', '--cd', str(root), '--model', route['model'],
             '-c', 'model_reasoning_effort='+json.dumps(route['effort']),
+            '-c', 'agents.enabled=false',
             '--sandbox', 'workspace-write', '--ask-for-approval', 'on-request',
             '-c', 'approvals_reviewer="user"', prompt]
 
 
 def main():
+    import amr_goal
     parser = argparse.ArgumentParser(description=__doc__)
     sub = parser.add_subparsers(dest='command', required=True)
     sub.add_parser('discover')
@@ -308,10 +344,13 @@ def main():
     p = sub.add_parser('validate-review')
     p.add_argument('--receipt', type=Path, required=True)
     p.add_argument('--critical', action='store_true')
+    amr_goal.add_parser(sub)
     args = parser.parse_args()
     result = {}
     code = 0
-    if args.command == 'discover':
+    if args.command == 'goal':
+        result = amr_goal.main(ROOT, args)
+    elif args.command == 'discover':
         result = discover(ROOT)
         save_private(ROOT, 'capabilities.json', result)
     elif args.command in ('route', 'context', 'launch'):
@@ -361,7 +400,7 @@ def main():
             'doccheck.py, changeguard.py, tests, .codex/config.toml and related docs. '
             'Read AGENTS.md. Focus on runtime correctness, fail-closed model/effort '
             'selection, stale evidence, approval boundaries and false passing gates. '
-            'No Git repository exists; review current files as a local snapshot. '
+            'Review the current repository content and Git diff when available. '
             'Use read-only tools. Return actionable defects with paths/lines; '
             'do not claim provider PR review or modify files.')
         try:
@@ -378,7 +417,8 @@ def main():
         code = 0 if result['status'] == 'verified' else 1
     else:
         receipt = json.loads(args.receipt.read_text())
-        errors = completion_errors(receipt, tree_identity(ROOT)['digest'], args.critical)
+        errors = completion_errors(receipt, tree_identity(ROOT)['digest'], args.critical,
+                                   product_required=(ROOT/'Kordra.slnx').is_file())
         result = {'status': 'blocked' if errors else 'ledger_valid', 'errors': errors,
                   'limitation': 'structural ledger validation, not provider or human identity attestation'}
         code = 1 if errors else 0

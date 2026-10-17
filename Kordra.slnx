@@ -1,0 +1,6 @@
+<Solution>
+  <Folder Name="/ArtifactManagement/">
+    <Project Path="src/Modules/ArtifactManagement/Domain/Kordra.ArtifactManagement.Domain.csproj" />
+    <Project Path="tests/ArtifactManagement.Domain.Tests/ArtifactManagement.Domain.Tests.csproj" />
+  </Folder>
+</Solution>

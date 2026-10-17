@@ -9,13 +9,14 @@ last_reviewed: 2026-10-15
 
 ## Ownership map
 - `GOAL.md`: mục tiêu/phạm vi; `AGENTS.md`/`WORKFLOW.md`: luật làm việc.
-- `docs/architecture/`: các invariant và liên kết giữa modules; không chứa chi tiết button/screen.
-- `docs/decisions/`: quyết định kiến trúc đã thông qua, immutable history (supersede thay vì xóa).
+- `docs/architecture/`: các invariant và liên kết giữa modules; không chứa chi tiết button/screen. Source/solution specs v1.2 đang `proposed` và chưa là baseline.
+- `docs/decisions/`: quyết định kiến trúc, immutable history (supersede thay vì xóa); `proposed` ADR không cấp quyền thay đổi baseline.
 - `docs/features/<module>/module.md`: module owner, capability, inbound/outbound dependencies.
 - `docs/features/<module>/features/<feature>.md`: hành vi, actor, permission, flow, acceptance của từng feature.
 - `docs/contracts/`: giao diện công khai và message schema liên module.
 - `docs/operations/`: runbooks thực thi/khôi phục.
 - `docs/engineering/technical-debt.md`: debt register, không ghi TODO rải rác làm nguồn duy nhất.
+- `docs/engineering/project-conventions.md` and `architecture-test-rules.md`: proposed code conventions and architecture-test design; actual source/CI behavior remains established by implementation and test evidence.
 
 ## Metadata bắt buộc
 YAML frontmatter: `id`, `status`, `owner`, `last_reviewed`; module còn có `module_id`; feature có `feature_id`, `module_id`, `phase`, `source_paths`, `test_paths` (đường dẫn chưa có có thể là `[]`).

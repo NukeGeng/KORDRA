@@ -28,14 +28,15 @@ class Native:
         self.counter = 0
         self.incoming = queue.Queue()
         self.process = subprocess.Popen(
-            ['codex', 'app-server', '--strict-config', *overrides, '--stdio'],
+            ['codex', 'app-server', '--strict-config', *overrides,
+             '-c', 'agents.enabled=false', '--stdio'],
             cwd=self.cwd, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
             stderr=subprocess.DEVNULL, text=True, bufsize=1,
             start_new_session=True)
         threading.Thread(target=self._read, daemon=True).start()
         try:
             self.request('initialize', {
-                'clientInfo': {'name': 'kordra_amr', 'version': '2.1'},
+                'clientInfo': {'name': 'kordra_amr', 'version': '3.0'},
                 'capabilities': {'experimentalApi': True}})
             self.send({'method': 'initialized'})
         except BaseException:
@@ -57,6 +58,10 @@ class Native:
         self.process.stdin.flush()
 
     def receive(self, deadline):
+        if time.monotonic() >= deadline:
+            methods = sorted({x.get('method', '') for x in self.events})
+            raise NativeError('native operation timed out; outcome unknown; observed events: '
+                              + ', '.join(methods))
         try:
             message = self.incoming.get(timeout=max(0.01, deadline-time.monotonic()))
         except queue.Empty as exc:
@@ -100,12 +105,15 @@ class Native:
             self.receive(deadline)
         return completed()
 
-    def start(self, model, effort, reviewer='user', sandbox='read-only'):
+    def start(self, model, effort, reviewer='user', sandbox='read-only', developer_instructions=None):
+        config = {'model_reasoning_effort': effort}
+        if developer_instructions:
+            config['developer_instructions'] = developer_instructions
         result = self.request('thread/start', {
             'cwd': self.cwd, 'model': model, 'ephemeral': True,
             'approvalPolicy': 'on-request', 'approvalsReviewer': reviewer,
             'sandbox': sandbox,
-            'config': {'model_reasoning_effort': effort}})
+            'config': config})
         if result.get('model') != model or result.get('reasoningEffort') != effort:
             raise NativeError('runtime changed requested model/effort; no fallback authorized')
         if result.get('approvalsReviewer') != reviewer:
@@ -163,6 +171,7 @@ def discover(root):
             if not cursor:
                 break
     c = config['config']
+    agents = c.get('agents') or {}
     return {'status': 'supported', 'version': version, 'models': models,
             'project_config': [{'status': 'disabled' if x.get('disabledReason') else 'loaded',
                                 'reason': x.get('disabledReason')}
@@ -171,6 +180,9 @@ def discover(root):
             'effective_config': {k: c.get(k) for k in (
                 'model', 'model_reasoning_effort', 'approval_policy',
                 'approvals_reviewer', 'sandbox_mode')},
+            'agent_defaults': {'subagents_enabled': agents.get('enabled', False),
+                               'max_concurrent_threads_per_session':
+                                   agents.get('max_concurrent_threads_per_session')},
             'usage': 'unknown', 'provider_review': 'not_configured'}
 
 
@@ -180,6 +192,7 @@ def summarize(start, turn, events, model, effort):
                 if x.get('method') == 'item/completed'
                 and x['params'].get('item', {}).get('type') == 'agentMessage']
     return {'requested_model': model, 'requested_effort': effort,
+            'thread_id': start.get('thread', {}).get('id'), 'turn_id': turn.get('id'),
             'observed_model': start.get('model'),
             'observed_effort': start.get('reasoningEffort'),
             'observed_sandbox': start.get('sandbox'),
@@ -192,6 +205,40 @@ def summarize(start, turn, events, model, effort):
             'event_methods': sorted({x.get('method', '') for x in events}),
             'usage': next((x['params'].get('tokenUsage') for x in reversed(events)
                            if x.get('method') == 'thread/tokenUsage/updated'), 'unknown')}
+
+
+def execute_task(root, task, model, effort, *, sandbox='read-only', timeout=600, on_start=None,
+                 goal_context=None):
+    """Execute one local task in a native session; callers own durable task state."""
+    if task.get('scope') != 'local-development' or set(task.get('signals', [])) & {
+            'production', 'secrets', 'remote-execution'}:
+        raise NativeError('native task execution is restricted to local development')
+    context = {key: task.get(key) for key in (
+        'task_id', 'objective', 'feature_id', 'module_id', 'actor', 'permission',
+        'scope', 'paths', 'consulted', 'invariants', 'decisions', 'tests', 'next_action',
+        'write_paths', 'depends_on', 'milestone')}
+    prompt = (
+        'Execute the actual local development task below. Read AGENTS.md and WORKFLOW.md '
+        'and the consulted source documents before acting. Respect the supplied scope '
+        'and invariants. Do not delegate or create nested agents, use network access, '
+        'or access infrastructure, clusters, devices, queues, or production resources. '
+        'Never bypass approval, a denial, or sandbox restrictions. If the task requires '
+        'those actions, stop and report the blocked requirement. Do not treat model '
+        'catalog discovery or capability probes as execution of this task. Return a '
+        'factual summary of changes, actual checks and results, and remaining blockers; '
+        'do not claim checks or review that did not run. Structured task:\n'
+        + json.dumps({'goal': goal_context, 'task': context}, ensure_ascii=False, indent=2))
+    with Native(root, timeout=timeout) as native:
+        start = native.start(model, effort, sandbox=sandbox)
+        if start.get('sandbox', {}).get('networkAccess') is True:
+            raise NativeError('native task sandbox enabled network access')
+        thread_id = start['thread']['id']
+        if on_start is not None:
+            on_start(thread_id)
+        turn = native.turn(thread_id, prompt, model, effort)
+        result = summarize(start, turn, native.events, model, effort)
+        result.update(execution='native_session', task_id=task['task_id'])
+        return result
 
 
 def probe_profile(model, effort, timeout=90):
@@ -235,13 +282,15 @@ def probe_auto_review(model, effort, timeout=120, extra_policy=None):
             return result
 
 
-def local_review(root, model, effort, instructions, timeout=300):
+def local_review(root, model, effort, instructions, timeout=300, target=None):
     with Native(root, timeout=timeout) as native:
-        start = native.start(model, effort)
+        start = (native.start(model, effort, developer_instructions=instructions)
+                 if instructions else native.start(model, effort))
         review = native.request('review/start', {'threadId': start['thread']['id'], 'delivery': 'inline',
-            'target': {'type': 'custom', 'instructions': instructions}})
+            'target': target if target is not None else {'type': 'custom', 'instructions': instructions}})
         turn = native.wait_turn(review['reviewThreadId'], review['turn']['id'])
         result = summarize(start, turn, native.events, model, effort)
+        result.update(thread_id=review['reviewThreadId'], turn_id=review['turn']['id'])
         result['channel'] = 'native_local_review'
         # A completed turn alone is insufficient: require native review exit.
         exits = [x['params']['item'] for x in native.events

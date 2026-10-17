@@ -2,7 +2,7 @@
 id: ADR-INDEX
 status: proposed
 owner: unassigned
-last_reviewed: 2026-10-15
+last_reviewed: 2026-10-16
 ---
 
 # Architecture Decision Records (ADRs)
@@ -19,3 +19,5 @@ ADR tracks **why** a design was chosen; status initially `proposed`, so not a fi
 | [0006](0006-driver-capabilities.md) | Adapter capability model |
 
 | [0007](0007-reference-testbed-not-product.md) | Reference environment is a bounded testbed, not product architecture |
+| [0008](0008-domain-bootstrap-validation.md) | Accepted scoped .NET/test bootstrap; other architecture and merge approvals remain separate |
+| [0009](0009-source-architecture.md) | Proposed Kordra source/solution layout; requires architecture and Agent-boundary review |

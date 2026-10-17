@@ -15,8 +15,9 @@ def matches(mapping, changed):
     return changed.startswith(mapping) if mapping.endswith('/') else mapping == changed
 
 def check_changes(root, changed):
-    governed=('src/', 'docs/tooling/', '.codex/', '.github/workflows/')
-    src=sorted(s for s in changed if s.startswith(governed) and not s.endswith(('.md','.txt')))
+    governed=('src/', 'tests/', 'docs/tooling/', '.codex/', '.github/workflows/')
+    src=sorted(s for s in changed if (s.startswith(governed) or s in {'global.json', 'Kordra.slnx'})
+               and not s.endswith(('.md','.txt')))
     docs=[]
     specs=list((root/'docs/features').glob('*/features/*.md'))
     specs+=list((root/'docs/engineering/ai-orchestration/features').glob('*.md'))
@@ -35,13 +36,30 @@ def check_changes(root, changed):
                 if doc not in changed: problems.append(f'STALE {file} belongs to {fid} ({doc}) but feature doc not updated in PR')
     return src,problems
 
+def working_tree_paths(root):
+    """Include unstaged, staged and untracked files in source ownership checks."""
+    paths=set()
+    commands=(['diff','--name-only','-z'],['diff','--cached','--name-only','-z'],
+              ['ls-files','--others','--exclude-standard','-z'])
+    for args in commands:
+        cp=subprocess.run(['git',*args],cwd=root,capture_output=True,timeout=15)
+        if cp.returncode: raise RuntimeError('unable to inspect Git working tree')
+        paths.update(p.decode('utf-8','surrogateescape') for p in cp.stdout.split(b'\0') if p)
+    return paths
+
 def main():
     ap=argparse.ArgumentParser()
     ap.add_argument('--base',required=True,help='Existing git base ref or SHA (git diff base...HEAD)')
+    ap.add_argument('--working-tree',action='store_true',help='also check staged, unstaged and untracked files')
     args=ap.parse_args()
     cp=subprocess.run(['git','diff','--name-only',f'{args.base}...HEAD'],cwd=ROOT, text=True, capture_output=True)
     if cp.returncode: print('ERROR unable to compare git refs:',cp.stderr.strip()); return 2
-    changed=set(cp.stdout.splitlines()); src,problems=check_changes(ROOT,changed)
+    changed=set(cp.stdout.splitlines())
+    if args.working_tree:
+        try: changed.update(working_tree_paths(ROOT))
+        except (OSError,RuntimeError,subprocess.TimeoutExpired) as exc:
+            print('ERROR unable to inspect working tree:',exc); return 2
+    src,problems=check_changes(ROOT,changed)
     if not src: print('PASS no source changes detected'); return 0
     for problem in problems: print('ERROR',problem)
     print(f'Changed source files: {len(src)}; problems: {len(problems)}')

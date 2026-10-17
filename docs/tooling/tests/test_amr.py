@@ -27,6 +27,11 @@ def task():
 
 
 class Routing(unittest.TestCase):
+    def test_project_defaults_disable_subagent_creation(self):
+        import tomllib
+        config = tomllib.loads((amr.ROOT/'.codex/config.toml').read_text())
+        self.assertIs(config['agents']['enabled'], False)
+
     def test_amr01_lookup_is_deterministic(self):
         t=task(); t['kind']='lookup'
         self.assertEqual(amr.classify(t)['action'], 'deterministic')
@@ -71,6 +76,20 @@ class Routing(unittest.TestCase):
         good=amr.resolve(route,{'models':[{'model':'gpt-6.1-sol','efforts':['medium']}]})
         self.assertEqual(good['support'],'advertised')
 
+    def test_sol_profiles_reject_older_sol_even_when_available(self):
+        for signals, effort in (([], 'medium'), (['auth'], 'high')):
+            with self.subTest(effort=effort):
+                t=task(); t['signals']=signals
+                route=amr.classify(t)
+                older={'models':[{'model':'gpt-6-sol','efforts':['medium','high']}]}
+                self.assertEqual(amr.resolve(route,older)['action'],'blocked')
+                exact={'models':[{'model':'gpt-6.1-sol','efforts':[effort]}]}
+                resolved=amr.resolve(route,exact)
+                self.assertEqual(resolved['model'],'gpt-6.1-sol')
+                self.assertEqual(resolved['effort'],effort)
+                self.assertEqual(resolved['support'],'advertised')
+                self.assertNotEqual(resolved['action'],'blocked')
+
     def test_amr11_sensitive_scope_not_launched(self):
         t=task(); t['scope']='production'
         r=dict(action='continue',support='advertised',model='gpt-6.1-sol',effort='high')
@@ -83,6 +102,7 @@ class Routing(unittest.TestCase):
         cmd=amr.launch_command(Path('.'),task(),r)
         self.assertIn('--model',cmd); self.assertIn('gpt-6.1-sol',cmd)
         self.assertIn('model_reasoning_effort="medium"',cmd)
+        self.assertIn('agents.enabled=false',cmd)
         self.assertIn('approvals_reviewer="user"',cmd)
         self.assertNotIn('--dangerously-bypass-approvals-and-sandbox',cmd)
 
@@ -137,6 +157,15 @@ class Context(unittest.TestCase):
         self.assertEqual(p.stat().st_mode & 0o777,0o600)
         amr.validate_snapshot(self.root,h)
 
+    def test_generated_dotnet_outputs_do_not_replace_source_identity(self):
+        before=amr.tree_identity(self.root)
+        for directory in ('bin','obj','TestResults'):
+            output=self.root/directory;output.mkdir()
+            (output/'generated').write_text('derived output')
+            with self.assertRaisesRegex(ValueError,'excluded'):
+                amr.safe_path(self.root,directory+'/generated')
+        self.assertEqual(before,amr.tree_identity(self.root))
+
     def test_escape_absolute_and_external_symlink_rejected(self):
         for p in ('../outside','/etc/passwd'):
             with self.assertRaises(ValueError): amr.safe_path(self.root,p)
@@ -165,6 +194,39 @@ class Context(unittest.TestCase):
     def test_amr18_unknown_usage_is_not_invented(self):
         h=amr.snapshot(self.root,task(),amr.classify(task()))
         self.assertEqual(h['usage'],'unknown'); self.assertEqual(h['actual_model'],'unknown')
+
+    def test_staged_index_content_changes_are_part_of_git_identity(self):
+        def git(*args):
+            return subprocess.run(['git',*args],cwd=self.root,capture_output=True,
+                                  text=True,check=True).stdout.strip()
+        git('init','-q'); git('config','user.name','AMR fixture')
+        git('config','user.email','amr@example.invalid'); git('add','.')
+        git('commit','-qm','baseline')
+        (self.root/'source.py').write_text('x=2\n'); git('add','source.py')
+        first=amr.git_identity(self.root)
+        (self.root/'source.py').write_text('x=3\n'); git('add','source.py')
+        second=amr.git_identity(self.root)
+        self.assertEqual(first['status'],second['status'])
+        self.assertNotEqual(first['index'],second['index'])
+
+
+class Changeguard(unittest.TestCase):
+    def test_working_tree_paths_includes_unstaged_staged_and_untracked(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root=Path(directory)
+            for name in ('staged.py','unstaged.py','tracked.py'):
+                (root/name).write_text('value = 1\n')
+            def git(*args):
+                return subprocess.run(['git',*args],cwd=root,capture_output=True,
+                                      text=True,check=True).stdout.strip()
+            git('init','-q'); git('config','user.name','AMR fixture')
+            git('config','user.email','amr@example.invalid'); git('add','.')
+            git('commit','-qm','baseline')
+            (root/'staged.py').write_text('value = 2\n'); git('add','staged.py')
+            (root/'unstaged.py').write_text('value = 2\n')
+            (root/'untracked.py').write_text('value = 1\n')
+            self.assertTrue({'staged.py','unstaged.py','untracked.py'}
+                            <= changeguard.working_tree_paths(root))
 
 
 class ReviewLedger(unittest.TestCase):
@@ -222,8 +284,42 @@ class ReviewLedger(unittest.TestCase):
     def test_stale_receipt_rejected(self):
         self.assertTrue(amr.completion_errors(self.ledger(),'changed'))
 
+    def test_product_solution_requires_product_checks_in_completion_ledger(self):
+        r=self.ledger()
+        self.assertTrue(amr.completion_errors(r,'hash',product_required=True))
+        r['product_tests']='executed'
+        r['checks'] += [dict(name=n,status='passed') for n in
+                       ('product-restore','product-build','product-test')]
+        self.assertEqual(amr.completion_errors(r,'hash',product_required=True),[])
+
 
 class NativeContract(unittest.TestCase):
+    def test_native_app_server_explicitly_disables_subagents(self):
+        with patch('amr_native.subprocess.Popen') as popen, \
+                patch('amr_native.threading.Thread') as thread, \
+                patch.object(amr_native.Native, 'request', return_value={}), \
+                patch.object(amr_native.Native, 'send'):
+            amr_native.Native(Path('.'))
+        command = popen.call_args.args[0]
+        self.assertIn('-c', command)
+        self.assertIn('agents.enabled=false', command)
+        thread.return_value.start.assert_called_once()
+
+    def test_discovery_reports_effective_subagent_setting(self):
+        from types import SimpleNamespace
+        with patch('amr_native.shutil.which', return_value='/usr/bin/codex'), \
+                patch('amr_native.subprocess.run',
+                      return_value=SimpleNamespace(stdout='codex test\n')), \
+                patch('amr_native.Native') as cls:
+            cls.return_value.__enter__.return_value.request.side_effect = [
+                {'config': {'agents': {'enabled': False, 'max_concurrent_threads_per_session': None}},
+                 'layers': [{'name': {'type': 'project'}}]},
+                {'data': [{'model': 'gpt-6.1-sol', 'supportedReasoningEfforts': [
+                    {'reasoningEffort': 'medium'}, {'reasoningEffort': 'high'}]}]}]
+            result = amr_native.discover(Path('.'))
+        self.assertEqual(result['agent_defaults'], {
+            'subagents_enabled': False, 'max_concurrent_threads_per_session': None})
+
     def test_actual_selection_mismatch_rejected(self):
         response=dict(model='wrong',reasoningEffort='medium')
         fake=object.__new__(amr_native.Native);fake.cwd='.'
@@ -297,6 +393,15 @@ class Mapping(unittest.TestCase):
         _,errors=changeguard.check_changes(amr.ROOT,{'src/Unknown.cs'})
         self.assertTrue(any('UNMAPPED' in e for e in errors))
 
+    def test_product_tests_and_bootstrap_files_need_feature_ownership(self):
+        spec='docs/features/artifact-management/features/immutable-artifact.md'
+        paths={'global.json','Kordra.slnx','tests/ArtifactManagement.Domain.Tests/OCIImageDigestTests.cs',
+               '.github/workflows/product-ci.yml'}
+        _,errors=changeguard.check_changes(amr.ROOT,paths|{spec})
+        self.assertEqual(errors,[])
+        _,errors=changeguard.check_changes(amr.ROOT,{'tests/UnownedTests.cs'})
+        self.assertTrue(any('UNMAPPED' in e for e in errors))
+
     def test_product_and_engineering_feature_roots_remain_checked(self):
         self.assertIn('docs/features/',doccheck.FEATURE_ROOTS)
         self.assertIn('docs/engineering/ai-orchestration/',doccheck.FEATURE_ROOTS)
@@ -326,6 +431,18 @@ class Mapping(unittest.TestCase):
 
 
 class Gates(unittest.TestCase):
+    def test_failed_product_restore_blocks_build_and_stale_binary_tests(self):
+        with tempfile.TemporaryDirectory() as d:
+            root=Path(d);(root/'Kordra.slnx').write_text('<Solution />')
+            def command(cmd,**kwargs):
+                return subprocess.CompletedProcess(cmd,1 if cmd[0]=='dotnet' else 0,'','')
+            with patch.object(amr.subprocess,'run',side_effect=command) as run:
+                result=amr.gates(root)
+            stages=[x['status'] for x in result['checks'] if x['name'].startswith('product-')]
+            self.assertEqual(stages,['failed','blocked','blocked'])
+            self.assertEqual(sum(x.args[0][0]=='dotnet' for x in run.call_args_list),1)
+            self.assertEqual(result['local_status'],'failed')
+
     def test_real_failing_commands_cannot_pass(self):
         with tempfile.TemporaryDirectory() as d:
             result=amr.gates(Path(d))

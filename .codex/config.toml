@@ -1,10 +1,13 @@
-# Native defaults for new trusted project sessions. The active desktop chat
-# may override these; amr discover reports effective values separately.
+# Single-agent defaults for new trusted project sessions. The active desktop
+# chat may override these; amr discover reports effective values separately.
 model = "gpt-6.1-sol"
 model_reasoning_effort = "medium"
 approval_policy = "on-request"
 approvals_reviewer = "user"
 sandbox_mode = "workspace-write"
+
+[agents]
+enabled = false
 
 # Adds to the built-in reviewer policy; never replaces it. Only used when a
 # contributor explicitly selects native Auto-review for local development.
