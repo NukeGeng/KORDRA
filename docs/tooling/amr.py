@@ -38,7 +38,7 @@ def safe_path(root, relative):
     return path
 
 
-def validate_task(task, root):
+def validate_task(task, root, *, require_inputs=True):
     for key in REQUIRED_TASK:
         if key not in task:
             raise ValueError(f'missing task field: {key}')
@@ -51,19 +51,27 @@ def validate_task(task, root):
     if not task['paths'] or not task['consulted'] or not task['invariants']:
         raise ValueError('paths, consulted documents and invariants must be explicit')
     for rel in task['paths'] + task['consulted']:
-        if not safe_path(root, rel).is_file():
+        path = safe_path(root, rel)
+        if require_inputs and not path.is_file():
             raise ValueError(f'missing input file: {rel}')
     specs = [(rel, frontmatter(safe_path(root, rel).read_text('utf-8')))
-             for rel in task['consulted'] if rel.endswith('.md')]
+             for rel in task['consulted'] if rel.endswith('.md')
+             and safe_path(root, rel).is_file()]
     owners = [(rel, meta) for rel, meta in specs
               if meta.get('feature_id') == task['feature_id']
               and meta.get('module_id') == task['module_id']]
-    if len(owners) != 1:
+    if len(owners) > 1 or (require_inputs and len(owners) != 1):
         raise ValueError('consult exactly one matching owner feature spec')
-    spec_path, meta = owners[0]
-    mappings = json.loads(meta.get('source_paths', '[]')) + json.loads(meta.get('test_paths', '[]'))
-    if any(p != spec_path and not any(matches(m, p) for m in mappings) for p in task['paths']):
-        raise ValueError('task paths not mapped to owner feature')
+    if owners:
+        spec_path, meta = owners[0]
+        mappings = json.loads(meta.get('source_paths', '[]')) + json.loads(meta.get('test_paths', '[]'))
+        if any(p != spec_path and not any(matches(m, p) for m in mappings) for p in task['paths']):
+            raise ValueError('task paths not mapped to owner feature')
+    else:
+        # Checkpoint reads may outlive an explicitly declared deletion. The
+        # immutable plan digest preserves the task metadata validated at init;
+        # dispatch still uses the strict default and requires the owner file.
+        meta = {'status': 'proposed', 'test_paths': '[]'}
     if task.get('kind', 'source') not in KINDS:
         raise ValueError('unknown task kind')
     for key in ('bounded', 'spec_verified', 'tests_known'):

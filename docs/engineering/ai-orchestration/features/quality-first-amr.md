@@ -2,7 +2,7 @@
 id: FEAT-AMR-001
 status: implemented
 owner: engineering-maintainers
-last_reviewed: 2026-10-16
+last_reviewed: 2026-10-17
 module_id: ENG-TOOLING
 feature_id: FEAT-AMR-001
 phase: developer-tooling
@@ -49,6 +49,9 @@ Missing capability/catalog model when a switch is required, unsupported effort, 
 - Resume validates exact recommended model/effort and unchanged plan/content/Git/task identity. Caller-supplied desktop model selection stays unverified. Unsupported native pause is reported separately from the local checkpoint; local state never claims to pause or resume native GOAL.
 - AMR and project configuration default to single-agent. Native collaboration sub-agent creation is disabled in trusted project config and prohibited by repository instructions.
 - Only current deterministic gates plus independent native review and explicit finding triage can complete a task. Triage is contributor judgment, never an AI-generated production approval. Stale source/Git, changed plan, scope violations, unavailable required switch target with no capable current profile, unresolved findings, missing review or failed gates block advancement. Read-only tasks must leave source unchanged; writes must stay within declared paths. Native approval requests are denied by the adapter.
+- The dispatch snapshot protects every file outside the task's declared `write_paths`; later validation rejects any out-of-scope content drift while allowing repairs inside the declared paths. Checkpoint inspection tolerates a declared input deletion so recovery remains possible, while task dispatch still requires all current inputs to exist.
+- A continue recommendation and `goal step` use the same exact, currently advertised model/effort selection when it meets the task quality floor. The native execution receipt verifies that selection; an unavailable preferred switch target never causes a silent substitution.
+- A task can enter validation and acceptance only with a verified native task-execution receipt. Direct coordinator edits have no session-bound execution evidence and cannot be accepted as completed AMR work; use the serial `goal step` runner or leave the task uncompleted. Native review and contributor triage remain separate gates.
 - Existing native smoke tasks exercise ROUTINE/ENGINEERING/CRITICAL and verify child-session model selection. The v3 switch/resume workflow is separately covered by offline state-machine tests; it is not described as an automatic chat model swap. Any actual desktop switch requires user action and session-bound runtime evidence before it is claimed verified.
 - Sol naming regression: both ENGINEERING and CRITICAL resolve to the exact `gpt-6.1-sol` model and requested effort; a catalog advertising only older `gpt-6-sol` blocks both profiles. Contributor actor, repository access and local development scope remain unchanged.
 - Product bootstrap follow-up: when Kordra.slnx exists, the existing gates also run locked restore, build and product tests; failed restore/build blocks dependent stages to prevent stale-binary passes. Build outputs are excluded from source snapshots and cannot be mapped as source. Product test/bootstrap file changes require owner feature updates through changeguard.

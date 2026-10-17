@@ -147,11 +147,29 @@ class GoalIntegration(unittest.TestCase):
         with self.boundaries(capabilities=lambda root: {
             'models': [{'model': 'gpt-6.1-sol', 'efforts': ['high']}]}):
             result = goal.recommend(self.root, 'fixture', 'gpt-6.1-sol', 'high')
+            stepped = goal.step(self.root, 'fixture')
         self.assertEqual(result['status'], 'active')
         self.assertEqual(result['recommendation']['action'], 'continue')
         self.assertEqual(result['recommendation']['recommended'],
                          {'model': 'gpt-6.1-sol', 'effort': 'high'})
         self.assertIn('exact Medium switch target is unavailable', result['recommendation']['reason'])
+        self.assertEqual(result['recommendation']['route']['model'], 'gpt-6.1-sol')
+        self.assertEqual(result['recommendation']['route']['effort'], 'high')
+        self.assertEqual(stepped['tasks']['A']['status'], 'awaiting_triage')
+        self.assertEqual(stepped['tasks']['A']['route']['effort'], 'high')
+
+    def test_short_standard_task_keeps_high_and_step_uses_the_same_selection(self):
+        plan = copy.deepcopy(self.plan)
+        plan['tasks'] = [plan['tasks'][0]]
+        goal.init(self.root, plan)
+        with self.boundaries():
+            recommendation = goal.recommend(self.root, 'fixture', 'gpt-6.1-sol', 'high')
+            result = goal.step(self.root, 'fixture')
+        self.assertEqual(recommendation['recommendation']['action'], 'continue')
+        self.assertEqual(recommendation['recommendation']['recommended'],
+                         {'model': 'gpt-6.1-sol', 'effort': 'high'})
+        self.assertEqual(result['tasks']['A']['status'], 'awaiting_triage')
+        self.assertEqual(result['tasks']['A']['route']['effort'], 'high')
 
     def test_unavailable_critical_target_still_blocks_lower_effort_current(self):
         plan = copy.deepcopy(self.plan)
@@ -163,6 +181,15 @@ class GoalIntegration(unittest.TestCase):
         self.assertEqual(result['status'], 'blocked')
         self.assertEqual(result['recommendation']['action'], 'blocked')
         self.assertEqual(self.execute_mock.call_count, 0)
+
+    def test_luna_high_is_not_substituted_for_standard_sol_quality_floor(self):
+        goal.init(self.root, self.plan)
+        with self.boundaries(capabilities=lambda root: {
+            'models': [{'model': 'gpt-6-luna', 'efforts': ['high']}]}):
+            result = goal.recommend(self.root, 'fixture', 'gpt-6-luna', 'high')
+            self.assertEqual(self.execute_mock.call_count, 0)
+        self.assertEqual(result['status'], 'blocked')
+        self.assertEqual(result['recommendation']['action'], 'blocked')
 
     def test_medium_to_medium_continues_without_pause_and_marks_selection_unverified(self):
         goal.init(self.root, self.plan)
@@ -328,6 +355,70 @@ class GoalIntegration(unittest.TestCase):
             self.review_mock.assert_not_called()
             goal.validate(self.root, 'fixture', 'A')
             self.assertEqual(self.execute_mock.call_count, 1)
+
+    def test_validate_rejects_source_drift_outside_write_paths_after_execution(self):
+        goal.init(self.root, self.plan)
+        with self.boundaries():
+            result = goal.step(self.root, 'fixture')
+            self.assertEqual(result['tasks']['A']['status'], 'awaiting_triage')
+            review_count = self.review_mock.call_count
+            (self.root/'source.py').write_text('value = 7\n')
+            result = goal.validate(self.root, 'fixture', 'A')
+            self.assertEqual(self.review_mock.call_count, review_count)
+            with self.assertRaisesRegex(ValueError, 'task not reviewed or source/Git changed'):
+                goal.accept(self.root, 'fixture', 'A', self.triage())
+        self.assertEqual(result['tasks']['A']['status'], 'failed')
+        self.assertEqual(result['status'], 'blocked')
+        self.assertIn('outside declared write paths', result['control']['pause']['reason'])
+
+    def test_revalidation_allows_repairs_within_declared_write_paths(self):
+        plan = copy.deepcopy(self.plan)
+        plan['tasks'][0]['write_paths'] = ['source.py']
+        goal.init(self.root, plan)
+        calls = {'count': 0}
+        def first_gate_fails(root, base):
+            calls['count'] += 1
+            result = self.gates(root, base)
+            if calls['count'] == 1:
+                result['local_status'] = 'failed'
+            return result
+        with self.boundaries(gates=first_gate_fails):
+            result = goal.step(self.root, 'fixture')
+            self.assertEqual(result['tasks']['A']['status'], 'validation_failed')
+            (self.root/'source.py').write_text('value = 2\n')
+            result = goal.validate(self.root, 'fixture', 'A')
+        self.assertEqual(result['tasks']['A']['status'], 'awaiting_triage')
+        self.assertEqual(self.execute_mock.call_count, 1)
+
+    def test_declared_write_path_deletion_survives_checkpoint_reload(self):
+        plan = copy.deepcopy(self.plan)
+        plan['tasks'] = [plan['tasks'][0]]
+        plan['tasks'][0]['write_paths'] = ['source.py']
+        goal.init(self.root, plan)
+        def delete_source(root, task, model, effort, **kwargs):
+            receipt = self.execution(root, task, model, effort, **kwargs)
+            (self.root/'source.py').unlink()
+            return receipt
+        with self.boundaries(execution=delete_source):
+            result = goal.step(self.root, 'fixture')
+            self.assertEqual(result['tasks']['A']['status'], 'awaiting_triage')
+            self.assertFalse((self.root/'source.py').exists())
+            reloaded = goal.status(self.root, 'fixture')
+            self.assertEqual(reloaded['tasks']['A']['status'], 'awaiting_triage')
+            accepted = goal.accept(self.root, 'fixture', 'A', self.triage())
+        self.assertEqual(accepted['status'], 'completed')
+
+    def test_coordinator_only_edits_cannot_validate_or_accept_without_execution_receipt(self):
+        goal.init(self.root, self.plan)
+        (self.root/'source.py').write_text('value = 8\n')
+        with self.boundaries():
+            with self.assertRaisesRegex(ValueError, 'task is not awaiting revalidation'):
+                goal.validate(self.root, 'fixture', 'A')
+            with self.assertRaisesRegex(ValueError, 'task not reviewed or source/Git changed'):
+                goal.accept(self.root, 'fixture', 'A', self.triage())
+            self.execute_mock.assert_not_called()
+            self.review_mock.assert_not_called()
+        self.assertEqual(goal.status(self.root, 'fixture')['tasks']['A']['status'], 'pending')
 
     def test_terminal_model_mismatch_is_unknown_not_success(self):
         goal.init(self.root, self.plan)

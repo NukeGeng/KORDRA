@@ -2,7 +2,7 @@
 id: ENG-AMR-EVIDENCE
 status: proposed
 owner: engineering-maintainers
-last_reviewed: 2026-10-16
+last_reviewed: 2026-10-17
 ---
 
 # Runtime capabilities and validation evidence
@@ -71,3 +71,16 @@ The v3 implementation is in the current working tree on `feat/artifact-identity-
 Post-change `python3 docs/tooling/amr.py discover` on Codex CLI `0.162.0-alpha.17.2` reported the project config layer loaded, effective project defaults `gpt-6.1-sol/medium`, and `agent_defaults.subagents_enabled=false`. The model catalog advertised `gpt-6.1-sol` with both medium and high effort. The AMR app-server adapter also passes an explicit `agents.enabled=false` override. This verifies project configuration and model availability, not the currently selected desktop coordinator model; the local CLI has no session-bound observation for that chat. `goal resume` therefore records manual selection as unverified.
 
 The local CLI records the switch checkpoint but cannot change the desktop Goal status. At inspection time the native Goal was already paused; this implementation did not mutate or resume it. No live model switch or native Goal continuation was executed, so those acceptance points remain unverified and require a user model change plus a subsequent native runtime observation. The existing sandboxed native task runner continues to verify its own child session selection independently.
+
+## PR #1 follow-up: checkpoint integrity and route consistency
+
+On 2026-10-17, follow-up changes on `feat/artifact-identity-foundation` addressed the four P2 review issues against PR head `c95b0db25dcbf5ab376037855508864a39b3de85`:
+
+- Validation pins a digest of all non-writable paths at dispatch and blocks later source drift outside `write_paths`; repairs within declared writable paths remain revalidatable.
+- Checkpoint reads validate the immutable task plan without requiring historical input files to remain present. New dispatch still checks live inputs strictly.
+- `goal recommend` records the task-bound current selection and `goal step` reuses it only if the catalog still advertises it and it meets the task quality floor. The native execution receipt verifies the actual request and observed selection.
+- Direct coordinator edits have no native task receipt and remain ineligible for `goal validate`/`goal accept`. The operating guide now states that the serial `goal step` runner is required for checkpointed completion; this adapter limitation remains tracked in DEBT-AMR-003.
+
+`python3 docs/tooling/amr.py gates --base d0eff75951d1d587b1d9689c189a8a62bae18d58` passed on the follow-up working tree: strict docs (157 Markdown files, zero errors/warnings), scope checks (39 cases), AMR unit tests (110), locked .NET restore, Release build (zero warnings/errors), product tests (48 passed), and source mapping (17 paths, zero problems). These are local results; GitHub checks for the new pushed head must run separately.
+
+Codex CLI confirmed `gpt-6-luna/max` for a full-PR review attempt, but that review exceeded the 300-second process limit during its .NET stage and exited 130 without returning findings. It is not a completed review. The user requested Luna Max for this work; no native session-bound evidence exposes the coordinator model selection, so that selection remains unverified. Provider Code Review and human approval for merge are still separate requirements.

@@ -144,7 +144,7 @@ def checkpoint(root, goal_id):
         os.close(fd)
 
 
-def validate_plan(root, plan):
+def validate_plan(root, plan, *, require_inputs=True):
     if plan.get('schemaVersion') != 1:
         raise ValueError('unsupported plan schemaVersion')
     identifier(plan.get('goal_id'))
@@ -167,7 +167,7 @@ def validate_plan(root, plan):
         raise ValueError('goal requires tasks')
     ids = []
     for task in plan['tasks']:
-        amr.validate_task(task, root)
+        amr.validate_task(task, root, require_inputs=require_inputs)
         ids.append(identifier(task['task_id']))
         if task['scope'] != 'local-development' or set(task.get('signals', [])) & {
                 'production', 'secrets', 'remote-execution'}:
@@ -180,7 +180,8 @@ def validate_plan(root, plan):
             if len(task[key]) != len(set(task[key])):
                 raise ValueError('duplicate '+key)
         for rel in task['write_paths']:
-            if rel not in task['paths'] or not amr.safe_path(root, rel).is_file():
+            path = amr.safe_path(root, rel)
+            if rel not in task['paths'] or (require_inputs and not path.is_file()):
                 raise ValueError('write paths must be existing feature-mapped task inputs')
     if len(ids) != len(set(ids)):
         raise ValueError('duplicate task IDs')
@@ -224,7 +225,7 @@ def load(root, path):
     if state.get('schemaVersion') != 1 or digest(state['plan']) != state['plan_digest']:
         raise ValueError('unsupported or corrupt goal checkpoint')
     # Validation works on a copy: never silently rewrite the pinned plan.
-    validate_plan(root, copy.deepcopy(state['plan']))
+    validate_plan(root, copy.deepcopy(state['plan']), require_inputs=False)
     observed = hashlib.sha256(amr.safe_path(root, state['plan']['objective_path']).read_bytes()).hexdigest()
     if observed != state['objective_hash']:
         raise ValueError('objective changed; reconcile intent in a new plan')
@@ -334,6 +335,30 @@ def pending_routes(root, state):
     return routes
 
 
+def selection_is_advertised(candidates, model, effort):
+    return any(item.get('model') == model and effort in item.get('efforts', [])
+               for item in candidates.get('models', []))
+
+
+def route_for_selection(route, model, effort, candidates):
+    """Use an already selected, advertised profile when it meets the task floor."""
+    profile = route.get('profile')
+    selection = (model, effort)
+    if (profile not in PROFILE_CAPABILITIES
+            or selection not in PROFILE_CAPABILITIES[profile]
+            or not selection_is_advertised(candidates, model, effort)):
+        return route
+    if route.get('action') == 'blocked' and route.get('support') != 'unsupported':
+        return route
+    if (route.get('action') == 'continue' and route.get('support') == 'advertised'
+            and (route.get('model'), route.get('effort')) == selection):
+        return route
+    return {**route, 'action': 'continue', 'model': model, 'effort': effort,
+            'support': 'advertised',
+            'rationale': route.get('rationale', []) + [
+                'retain the exact advertised selection because it meets this task quality floor']}
+
+
 def recommend(root, goal_id, current_model, current_effort):
     """Persist a justified model-switch pause at a verified task boundary.
 
@@ -349,9 +374,8 @@ def recommend(root, goal_id, current_model, current_effort):
             raise ValueError('model switches require a safe boundary with no unresolved task operation')
         candidates = discover(root)
         current_selection = (current_model, current_effort)
-        supported_current = (current_selection in PROFILE_SELECTIONS and any(
-            x.get('model') == current_model and current_effort in x.get('efforts', [])
-            for x in candidates.get('models', [])))
+        supported_current = (current_selection in PROFILE_SELECTIONS
+                             and selection_is_advertised(candidates, current_model, current_effort))
         if not supported_current:
             raise ValueError('caller-reported current model/effort is not an advertised Kordra AMR profile')
         task = next_task(state)
@@ -409,7 +433,11 @@ def recommend(root, goal_id, current_model, current_effort):
         else:
             reason = 'task route needs a different model or reasoning effort'
 
+        if (target_model, target_effort) == current_selection:
+            route = route_for_selection(route, current_model, current_effort, candidates)
+
         selection = {'model': current_model, 'effort': current_effort,
+                     'task_id': task['task_id'],
                      'status': 'unverified', 'source': 'caller_reported', 'recorded_at': amr.now()}
         control['runtime_selection'] = selection
         if (target_model, target_effort) == (current_model, current_effort):
@@ -419,7 +447,7 @@ def recommend(root, goal_id, current_model, current_effort):
             result = projection(root, state)
             result['recommendation'] = {'action': 'continue', 'task_id': task['task_id'],
                 'current': selection, 'recommended': {'model': target_model, 'effort': target_effort},
-                'reason': reason, 'selection_verification': 'unverified'}
+                'reason': reason, 'route': route, 'selection_verification': 'unverified'}
             return result
 
         control.update(status='awaiting_model_switch', pause=None, model_switch={
@@ -502,7 +530,8 @@ def resume(root, goal_id, *, model=None, effort=None, approval_evidence=None,
             switch['selection_verification'] = 'unverified'
             control.setdefault('switch_history', []).append(copy.deepcopy(switch))
             control['runtime_selection'] = {'model': model, 'effort': effort,
-                'status': 'unverified', 'source': 'manual_switch_claim', 'recorded_at': amr.now()}
+                'task_id': switch['task_id'], 'status': 'unverified',
+                'source': 'manual_switch_claim', 'recorded_at': amr.now()}
         elif paused_status == 'awaiting_approval':
             if any(record['status'] == 'awaiting_triage' for record in state['tasks'].values()):
                 raise ValueError('use goal accept after exact-content review triage')
@@ -553,12 +582,16 @@ def current_identity(root):
     return {'content': amr.tree_identity(root)['digest'], 'git': amr.git_identity(root)}
 
 
+def protected_content_identity(files, write_paths):
+    writable = set(write_paths)
+    return digest({path: identity for path, identity in files.items() if path not in writable})
+
+
 def verified_execution(record, route):
     execution = record.get('execution', {})
     profile = route.get('profile')
-    return (profile in amr.PROFILES and route.get('action') == 'continue'
-            and route.get('model') == amr.PROFILES[profile][0]
-            and route.get('effort') == amr.PROFILES[profile][1]
+    return (profile in PROFILE_CAPABILITIES and route.get('action') == 'continue'
+            and (route.get('model'), route.get('effort')) in PROFILE_CAPABILITIES[profile]
             and route.get('support') == 'advertised'
             and execution.get('requested_model') == route['model']
             and execution.get('requested_effort') == route['effort']
@@ -579,6 +612,14 @@ def validate_work(root, state, task, path):
     git = amr.git_identity(root)
     if any(git[k] != record['input_identity']['git'][k] for k in ('head', 'branch')):
         raise ValueError('task Git HEAD/branch changed; uncommitted review cannot cover committed task edits')
+    files = amr.tree_identity(root)['files']
+    if (not record.get('protected_content_identity')
+            or protected_content_identity(files, task['write_paths'])
+            != record['protected_content_identity']):
+        event(state, task['task_id'], 'failed',
+              'source changed outside declared write paths; create a fresh reviewed task plan')
+        atomic_save(path, state)
+        return False
     if record['validation_attempts'] >= 4:
         raise ValueError('validation repair limit reached; contributor investigation required')
     record['validation_attempts'] += 1
@@ -633,14 +674,19 @@ def step(root, goal_id):
             artifacts = state['tasks'][dependency].get('output_artifacts', {})
             if not artifacts or any(current_files.get(name) != value for name, value in artifacts.items()):
                 raise ValueError('completed dependency inputs changed; create a fresh reviewed task plan')
-        route = amr.resolve(amr.classify(task), discover(root))
+        candidates = discover(root)
+        route = amr.resolve(amr.classify(task), candidates)
+        selection = control.get('runtime_selection')
+        if isinstance(selection, dict) and selection.get('task_id') == task['task_id']:
+            route = route_for_selection(route, selection.get('model'), selection.get('effort'), candidates)
         record['route'] = route
         if route['action'] != 'continue' or route.get('support') != 'advertised':
             event(state, task['task_id'], 'failed', 'exact model unavailable or task requires deterministic execution')
             atomic_save(path, state); return projection(root, state)
         before = amr.tree_identity(root)
         record.update(task_id=task['task_id'], attempts=record['attempts']+1, attempt_id=str(uuid.uuid4()),
-                      input_identity=current_identity(root),
+                      input_identity={'content': before['digest'], 'git': amr.git_identity(root)},
+                      protected_content_identity=protected_content_identity(before['files'], task['write_paths']),
                       context_paths=task['paths']+task['consulted'])
         event(state, task['task_id'], 'running', 'dispatch intent saved before native invocation')
         atomic_save(path, state)

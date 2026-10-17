@@ -2,7 +2,7 @@
 id: ENG-HISTORY
 status: proposed
 owner: unassigned
-last_reviewed: 2026-10-16
+last_reviewed: 2026-10-17
 ---
 
 # Feature change log and release-note discipline
@@ -15,6 +15,7 @@ Sol clarification is tracked by FEAT-AMR-001 (ENG-TOOLING); existing router/conf
 
 | Date | Change ID | Module / Feature | Source PR/Commit | ADR / contract | Migration impact | Owner |
 |---|---|---|---|---|---|---|
+| 2026-10-17 | AMR-GOAL-P2-REMEDIATION | ENG-TOOLING / FEAT-AMR-001 | PR #1 follow-up; 110 AMR tests and full local gates passed on working tree | Existing private goal checkpoint; no public API, product contract, ADR or permission change | Local tooling only; scope drift blocks completion; direct coordinator receipts remain unsupported and documented; no production operation | engineering-maintainers |
 | 2026-10-16 | AMR-V3-MANUAL-SWITCH | ENG-TOOLING / FEAT-AMR-001 | Current working tree; checkpoint/model-switch regression tests and post-change native config discovery | Backward-compatible goal checkpoint control fields; statuses distinguish model switch, approval and technical block | Local-only; single-agent default; manual selection stays unverified without coordinator-session evidence; no product/production operation | engineering-maintainers |
 | 2026-10-16 | AMR-GOAL-EXECUTION | ENG-TOOLING / FEAT-AMR-001 | Current branch; native smoke and E2E receipts recorded after validation | Existing local task contract extended with plan/checkpoint v1; no product ADR change | Private local checkpoints only; no production operations or auto-merge | engineering-maintainers |
 | 2026-10-16 | AMR-SOL-6.1 | ENG-TOOLING / FEAT-AMR-001 | User clarification; working-tree regression in test_amr.py | Local contract v1 clarified: Sol exclusively means gpt-6.1-sol | None; no model fallback or product behavior change | engineering-maintainers |
