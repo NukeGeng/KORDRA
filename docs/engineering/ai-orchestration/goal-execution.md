@@ -5,47 +5,58 @@ owner: engineering-maintainers
 last_reviewed: 2026-10-16
 ---
 
-# Goal execution through existing AMR
+# Goal execution through AMR v3
 
-Owner: [FEAT-AMR-001](features/quality-first-amr.md), ENG-TOOLING. Local contributor use case: progress a dependency-ordered engineering goal while retaining source, selection, execution and review evidence. No tenant resource or production permission is introduced. The [contract](contract.md) defines local plan/checkpoint version 1.
+Owner: [FEAT-AMR-001](features/quality-first-amr.md), ENG-TOOLING. AMR v3 uses one coordinator session, makes risk-based model recommendations, and preserves the existing local checkpoint, execution, gates and review adapters. It does not create collaboration sub-agents. No tenant resource or production permission is introduced.
 
-## Three mechanisms
+## Session and routing policy
 
-AGENTS/WORKFLOW are coordinator policy. Native collaboration tools actually spawn agents, using explicit model and effort with bounded context; their result may not expose authoritative model metadata. `amr.py goal` is executable serial orchestration using native app-server sessions, with observed model/effort and task/thread/turn receipts. A native session is not described as a collaboration sub-agent or a swap of the main chat. The coordinator can work directly when delegation would lose context, but must retain the same gates/review obligations.
+The default substantive engineering model is GPT-6.1 Sol Medium (`gpt-6.1-sol/medium`). Use GPT-6.1 Sol High (`gpt-6.1-sol/high`) for security, tenant/platform scope, distributed concurrency, consistency, recovery, state integrity and significant production risk. ROUTINE remains deterministic where possible; Luna High is recommended only for isolated low-risk work when the switch is worth its cost. Never switch for a simple DTO/CRUD task while a capable session is active. There are no model-use quotas.
 
-The desktop's GOAL status is independent. Read the goal objective attachment, inspect native goal state and use the supported UI to resume if paused; no local command here can alter that state. Runtime activation must be reported from actual native state. The current user explicitly authorizes adaptive delegation for this goal and subsequent goal runs inherit the repository policy.
+Only consider a High-to-Medium switch at a safe boundary when at least two pending tasks are standard engineering and no critical task is queued. Resolve every proposed switch target against the native catalog. If it is unavailable, continue only when the already selected, runtime-advertised Kordra profile meets the task's quality floor: Sol Medium or High for routine work, Sol High for standard work, and Sol High for critical work. This retains the exact current selection; it is not a model or effort substitution. Otherwise block. A local CLI argument describing the current desktop selection is recorded as caller-reported and unverified. A model/effort observed from a native `thread/start` and matching terminal turn proves that native task session only, not the desktop coordinator session.
 
 ## Coordinator loop
 
-1. Inspect GOAL.md, the existing roadmap, current Git/dirty state, accepted ADRs, owner feature and prior checkpoint. Identify milestone, module, feature, actor, permission, local scope, dependencies and acceptance evidence.
-2. Register one plan extending existing milestone tracking. Include the active user goal in `objective`; `objective_path` pins GOAL.md; `progress_path` points to the owning roadmap. Each task reuses the AMR task contract, adds milestone, dependencies and exact existing writable paths. Empty write_paths means read-only inspection. New files must first be explicitly scaffolded and feature-mapped by the coordinator; workers cannot silently broaden their scope.
-3. `goal init --plan <private-plan.json>` validates the DAG, owner mappings, local scope and Git base; freezes a private copy of the plan and objective hash. No arbitrary command template or shell interpolation is accepted.
-4. `goal step --id <goal-id>` chooses one eligible task, resolves the exact supported model/effort, saves dispatch intent, invokes native execution, checks actual selection and allowed changes, runs all gates and independent native Code Review of uncommitted changes. Workers must not commit; changed Git HEAD/branch blocks validation, so task changes cannot disappear from review.
-5. Inspect private checkpoint messages, findings and review output. Supply `goal accept --id <goal-id> --task-id <task-id> --triage <private-triage.json>` only after reproducing/fixing or evidence-backed dismissal. Triage has task_id, current content digest, reviewed_by, rationale and explicit findings array; it is contributor judgment, not human production/merge approval. No automatic text heuristic labels a review clean.
-6. `goal status` projects progress. Update the existing roadmap and owner feature with sanitized evidence, then run gates/review again for that new content. Continue the next eligible task. When accepted architecture limits further implementation, record the exact decision required and prepare a reviewable proposal rather than inventing it.
+1. Read GOAL.md, roadmap, Git/working-tree state, accepted ADRs, owner feature, tests and the prior checkpoint. Identify milestone, module, feature, actor, permission, local scope, dependencies and acceptance evidence.
+2. Register one plan extending existing milestone tracking. Include the active objective, pinned `GOAL.md`, milestone, progress path and verified Git base. Tasks reuse the AMR task contract with dependencies and exact existing writable paths. New files must first be scaffolded and feature-mapped by the coordinator.
+3. Initialize and inspect the private local checkpoint. At each task boundary, let the single coordinator classify the next task and run `goal recommend` with its current selection. If no switch is recommended, continue without pausing. If a switch is justified, AMR persists `awaiting_model_switch`, shows the recommended model/effort and reason, and blocks `goal step`.
+4. When the native Codex Goal runtime exposes pause for the active GOAL, pause it after the local checkpoint is durable. Otherwise stop and report that native pause was unavailable. The user changes the model and explicitly resumes GOAL. The coordinator reads the local checkpoint, rechecks source, Git, documentation, task and unresolved operations, then records the manual selection through `goal resume`. The local command labels this selection unverified; the coordinator must not claim runtime verification without native evidence.
+5. The coordinator continues in its active session. The existing `goal step` remains an optional sandboxed native task runner; it is never auto-started by a recommendation and verifies its own selected model/effort, task/thread/turn and terminal result. Inspect the exact result and changed paths.
+6. Run `goal validate` for gates and independent review. Inspect current review output, reproduce/fix or evidence-dismiss findings, and submit exact-content contributor triage via `goal accept`. This is not merge approval or production authorization. Reconcile verified progress into the existing roadmap/feature, then run applicable gates again.
 
-Use ROUTINE gpt-6-luna/high only for bounded tasks with current implemented/accepted/verified owner specs and known tests; substantive engineering defaults gpt-6.1-sol/medium. Sensitive paths and architecture/state/security concerns require gpt-6.1-sol/high. Reclassification may increase effort; unavailable exact selection blocks. `.codex/config.toml` supplies native delegation defaults only when trusted/loaded. Explicit execution arguments remain authoritative, with start-response validation.
+## Local checkpoint states and commands
 
-## Recovery and limits
+Private atomic state remains under `.amr-local/goals/<goal_id>.json`; it is an extension of the existing AMR checkpoint, not a second backlog or product state machine. New control states are:
 
-One OS lock serializes writers across goal IDs in a checkout. Atomic fsynced private JSON preserves dispatch intent and receipts across sessions without a database/service dependency. This extends existing local receipts; it does not adopt a product workflow state machine, broker or technology. The tradeoff versus SQLite is simple single-writer checkpoints rather than concurrent task scheduling. Workers receive a sandbox and no network request authority; the adapter never grants human approvals. Declared write-path checking detects scope violations after execution; it is not a filesystem authorization boundary. Native workspace sandbox remains the boundary.
-
-After a process exits while a task was running, `status` records unknown. Do not replay: inspect native identity and source, then `reconcile --evidence <explanation>`. Missing authoritative terminal evidence becomes failed; observed completed execution may proceed to validation without repeating the work. Failed work requires an explicit investigated new task/plan. `validate` reruns gates/review only, up to four attempts; it never repeats execution. Two failed repair attempts of a root cause require critical analysis; the executor already uses independent Sol High review, while the coordinator supplies root-cause evidence and an explicit repair task. No unbounded automatic repair loop exists.
-
-Local native review proves local execution only. Provider PR Code Review requires the configured connector/repository and exact current PR head evidence. If absent, report requires-user-configuration; do not treat an empty review list as a completed review. Auto-review concerns eligible sandbox permission requests and remains separate from code review and human approval.
-
-## Commands
+| State | Meaning | Resume condition |
+|---|---|---|
+| `active` | Work may continue | A valid next task exists |
+| `awaiting_model_switch` | The next task justifies a model/effort change | User explicitly switches and supplies the exact recommended selection; source/Git/task identity must still match |
+| `awaiting_approval` | A human decision or review triage is required | Evidence reference is recorded; it does not authenticate or grant permission |
+| `blocked` | A technical or uncertain execution state prevents progress | Evidence resolves the block; failed/unknown/untriaged tasks still require reconciliation or a fresh plan |
+| `completed` | All planned tasks have verified execution, gates, review and triage | Terminal |
 
 ```bash
-python3 docs/tooling/amr.py discover
 python3 docs/tooling/amr.py goal init --plan .amr-local/goal-plan.json
 python3 docs/tooling/amr.py goal status --id KORDRA-FOUNDATION
+python3 docs/tooling/amr.py goal recommend --id KORDRA-FOUNDATION \
+  --current-model gpt-6.1-sol --current-effort medium
+# Change model manually in Codex, then explicitly continue GOAL.
+python3 docs/tooling/amr.py goal resume --id KORDRA-FOUNDATION \
+  --model gpt-6.1-sol --effort high
 python3 docs/tooling/amr.py goal step --id KORDRA-FOUNDATION
-python3 docs/tooling/amr.py goal accept --id KORDRA-FOUNDATION --task-id F0-task --triage .amr-local/triage.json
 python3 docs/tooling/amr.py goal validate --id KORDRA-FOUNDATION --task-id F0-task
-python3 docs/tooling/amr.py gates --base origin/main
+python3 docs/tooling/amr.py goal accept --id KORDRA-FOUNDATION --task-id F0-task \
+  --triage .amr-local/triage.json
+python3 docs/tooling/amr.py gates --base <verified-base-SHA>
 ```
 
-Plans and receipts stay private. The committed roadmap/feature is the product progress source; checkpoints are execution evidence, not a competing backlog. Never automatically merge, deploy, rollback, mutate infrastructure or access LAB-01 while executing this workflow.
+`goal pause --status awaiting_approval|blocked --reason ...` records those distinct local states. Resume from `awaiting_approval` requires an evidence reference; resume from `blocked` requires resolution evidence. The local CLI has no connection to desktop GOAL controls. Local pause is not proof that the native GOAL itself paused, and `goal resume` does not resume that native GOAL. Use the Codex native runtime when available and require an explicit user continue action.
 
-The [safe example plan](goal.example.json) illustrates the input shape. Copy it into `.amr-local/goal-plan.json`, inspect the objective and use a fresh goal ID; its one-shot documentation marker must still be pending. Do not replay it after completion or replace a genuine product task with a smoke test.
+## Recovery, validation and approval boundaries
+
+Checkpoints are mode 0700/0600, atomically written and protected by a nonblocking OS lock. The plan and objective are hashed. Model-switch pause stores content digest, Git head/branch/status/index, current task, route, completed/pending task records and next action. Resume rejects changed source, Git state, plan, task order, missing exact model/effort and unresolved task operations. It never automatically replays.
+
+A process lost while `running` becomes `unknown` and the goal becomes `blocked`. Inspect native identity and source, then `goal reconcile --evidence ...`; prose cannot invent a successful execution receipt. `goal validate` reruns gates/review only. New source/owner-context changes invalidate the task and require revalidation or a fresh plan.
+
+Native local review and provider PR Code Review remain separate channels. Provider review requires a configured integration plus terminal evidence on the exact current PR head. Auto-review only decides eligible sandbox permission requests. Neither can authorize company resources, merge a PR or approve production work. Human approval, target lease, immutable spec and rollback/evidence requirements remain explicit for sensitive operations. LAB-01 restrictions remain unchanged.

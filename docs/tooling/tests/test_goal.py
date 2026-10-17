@@ -50,7 +50,9 @@ class GoalIntegration(unittest.TestCase):
                               text=True, check=True).stdout.strip()
 
     def capabilities(self, root):
-        return {'models': [{'model': 'gpt-6.1-sol', 'efforts': ['medium', 'high']}]}
+        return {'models': [
+            {'model': 'gpt-6.1-sol', 'efforts': ['medium', 'high']},
+            {'model': 'gpt-6-luna', 'efforts': ['high']}]}
 
     def execution(self, root, task, model, effort, **kwargs):
         kwargs['on_start']('native-thread-A')
@@ -108,6 +110,159 @@ class GoalIntegration(unittest.TestCase):
         self.assertEqual(self.state()['tasks']['A']['attempts'], 1)
         self.assertEqual(list(checkpoint.parent.glob('.checkpoint-*')), [])
 
+    def test_old_checkpoint_without_control_is_read_as_active_without_replay(self):
+        goal.init(self.root, self.plan)
+        path = self.root/'.amr-local/goals/fixture.json'
+        state = self.state()
+        state.pop('control')
+        path.write_text(json.dumps(state))
+        result = goal.status(self.root, 'fixture')
+        self.assertEqual(result['status'], 'active')
+        self.assertIn('control', self.state())
+        self.assertEqual(self.state()['tasks']['A']['attempts'], 0)
+
+    def test_forged_completed_control_state_cannot_claim_pending_goal_complete(self):
+        goal.init(self.root, self.plan)
+        path = self.root/'.amr-local/goals/fixture.json'
+        state = self.state()
+        state['control']['status'] = 'completed'
+        path.write_text(json.dumps(state))
+        with self.assertRaisesRegex(ValueError, 'unfinished tasks'):
+            goal.status(self.root, 'fixture')
+
+    def test_routine_task_does_not_interrupt_a_capable_current_model(self):
+        plan = copy.deepcopy(self.plan)
+        plan['tasks'] = [copy.deepcopy(plan['tasks'][0])]
+        plan['tasks'][0].update(kind='docs', bounded=True, spec_verified=True, tests_known=True)
+        goal.init(self.root, plan)
+        with self.boundaries(capabilities=lambda root: {
+            'models': [{'model': 'gpt-6.1-sol', 'efforts': ['medium']}]}):
+            result = goal.recommend(self.root, 'fixture', 'gpt-6.1-sol', 'medium')
+        self.assertEqual(result['status'], 'active')
+        self.assertEqual(result['recommendation']['action'], 'continue')
+        self.assertIn('switching overhead', result['recommendation']['reason'])
+
+    def test_unavailable_engineering_target_keeps_current_sol_high(self):
+        goal.init(self.root, self.plan)
+        with self.boundaries(capabilities=lambda root: {
+            'models': [{'model': 'gpt-6.1-sol', 'efforts': ['high']}]}):
+            result = goal.recommend(self.root, 'fixture', 'gpt-6.1-sol', 'high')
+        self.assertEqual(result['status'], 'active')
+        self.assertEqual(result['recommendation']['action'], 'continue')
+        self.assertEqual(result['recommendation']['recommended'],
+                         {'model': 'gpt-6.1-sol', 'effort': 'high'})
+        self.assertIn('exact Medium switch target is unavailable', result['recommendation']['reason'])
+
+    def test_unavailable_critical_target_still_blocks_lower_effort_current(self):
+        plan = copy.deepcopy(self.plan)
+        plan['tasks'][0]['signals'] = ['concurrency']
+        goal.init(self.root, plan)
+        with self.boundaries(capabilities=lambda root: {
+            'models': [{'model': 'gpt-6.1-sol', 'efforts': ['medium']}]}):
+            result = goal.recommend(self.root, 'fixture', 'gpt-6.1-sol', 'medium')
+        self.assertEqual(result['status'], 'blocked')
+        self.assertEqual(result['recommendation']['action'], 'blocked')
+        self.assertEqual(self.execute_mock.call_count, 0)
+
+    def test_medium_to_medium_continues_without_pause_and_marks_selection_unverified(self):
+        goal.init(self.root, self.plan)
+        with self.boundaries():
+            result = goal.recommend(self.root, 'fixture', 'gpt-6.1-sol', 'medium')
+        self.assertEqual(result['status'], 'active')
+        self.assertEqual(result['recommendation']['action'], 'continue')
+        self.assertEqual(result['recommendation']['selection_verification'], 'unverified')
+        self.assertIsNone(result['control']['model_switch'])
+        self.assertEqual(result['control']['runtime_selection']['status'], 'unverified')
+        self.assertEqual(result['native_goal_control'], 'not_available_in_local_cli')
+        self.assertEqual(self.execute_mock.call_count, 0)
+
+    def test_medium_to_high_persists_switch_checkpoint_and_blocks_dispatch(self):
+        plan = copy.deepcopy(self.plan)
+        plan['tasks'][0]['signals'] = ['concurrency']
+        goal.init(self.root, plan)
+        with self.boundaries():
+            result = goal.recommend(self.root, 'fixture', 'gpt-6.1-sol', 'medium')
+            with self.assertRaisesRegex(ValueError, 'awaiting_model_switch'):
+                goal.step(self.root, 'fixture')
+        self.assertEqual(result['status'], 'awaiting_model_switch')
+        self.assertEqual(result['recommendation']['recommended'],
+                         {'model': 'gpt-6.1-sol', 'effort': 'high'})
+        self.assertEqual(self.state()['control']['model_switch']['task_id'], 'A')
+        self.assertEqual(self.state()['control']['model_switch']['current_selection_verification'], 'unverified')
+        self.assertIn('Manually select', self.state()['control']['model_switch']['next_action'])
+        self.assertEqual(self.execute_mock.call_count, 0)
+
+    def test_high_to_medium_is_recommended_only_for_sustained_standard_work(self):
+        goal.init(self.root, self.plan)
+        with self.boundaries():
+            sustained = goal.recommend(self.root, 'fixture', 'gpt-6.1-sol', 'high')
+        self.assertEqual(sustained['status'], 'awaiting_model_switch')
+        self.assertEqual(sustained['recommendation']['recommended'],
+                         {'model': 'gpt-6.1-sol', 'effort': 'medium'})
+
+        short = copy.deepcopy(self.plan)
+        short['goal_id'] = 'short'
+        short['tasks'] = [copy.deepcopy(short['tasks'][0])]
+        goal.init(self.root, short)
+        with self.boundaries():
+            brief = goal.recommend(self.root, 'short', 'gpt-6.1-sol', 'high')
+        self.assertEqual(brief['status'], 'active')
+        self.assertEqual(brief['recommendation']['action'], 'continue')
+        self.assertEqual(brief['recommendation']['recommended'],
+                         {'model': 'gpt-6.1-sol', 'effort': 'high'})
+
+    def test_manual_resume_is_explicit_and_never_claims_runtime_selection_verified(self):
+        plan = copy.deepcopy(self.plan)
+        plan['tasks'][0]['signals'] = ['concurrency']
+        goal.init(self.root, plan)
+        with self.boundaries():
+            goal.recommend(self.root, 'fixture', 'gpt-6.1-sol', 'medium')
+            with self.assertRaisesRegex(ValueError, 'does not match the recommendation'):
+                goal.resume(self.root, 'fixture', model='gpt-6.1-sol', effort='medium')
+            resumed = goal.resume(self.root, 'fixture', model='gpt-6.1-sol', effort='high')
+        self.assertEqual(resumed['status'], 'active')
+        self.assertEqual(resumed['selection_verification'], 'unverified')
+        self.assertEqual(resumed['control']['runtime_selection']['source'], 'manual_switch_claim')
+        self.assertEqual(len(resumed['control']['switch_history']), 1)
+        self.assertIn('Manually select', resumed['control']['switch_history'][0]['next_action'])
+        self.assertEqual(resumed['native_goal_resume'], 'coordinator_must_resume_native_goal_separately')
+
+    def test_switch_resume_rejects_source_or_git_revision_change(self):
+        plan = copy.deepcopy(self.plan)
+        plan['tasks'][0]['signals'] = ['concurrency']
+        goal.init(self.root, plan)
+        with self.boundaries():
+            goal.recommend(self.root, 'fixture', 'gpt-6.1-sol', 'medium')
+            (self.root/'source.py').write_text('value = 9\n')
+            with self.assertRaisesRegex(ValueError, 'working tree changed'):
+                goal.resume(self.root, 'fixture', model='gpt-6.1-sol', effort='high')
+        self.assertEqual(self.state()['control']['status'], 'awaiting_model_switch')
+
+    def test_approval_and_blocked_are_distinct_and_require_separate_evidence(self):
+        goal.init(self.root, self.plan)
+        approval = goal.pause(self.root, 'fixture', 'awaiting_approval', 'ADR decision required')
+        self.assertEqual(approval['status'], 'awaiting_approval')
+        with self.assertRaisesRegex(ValueError, 'approval evidence reference'):
+            goal.resume(self.root, 'fixture')
+        resumed = goal.resume(self.root, 'fixture', approval_evidence='ADR-0009 accepted by owner')
+        self.assertEqual(resumed['status'], 'active')
+        self.assertEqual(resumed['control']['pause_history'][-1]['evidence_status'], 'referenced')
+
+        blocked = goal.pause(self.root, 'fixture', 'blocked', 'SDK dependency is missing')
+        self.assertEqual(blocked['status'], 'blocked')
+        with self.assertRaisesRegex(ValueError, 'resolution evidence'):
+            goal.resume(self.root, 'fixture')
+        unblocked = goal.resume(self.root, 'fixture', resolution_evidence='SDK installed and verified')
+        self.assertEqual(unblocked['status'], 'active')
+        self.assertEqual(unblocked['resumed_from'], 'blocked')
+
+    def test_unsupported_native_pause_remains_local_and_does_not_claim_goal_control(self):
+        goal.init(self.root, self.plan)
+        result = goal.pause(self.root, 'fixture', 'awaiting_approval', 'Human decision needed')
+        self.assertEqual(result['native_goal_control'], 'not_available_in_local_cli')
+        self.assertIn('native GOAL control', result['limitation'])
+        self.assertEqual(result['status'], 'awaiting_approval')
+
     def test_dag_rejects_cycles_duplicates_missing_and_invalid_dependencies(self):
         variants = []
         p = copy.deepcopy(self.plan); p['tasks'][0]['depends_on'] = ['B']; variants.append(p)
@@ -146,7 +301,7 @@ class GoalIntegration(unittest.TestCase):
             result = goal.status(self.root, 'fixture')
             self.assertEqual(result['tasks']['A']['status'], 'unknown')
             self.assertIsNone(result['next_task'])
-            with self.assertRaisesRegex(ValueError, 'no eligible task'):
+            with self.assertRaisesRegex(ValueError, 'goal is blocked'):
                 goal.step(self.root, 'fixture')
             self.assertEqual(self.execute_mock.call_count, 1)
 

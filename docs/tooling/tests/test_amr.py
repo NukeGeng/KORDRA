@@ -27,6 +27,11 @@ def task():
 
 
 class Routing(unittest.TestCase):
+    def test_project_defaults_disable_subagent_creation(self):
+        import tomllib
+        config = tomllib.loads((amr.ROOT/'.codex/config.toml').read_text())
+        self.assertIs(config['agents']['enabled'], False)
+
     def test_amr01_lookup_is_deterministic(self):
         t=task(); t['kind']='lookup'
         self.assertEqual(amr.classify(t)['action'], 'deterministic')
@@ -97,6 +102,7 @@ class Routing(unittest.TestCase):
         cmd=amr.launch_command(Path('.'),task(),r)
         self.assertIn('--model',cmd); self.assertIn('gpt-6.1-sol',cmd)
         self.assertIn('model_reasoning_effort="medium"',cmd)
+        self.assertIn('agents.enabled=false',cmd)
         self.assertIn('approvals_reviewer="user"',cmd)
         self.assertNotIn('--dangerously-bypass-approvals-and-sandbox',cmd)
 
@@ -288,6 +294,32 @@ class ReviewLedger(unittest.TestCase):
 
 
 class NativeContract(unittest.TestCase):
+    def test_native_app_server_explicitly_disables_subagents(self):
+        with patch('amr_native.subprocess.Popen') as popen, \
+                patch('amr_native.threading.Thread') as thread, \
+                patch.object(amr_native.Native, 'request', return_value={}), \
+                patch.object(amr_native.Native, 'send'):
+            amr_native.Native(Path('.'))
+        command = popen.call_args.args[0]
+        self.assertIn('-c', command)
+        self.assertIn('agents.enabled=false', command)
+        thread.return_value.start.assert_called_once()
+
+    def test_discovery_reports_effective_subagent_setting(self):
+        from types import SimpleNamespace
+        with patch('amr_native.shutil.which', return_value='/usr/bin/codex'), \
+                patch('amr_native.subprocess.run',
+                      return_value=SimpleNamespace(stdout='codex test\n')), \
+                patch('amr_native.Native') as cls:
+            cls.return_value.__enter__.return_value.request.side_effect = [
+                {'config': {'agents': {'enabled': False, 'max_concurrent_threads_per_session': None}},
+                 'layers': [{'name': {'type': 'project'}}]},
+                {'data': [{'model': 'gpt-6.1-sol', 'supportedReasoningEfforts': [
+                    {'reasoningEffort': 'medium'}, {'reasoningEffort': 'high'}]}]}]
+            result = amr_native.discover(Path('.'))
+        self.assertEqual(result['agent_defaults'], {
+            'subagents_enabled': False, 'max_concurrent_threads_per_session': None})
+
     def test_actual_selection_mismatch_rejected(self):
         response=dict(model='wrong',reasoningEffort='medium')
         fake=object.__new__(amr_native.Native);fake.cwd='.'

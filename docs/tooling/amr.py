@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Kordra AMR v2.1: routing and evidence alongside existing governance checks."""
+"""Kordra AMR v3: single-agent routing and evidence alongside existing governance checks."""
 import argparse
 import datetime
 import hashlib
@@ -313,6 +313,7 @@ def launch_command(root, task, route):
               'operations under explicit human approval. Task: '+task['objective'])
     return ['codex', '--strict-config', '--cd', str(root), '--model', route['model'],
             '-c', 'model_reasoning_effort='+json.dumps(route['effort']),
+            '-c', 'agents.enabled=false',
             '--sandbox', 'workspace-write', '--ask-for-approval', 'on-request',
             '-c', 'approvals_reviewer="user"', prompt]
 

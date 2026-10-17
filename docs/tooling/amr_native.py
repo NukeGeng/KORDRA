@@ -28,14 +28,15 @@ class Native:
         self.counter = 0
         self.incoming = queue.Queue()
         self.process = subprocess.Popen(
-            ['codex', 'app-server', '--strict-config', *overrides, '--stdio'],
+            ['codex', 'app-server', '--strict-config', *overrides,
+             '-c', 'agents.enabled=false', '--stdio'],
             cwd=self.cwd, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
             stderr=subprocess.DEVNULL, text=True, bufsize=1,
             start_new_session=True)
         threading.Thread(target=self._read, daemon=True).start()
         try:
             self.request('initialize', {
-                'clientInfo': {'name': 'kordra_amr', 'version': '2.1'},
+                'clientInfo': {'name': 'kordra_amr', 'version': '3.0'},
                 'capabilities': {'experimentalApi': True}})
             self.send({'method': 'initialized'})
         except BaseException:
@@ -170,6 +171,7 @@ def discover(root):
             if not cursor:
                 break
     c = config['config']
+    agents = c.get('agents') or {}
     return {'status': 'supported', 'version': version, 'models': models,
             'project_config': [{'status': 'disabled' if x.get('disabledReason') else 'loaded',
                                 'reason': x.get('disabledReason')}
@@ -178,6 +180,9 @@ def discover(root):
             'effective_config': {k: c.get(k) for k in (
                 'model', 'model_reasoning_effort', 'approval_policy',
                 'approvals_reviewer', 'sandbox_mode')},
+            'agent_defaults': {'subagents_enabled': agents.get('enabled', False),
+                               'max_concurrent_threads_per_session':
+                                   agents.get('max_concurrent_threads_per_session')},
             'usage': 'unknown', 'provider_review': 'not_configured'}
 
 

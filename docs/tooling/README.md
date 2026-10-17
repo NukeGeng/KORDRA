@@ -17,7 +17,7 @@ Guard dùng `git diff <base>...HEAD`, kiểm tra `src/`, `tests/`, `docs/tooling
 Run `python3 docs/tooling/scopecheck.py`; validates case IDs, phase/mutation safety mapping, owning modules and observe-only sample profile. **Does not run live infrastructure tests.**
 
 ## Quality-first AI engineering
-Use [AMR v2.1](../engineering/ai-orchestration/README.md) for native discovery, verified routing, context handoff, local checks and independent review. Requires Python 3.11+ (stdlib only); Codex is optional for offline tests and required for live probes.
+Use [AMR v3](../engineering/ai-orchestration/README.md) for single-agent routing, human-in-the-loop model switching, durable local checkpoints, native discovery, context handoff, local checks and independent review. Requires Python 3.11+ (stdlib only); Codex is optional for offline tests and required for live probes.
 
 ```bash
 python3 -m unittest discover -s docs/tooling/tests -v

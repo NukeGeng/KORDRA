@@ -22,6 +22,58 @@ import amr
 from amr_native import NativeError, discover, execute_task, local_review
 
 
+GOAL_STATES = {'active', 'awaiting_model_switch', 'awaiting_approval', 'blocked', 'completed'}
+UNRESOLVED_TASK_STATES = {'running', 'unknown', 'validation_failed', 'awaiting_triage', 'failed'}
+SAFE_BOUNDARY_TASK_STATES = {'pending', 'completed'}
+PROFILE_SELECTIONS = set(amr.PROFILES.values())
+PROFILE_CAPABILITIES = {
+    'ROUTINE': {amr.PROFILES['ROUTINE'], amr.PROFILES['ENGINEERING'], amr.PROFILES['CRITICAL']},
+    'ENGINEERING': {amr.PROFILES['ENGINEERING'], amr.PROFILES['CRITICAL']},
+    'CRITICAL': {amr.PROFILES['CRITICAL']},
+}
+
+
+def default_control(state):
+    statuses = {record.get('status') for record in state.get('tasks', {}).values()}
+    if statuses and statuses <= {'completed'}:
+        current = 'completed'
+    elif 'awaiting_triage' in statuses:
+        current = 'awaiting_approval'
+    elif statuses & UNRESOLVED_TASK_STATES:
+        current = 'blocked'
+    else:
+        current = 'active'
+    reason = ('legacy checkpoint requires contributor finding triage'
+              if current == 'awaiting_approval' else
+              'legacy checkpoint has unresolved execution or validation work'
+              if current == 'blocked' else None)
+    pause = {'reason': reason, 'created_at': amr.now(), 'baseline_identity': None} if reason else None
+    return {'status': current, 'model_switch': None, 'switch_history': [],
+            'pause_history': [], 'pause': pause,
+            'runtime_selection': None}
+
+
+def ensure_control(state):
+    control = state.setdefault('control', default_control(state))
+    if not isinstance(control, dict) or control.get('status') not in GOAL_STATES:
+        raise ValueError('invalid goal control state')
+    control.setdefault('switch_history', [])
+    control.setdefault('pause_history', [])
+    if not isinstance(control['switch_history'], list) or not isinstance(control['pause_history'], list):
+        raise ValueError('invalid goal control history')
+    if control['status'] == 'awaiting_model_switch':
+        switch = control.get('model_switch')
+        if (not isinstance(switch, dict) or not switch.get('task_id')
+                or not switch.get('reason') or not isinstance(switch.get('baseline_identity'), dict)
+                or not switch.get('recommended_model') or not switch.get('recommended_effort')):
+            raise ValueError('model-switch checkpoint is incomplete')
+    if control['status'] in {'awaiting_approval', 'blocked'}:
+        pause = control.get('pause')
+        if not isinstance(pause, dict) or not pause.get('reason'):
+            raise ValueError('paused goal checkpoint is incomplete')
+    return control
+
+
 def digest(value):
     return hashlib.sha256(json.dumps(value, sort_keys=True).encode()).hexdigest()
 
@@ -159,7 +211,10 @@ def init(root, plan):
                  'objective_hash': hashlib.sha256(amr.safe_path(root, plan['objective_path']).read_bytes()).hexdigest(),
                  'created_at': amr.now(), 'events': [],
                  'tasks': {t['task_id']: {'task_id': t['task_id'], 'status': 'pending', 'attempts': 0,
-                                         'validation_attempts': 0} for t in plan['tasks']}}
+                                         'validation_attempts': 0} for t in plan['tasks']},
+                 'control': {'status': 'active', 'model_switch': None, 'switch_history': [],
+                             'pause_history': [], 'pause': None,
+                             'runtime_selection': None}}
         atomic_save(path, state)
         return projection(root, state)
 
@@ -200,12 +255,41 @@ def load(root, path):
                 valid = False
             if not valid:
                 raise ValueError('completed checkpoint lacks task-bound execution/gates/review/triage')
+    ensure_control(state)
+    control = state['control']
+    statuses = {record['status'] for record in state['tasks'].values()}
+    if control['status'] == 'completed' and statuses != {'completed'}:
+        raise ValueError('completed goal state contains unfinished tasks')
+    if control['status'] == 'awaiting_model_switch':
+        switch = control['model_switch']
+        if (switch['task_id'] not in state['tasks']
+                or state['tasks'][switch['task_id']]['status'] != 'pending'
+                or next_task(state) is None
+                or next_task(state)['task_id'] != switch['task_id']):
+            raise ValueError('model-switch checkpoint no longer identifies the next pending task')
     return state
 
 
 def event(state, task_id, status, detail):
-    state['tasks'][task_id]['status'] = status
+    control = ensure_control(state)
+    if task_id is not None:
+        state['tasks'][task_id]['status'] = status
     state['events'].append({'at': amr.now(), 'task_id': task_id, 'status': status, 'detail': detail})
+    if status in {'unknown', 'validation_failed', 'failed'}:
+        control.update(status='blocked', pause={'reason': detail, 'created_at': amr.now(),
+                                                'baseline_identity': None,
+                                                'next_action': 'Inspect the current execution/gate evidence; reconcile or create a fresh plan.'})
+    elif status == 'awaiting_triage':
+        control.update(status='awaiting_approval', pause={
+            'reason': 'contributor finding triage is required; this is not production authorization',
+            'created_at': amr.now(), 'baseline_identity': None,
+            'next_action': 'Inspect native review output and submit exact-content contributor triage.'})
+    elif status == 'completed':
+        control.update(status='completed' if all(
+            record.get('status') == 'completed' for record in state['tasks'].values()) else 'active',
+            pause=None, model_switch=None)
+    elif status == 'running':
+        control.update(status='active', pause=None, model_switch=None)
 
 
 def next_task(state):
@@ -220,14 +304,238 @@ def next_task(state):
 
 def projection(root, state):
     task = next_task(state)
+    control = ensure_control(state)
+    status = ('completed' if all(t['status'] == 'completed' for t in state['tasks'].values())
+              else control['status'])
     return {'goal_id': state['plan']['goal_id'], 'milestone': state['plan']['milestone'],
             'objective_path': state['plan']['objective_path'],
             'objective': state['plan'].get('objective'),
             'progress_path': state['plan']['progress_path'],
             'next_task': task['task_id'] if task else None,
-            'status': 'completed' if all(t['status'] == 'completed' for t in state['tasks'].values()) else 'active',
+            'status': status,
+            'control': control,
             'tasks': state['tasks'], 'events': state['events'],
-            'limitation': 'local execution checkpoints; not native GOAL control, merge or production approval'}
+            'native_goal_control': 'not_available_in_local_cli',
+            'limitation': 'local execution checkpoints; native GOAL control, merge and production approval remain external'}
+
+
+def safe_model_switch_boundary(state):
+    return all(record.get('status') in SAFE_BOUNDARY_TASK_STATES
+               for record in state['tasks'].values())
+
+
+def pending_routes(root, state):
+    routes = []
+    for candidate in state['plan']['tasks']:
+        if state['tasks'][candidate['task_id']]['status'] != 'pending':
+            continue
+        validated = amr.validate_task(copy.deepcopy(candidate), root)
+        routes.append((candidate, amr.classify(validated)))
+    return routes
+
+
+def recommend(root, goal_id, current_model, current_effort):
+    """Persist a justified model-switch pause at a verified task boundary.
+
+    current_model/current_effort are caller-reported because this local CLI
+    cannot observe the selected model of the desktop coordinator thread.
+    """
+    with checkpoint(root, goal_id) as path:
+        state = load(root, path)
+        control = ensure_control(state)
+        if control['status'] != 'active':
+            raise ValueError('goal is '+control['status']+'; resolve that state before routing')
+        if not safe_model_switch_boundary(state):
+            raise ValueError('model switches require a safe boundary with no unresolved task operation')
+        candidates = discover(root)
+        current_selection = (current_model, current_effort)
+        supported_current = (current_selection in PROFILE_SELECTIONS and any(
+            x.get('model') == current_model and current_effort in x.get('efforts', [])
+            for x in candidates.get('models', [])))
+        if not supported_current:
+            raise ValueError('caller-reported current model/effort is not an advertised Kordra AMR profile')
+        task = next_task(state)
+        if task is None:
+            result = projection(root, state)
+            result['recommendation'] = {'action': 'none', 'reason': 'no eligible task',
+                                        'selection_verification': 'unverified'}
+            return result
+        task = amr.validate_task(copy.deepcopy(task), root)
+        classification = amr.classify(task)
+        route = amr.resolve(classification, candidates)
+        can_keep_current = current_selection in PROFILE_CAPABILITIES.get(route.get('profile'), set())
+        # An alternative ROUTINE/ENGINEERING profile may be unavailable while
+        # the current advertised profile already meets that task's quality floor.
+        # Keep that exact current selection explicitly; never silently substitute.
+        unavailable_switch_target = (route.get('action') == 'blocked'
+                                     and route.get('support') == 'unsupported'
+                                     and can_keep_current)
+        if route.get('action') == 'blocked' and not unavailable_switch_target:
+            control.update(status='blocked', model_switch=None, pause={
+                'reason': '; '.join(route.get('rationale', [])) or 'model route unavailable',
+                'created_at': amr.now(), 'baseline_identity': current_identity(root),
+                'next_action': 'Resolve model/effort availability and re-evaluate this task route.'})
+            state['events'].append({'at': amr.now(), 'task_id': task['task_id'],
+                                    'status': 'blocked', 'detail': control['pause']['reason']})
+            atomic_save(path, state)
+            result = projection(root, state)
+            result['recommendation'] = {'action': 'blocked', 'route': route,
+                                        'selection_verification': 'unverified'}
+            return result
+
+        target_model, target_effort = route.get('model'), route.get('effort')
+        reason = None
+        # Routine work does not justify interrupting a capable current session.
+        if route.get('profile') is None:
+            reason = 'the next task is deterministic; no model switch is needed'
+            target_model, target_effort = current_model, current_effort
+        elif route.get('profile') == 'ROUTINE':
+            reason = 'keep the current session for routine work; switching overhead is not justified'
+            target_model, target_effort = current_model, current_effort
+        elif route.get('profile') == 'ENGINEERING' and current_model == 'gpt-6.1-sol' and current_effort == 'high':
+            remaining = pending_routes(root, state)
+            all_standard = all(item_route.get('profile') == 'ENGINEERING' for _, item_route in remaining)
+            if route.get('support') == 'unsupported':
+                target_model, target_effort = current_model, current_effort
+                reason = 'keep the already selected Sol High session because the exact Medium switch target is unavailable'
+            elif len(remaining) >= 2 and all_standard:
+                target_model, target_effort = amr.PROFILES['ENGINEERING']
+                reason = 'at least two pending standard tasks remain and no critical task is queued'
+            else:
+                target_model, target_effort = current_model, current_effort
+                reason = 'keep the current high-effort session; switching down is not worth this short segment'
+        elif current_model == target_model and current_effort == target_effort:
+            reason = 'current model and effort already match the task route'
+        else:
+            reason = 'task route needs a different model or reasoning effort'
+
+        selection = {'model': current_model, 'effort': current_effort,
+                     'status': 'unverified', 'source': 'caller_reported', 'recorded_at': amr.now()}
+        control['runtime_selection'] = selection
+        if (target_model, target_effort) == (current_model, current_effort):
+            state['events'].append({'at': amr.now(), 'task_id': task['task_id'],
+                                    'status': 'active', 'detail': 'no model switch: '+reason})
+            atomic_save(path, state)
+            result = projection(root, state)
+            result['recommendation'] = {'action': 'continue', 'task_id': task['task_id'],
+                'current': selection, 'recommended': {'model': target_model, 'effort': target_effort},
+                'reason': reason, 'selection_verification': 'unverified'}
+            return result
+
+        control.update(status='awaiting_model_switch', pause=None, model_switch={
+            'task_id': task['task_id'], 'current_model': current_model,
+            'current_effort': current_effort, 'current_selection_verification': 'unverified',
+            'recommended_model': target_model, 'recommended_effort': target_effort,
+            'reason': reason, 'route': route, 'baseline_identity': current_identity(root),
+            'context_paths': sorted(set(task['paths']+task['consulted'])),
+            'completed_tasks': sorted(tid for tid, record in state['tasks'].items()
+                                      if record['status'] == 'completed'),
+            'outstanding_operations': [],
+            'next_action': 'Manually select '+target_model+'/'+target_effort
+                           +' in Codex, explicitly resume GOAL, then revalidate this checkpoint.',
+            'created_at': amr.now(), 'native_pause': 'not_available_in_local_cli'})
+        state['events'].append({'at': amr.now(), 'task_id': task['task_id'],
+                                'status': 'awaiting_model_switch', 'detail': reason})
+        atomic_save(path, state)
+        result = projection(root, state)
+        result['recommendation'] = {'action': 'awaiting_model_switch',
+            'task_id': task['task_id'], 'current': selection,
+            'recommended': {'model': target_model, 'effort': target_effort},
+            'reason': reason, 'selection_verification': 'unverified',
+            'native_pause': 'not_available_in_local_cli'}
+        return result
+
+
+def pause(root, goal_id, status, reason):
+    if status not in {'awaiting_approval', 'blocked'}:
+        raise ValueError('manual pause state must be awaiting_approval or blocked')
+    if not isinstance(reason, str) or not reason.strip():
+        raise ValueError('pause requires a specific reason')
+    with checkpoint(root, goal_id) as path:
+        state = load(root, path)
+        control = ensure_control(state)
+        if control['status'] != 'active' or not safe_model_switch_boundary(state):
+            raise ValueError('pause requires an active goal at a safe execution boundary')
+        control.update(status=status, model_switch=None,
+                       pause={'reason': reason.strip(), 'created_at': amr.now(),
+                              'baseline_identity': current_identity(root),
+                              'next_action': ('Obtain a human decision and record its evidence reference.'
+                                  if status == 'awaiting_approval' else
+                                  'Resolve the technical blocker, verify it, then explicitly resume.'),
+                              'evidence_status': 'pending'})
+        state['events'].append({'at': amr.now(), 'task_id': None,
+                                'status': status, 'detail': reason.strip()})
+        atomic_save(path, state)
+        result = projection(root, state)
+        result['native_goal_control'] = 'not_available_in_local_cli'
+        return result
+
+
+def resume(root, goal_id, *, model=None, effort=None, approval_evidence=None,
+           resolution_evidence=None):
+    with checkpoint(root, goal_id) as path:
+        state = load(root, path)
+        control = ensure_control(state)
+        paused_status = control['status']
+        if paused_status == 'active':
+            raise ValueError('goal is already active; resume is never automatic')
+        if paused_status == 'completed':
+            raise ValueError('completed goal cannot be resumed; create a new plan')
+        if not safe_model_switch_boundary(state):
+            raise ValueError('unresolved or uncertain task state blocks resume; reconcile or create a new plan')
+
+        if paused_status == 'awaiting_model_switch':
+            switch = control['model_switch']
+            current = current_identity(root)
+            if current != switch['baseline_identity']:
+                raise ValueError('Git revision or working tree changed while paused; revalidate and create a fresh plan')
+            task = next_task(state)
+            if task is None or task['task_id'] != switch['task_id']:
+                raise ValueError('next task changed while paused; re-evaluate the model route')
+            if (model, effort) != (switch['recommended_model'], switch['recommended_effort']):
+                raise ValueError('selected model/effort does not match the recommendation; no silent fallback')
+            capabilities = discover(root)
+            if not any(x.get('model') == model and effort in x.get('efforts', [])
+                       for x in capabilities.get('models', [])):
+                raise ValueError('recommended model/effort is no longer advertised')
+            switch['resumed_at'] = amr.now()
+            switch['selection_verification'] = 'unverified'
+            control.setdefault('switch_history', []).append(copy.deepcopy(switch))
+            control['runtime_selection'] = {'model': model, 'effort': effort,
+                'status': 'unverified', 'source': 'manual_switch_claim', 'recorded_at': amr.now()}
+        elif paused_status == 'awaiting_approval':
+            if any(record['status'] == 'awaiting_triage' for record in state['tasks'].values()):
+                raise ValueError('use goal accept after exact-content review triage')
+            if not isinstance(approval_evidence, str) or not approval_evidence.strip():
+                raise ValueError('approval evidence reference required; this CLI cannot authenticate approval')
+            pause_record = control['pause']
+            if pause_record.get('baseline_identity') != current_identity(root):
+                raise ValueError('source changed while awaiting approval; create a fresh reviewed plan')
+            pause_record.update(evidence_reference=approval_evidence.strip(), evidence_status='referenced')
+        elif paused_status == 'blocked':
+            if not isinstance(resolution_evidence, str) or not resolution_evidence.strip():
+                raise ValueError('resolution evidence required to clear a technical block')
+            if any(record['status'] in UNRESOLVED_TASK_STATES for record in state['tasks'].values()):
+                raise ValueError('failed, uncertain or untriaged task requires reconciliation or a fresh plan')
+            pause_record = control['pause']
+            if pause_record.get('baseline_identity') != current_identity(root):
+                raise ValueError('source changed while blocked; create a fresh reviewed plan')
+            pause_record.update(evidence_reference=resolution_evidence.strip(), evidence_status='referenced')
+
+        prior_status = paused_status
+        if control.get('pause'):
+            control['pause_history'].append(copy.deepcopy(control['pause']))
+        control.update(status='active', pause=None, model_switch=None)
+        state['events'].append({'at': amr.now(), 'task_id': None, 'status': 'active',
+                                'detail': 'explicit resume from '+prior_status})
+        atomic_save(path, state)
+        result = projection(root, state)
+        result['resumed_from'] = prior_status
+        selection = control.get('runtime_selection')
+        result['selection_verification'] = (selection.get('status') if isinstance(selection, dict)
+                                            else 'not_applicable')
+        result['native_goal_resume'] = 'coordinator_must_resume_native_goal_separately'
+        return result
 
 
 def status(root, goal_id):
@@ -312,6 +620,9 @@ def verified_review(review):
 def step(root, goal_id):
     with checkpoint(root, goal_id) as path:
         state = load(root, path)
+        control = ensure_control(state)
+        if control['status'] != 'active':
+            raise ValueError('goal is '+control['status']+'; explicitly resolve or resume it first')
         task = next_task(state)
         if task is None:
             raise ValueError('no eligible task; inspect status, triage or reconcile unfinished work')
@@ -421,7 +732,7 @@ def add_parser(sub):
     parser = sub.add_parser('goal', help='persistent local goal execution')
     commands = parser.add_subparsers(dest='goal_command', required=True)
     p = commands.add_parser('init'); p.add_argument('--plan', required=True, type=Path)
-    for command in ('status', 'step', 'validate', 'accept', 'reconcile'):
+    for command in ('status', 'step', 'validate', 'accept', 'reconcile', 'recommend', 'pause', 'resume'):
         p = commands.add_parser(command); p.add_argument('--id', required=True)
         if command in {'validate', 'accept', 'reconcile'}:
             p.add_argument('--task-id', required=True)
@@ -429,6 +740,17 @@ def add_parser(sub):
             p.add_argument('--triage', required=True, type=Path)
         if command == 'reconcile':
             p.add_argument('--evidence', required=True)
+        if command == 'recommend':
+            p.add_argument('--current-model', required=True)
+            p.add_argument('--current-effort', required=True)
+        if command == 'pause':
+            p.add_argument('--status', required=True, choices=('awaiting_approval', 'blocked'))
+            p.add_argument('--reason', required=True)
+        if command == 'resume':
+            p.add_argument('--model')
+            p.add_argument('--effort')
+            p.add_argument('--approval-evidence')
+            p.add_argument('--resolution-evidence')
 
 
 def main(root, args):
@@ -442,4 +764,12 @@ def main(root, args):
         return validate(root, args.id, args.task_id)
     if args.goal_command == 'accept':
         return accept(root, args.id, args.task_id, json.loads(args.triage.read_text()))
-    return reconcile(root, args.id, args.task_id, args.evidence)
+    if args.goal_command == 'reconcile':
+        return reconcile(root, args.id, args.task_id, args.evidence)
+    if args.goal_command == 'recommend':
+        return recommend(root, args.id, args.current_model, args.current_effort)
+    if args.goal_command == 'pause':
+        return pause(root, args.id, args.status, args.reason)
+    return resume(root, args.id, model=args.model, effort=args.effort,
+                  approval_evidence=args.approval_evidence,
+                  resolution_evidence=args.resolution_evidence)

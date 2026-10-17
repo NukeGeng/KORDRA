@@ -2,7 +2,7 @@
 id: ENG-DEBT
 status: proposed
 owner: unassigned
-last_reviewed: 2026-10-15
+last_reviewed: 2026-10-16
 ---
 
 # Technical debt register, triage & prevention
@@ -16,6 +16,7 @@ A debt entry is a **tracked obligation**; no TODO-only debt as sole record. Ever
 | DEBT-000 | `unassigned` | TEMPLATE ONLY — remove when starting project | low | unassigned | n/a | first real debt registered | example |
 | DEBT-AMR-001 | ENG-TOOLING / FEAT-AMR-001 | GitHub/NukeGeng identity, protected `main`, required checks and first module build/tests are verified; current PR still has no review on its latest published head; provider automatic review and independent owner acceptance remain unverified | medium | engineering-maintainers | Keep local/native review and provider review statuses separate; retain required human merge/production approvals | Provider or native review on exact current PR SHA, relevant CI and independent owner approval; checkpoint: first product PR | open; Git setup, main protection and local product validation completed |
 | DEBT-AMR-002 | ENG-TOOLING / FEAT-AMR-001 | Native review/start previously completed only on a stale source snapshot; later native review attempts, including the current Goal E2E, timed out without matching terminal review evidence | medium | engineering-maintainers | Preserve timeout receipts and independent findings; stop same-cause retries until runtime/protocol or provider path changes | Observe verified native/provider review exit on an exact stable current revision; checkpoint: first connected PR | open |
+| DEBT-AMR-003 | ENG-TOOLING / FEAT-AMR-001 | Local AMR can read project config and model catalog but cannot inspect the active desktop coordinator model or control native GOAL status; `goal resume` therefore stores manual model selection as unverified | medium | engineering-maintainers | Keep local runtime claims unverified, validate checkpoint source/Git/task identity, and use native desktop Goal controls for pause/continue | A supported session-bound model observation and native Goal control integration are verified end-to-end; otherwise retain the explicit limitation | open |
 
 ## Taxonomy
 `architecture-drift`, `documentation-drift`, `test-gap`, `security-risk`, `data-model`, `dependency`, `reliability`, `performance`, `operational-gap`, `model-data-lineage`.

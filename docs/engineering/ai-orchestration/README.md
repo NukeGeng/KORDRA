@@ -2,26 +2,44 @@
 id: ENG-AMR-GUIDE
 status: proposed
 owner: engineering-maintainers
-last_reviewed: 2026-10-15
+last_reviewed: 2026-10-16
 ---
 
-# Kordra AMR v2.1 operating guide
+# Kordra AMR v3 operating guide
 
 Owner: [developer engineering tooling](module.md), [FEAT-AMR-001](features/quality-first-amr.md). The existing [AI review protocol](../../governance/ai-review-protocol.md) remains authoritative for source/docs reconciliation. Correctness, architecture, security, reliability and maintainability precede efficiency and tokens. This checkout had no previous AMR implementation; this extends `docs/tooling`, AGENTS, WORKFLOW and existing CI rather than adding a product service.
 
-## Routing and context continuity
-For persistent GOAL execution, use the [coordinator and executable workflow](goal-execution.md); `amr.py goal` extends this implementation with dependency scheduling, actual execution, current gates/review and private checkpoints.
+## Single-agent routing and context continuity
+For persistent GOAL execution, use the [coordinator and executable workflow](goal-execution.md); `amr.py goal` extends the existing implementation with dependency scheduling, actual execution, current gates/review and private checkpoints. AMR v3 runs the coordinator in one session and does not spawn native collaboration sub-agents. `.codex/config.toml` disables sub-agent tools for new trusted project sessions; `amr.py discover` reports the effective setting. Repository instructions remain in force if project configuration is not loaded.
 
-“Sol” means GPT-6.1 Sol (`gpt-6.1-sol`) throughout Kordra AMR. Medium and High select reasoning effort on that same model. An unavailable exact model/effort blocks execution; GPT-6 Sol (`gpt-6-sol`) is not a fallback.
+“Sol” means GPT-6.1 Sol (`gpt-6.1-sol`) throughout Kordra AMR. Medium and High select reasoning effort on that same model. If a required switch target is unavailable, stay only when the already selected, runtime-advertised Kordra profile meets the task's quality floor; otherwise block. This keeps the exact current selection and records it as unverified when supplied by the coordinator. GPT-6 Sol (`gpt-6-sol`) is never a fallback.
 
 | Risk | Profile | Native model / effort | Evidence required |
 |---|---|---|---|
 | Mechanical lookup | deterministic | `rg` / enumeration | No source interpretation |
-| ROUTINE | ROUTINE | gpt-6-luna / high | Bounded task, mapped owner, approved/current spec and known tests |
+| ROUTINE | ROUTINE | gpt-6-luna / high when a switch is worth it | Bounded task, mapped owner, approved/current spec and known tests; stay on a capable current session when interruption costs more |
 | STANDARD (default) | ENGINEERING | gpt-6.1-sol / medium | Source comprehension, feature/integration/messaging/contracts |
 | CRITICAL | CRITICAL | gpt-6.1-sol / high | Auth, tenant/platform scope, secrets, state integrity, leases, retry side effects, rollback, production |
 
-Reclassify when evidence changes. Keep a capable session through analysis and implementation; use a structured handoff only for a real switch. Native Code Review selects its own review channel; no model allocation quota applies. Independent review is mandatory for CRITICAL, and self-checking does not count. A dedicated native local reviewer is the available alternative when provider review cannot run.
+Reclassify when evidence changes. The default is GPT-6.1 Sol Medium. Recommend GPT-6.1 Sol High for security, tenant/platform scope, distributed concurrency, state integrity, recovery or significant production risk. A move from High back to Medium is considered only when at least two pending tasks are standard engineering and no critical task is queued. Do not pause for a routine DTO or CRUD task just because the model table names Luna High. There are no model-use quotas. Native Code Review selects its own review channel; independent review is mandatory for CRITICAL, and self-checking does not count. A dedicated native local reviewer is the available alternative when provider review cannot run.
+
+### Human-in-the-loop model switching
+
+At an eligible task boundary, supply the current model and effort to `goal recommend`. If the route justifies a switch, AMR stores `awaiting_model_switch` with the task, rationale, recommended selection, source/content hash, Git head/branch/index and next action. `goal step` refuses to dispatch while paused. The user changes the model in Codex and explicitly continues GOAL; the coordinator validates the checkpoint before proceeding.
+
+```bash
+python3 docs/tooling/amr.py goal status --id KORDRA-FOUNDATION
+python3 docs/tooling/amr.py goal recommend --id KORDRA-FOUNDATION \
+  --current-model gpt-6.1-sol --current-effort medium
+# After manually switching the model in Codex:
+python3 docs/tooling/amr.py goal resume --id KORDRA-FOUNDATION \
+  --model gpt-6.1-sol --effort high
+python3 docs/tooling/amr.py goal status --id KORDRA-FOUNDATION
+```
+
+The current model passed to the local CLI is caller-reported. `goal resume` validates it against the recommendation and current model catalog, but marks it `unverified`; the local CLI cannot inspect the active desktop coordinator session. Do not treat `config/read`, a model name typed by a caller, or local checkpoint resume as proof of the model active in the chat. The sandboxed `goal step` runner remains an explicit native execution path and independently verifies its own `thread/start` model/effort and terminal turn; that evidence applies to that child execution only.
+
+Local status values are `active`, `awaiting_model_switch`, `awaiting_approval`, `blocked` and `completed`. Approval evidence is a reference for human review, not an approval token. A blocked/unknown operation cannot replay automatically. The local CLI cannot control the desktop GOAL status; when an active native GOAL exists and the runtime exposes pause, the coordinator pauses it only after saving the local checkpoint. Otherwise it stops and reports the limitation. Resume always requires an explicit user action.
 
 ```bash
 python3 docs/tooling/amr.py discover
