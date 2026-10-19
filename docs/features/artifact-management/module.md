@@ -2,7 +2,7 @@
 id: MOD-ART
 status: proposed
 owner: unassigned
-last_reviewed: 2026-10-15
+last_reviewed: 2026-10-18
 module_id: MOD-ART
 ---
 
@@ -35,7 +35,7 @@ Tag changed between approve/deploy, digest not available, incompatible architect
 - [FEAT-ART-001 — Discover and pin immutable deployable artifacts](features/immutable-artifact.md)
 
 ## Implementation mapping
-At baseline d0eff75 the module had no source/tests. FEAT-ART-001/I1 now maps a module-local digest validation increment under `src/Modules/ArtifactManagement/Domain/` and `tests/ArtifactManagement.Domain.Tests/`. It does not implement registry discovery, tenant-owned registration, events, persistence, policy/provenance verification or release integration. See the feature for actual build/test/review evidence; module status stays proposed pending architecture/owner review.
+At baseline d0eff75 the module had no source/tests. FEAT-ART-001/I1 now maps a module-local digest validation increment under `src/Modules/ArtifactManagement/Domain/` and `tests/ArtifactManagement.Domain.Tests/`, merged via PR #1 at `2aa156f4` with merge-SHA docs/product CI success. It does not implement registry discovery, tenant-owned registration, events, persistence, policy/provenance verification or release integration. See the feature for dated build/test/review evidence; module status stays proposed pending architecture/owner review.
 
 ## Definition of done
 Tuân thủ [DoD](../../engineering/definition-of-done.md), [module boundaries](../../engineering/module-boundaries.md), [architecture](../../architecture/bounded-contexts.md).

@@ -1,0 +1,16 @@
+{
+  "version": 1,
+  "dependencies": {
+    "net10.0": {
+      "kordra.modules.infrastructureinventory": {
+        "type": "Project",
+        "dependencies": {
+          "Kordra.Modules.InfrastructureInventory.Contracts": "[1.0.0, )"
+        }
+      },
+      "kordra.modules.infrastructureinventory.contracts": {
+        "type": "Project"
+      }
+    }
+  }
+}

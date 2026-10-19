@@ -2,7 +2,7 @@
 id: MOD-INV
 status: proposed
 owner: unassigned
-last_reviewed: 2026-10-15
+last_reviewed: 2026-10-18
 module_id: MOD-INV
 ---
 
@@ -35,7 +35,7 @@ Stale agent capability, target re-assigned to wrong tenant, stale cluster namesp
 - [FEAT-INV-001 — Register infrastructure target and discover capability](features/register-target.md)
 
 ## Implementation mapping
-`source_paths: []` và `test_paths: []` có nghĩa **chưa đối chiếu repository thật**. Sau khi có code, bổ sung path, commit/test evidence ở mỗi feature, không điền đường dẫn dự đoán.
+[FEAT-INV-001/I1](features/register-target.md) maps the actual Contracts/runtime, local API and tests authorized by ADR-0010. Local full gates (19 bootstrap + 48 Artifact tests), independent native High review and triage passed on 2026-10-18; new remote CI is pending. Inventory ingress is denied; target registration, trusted authorization and real discovery remain proposed/unimplemented. The module is not complete.
 
 ## Definition of done
 Tuân thủ [DoD](../../engineering/definition-of-done.md), [module boundaries](../../engineering/module-boundaries.md), [architecture](../../architecture/bounded-contexts.md).

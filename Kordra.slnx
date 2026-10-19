@@ -3,4 +3,10 @@
     <Project Path="src/Modules/ArtifactManagement/Domain/Kordra.ArtifactManagement.Domain.csproj" />
     <Project Path="tests/ArtifactManagement.Domain.Tests/ArtifactManagement.Domain.Tests.csproj" />
   </Folder>
+  <Folder Name="/InfrastructureInventory/">
+    <Project Path="src/Modules/InfrastructureInventory/Contracts/Kordra.Modules.InfrastructureInventory.Contracts.csproj" />
+    <Project Path="src/Modules/InfrastructureInventory/Kordra.Modules.InfrastructureInventory.csproj" />
+    <Project Path="src/Host/Kordra.Api/Kordra.Api.csproj" />
+    <Project Path="tests/InfrastructureInventory.Bootstrap.Tests/InfrastructureInventory.Bootstrap.Tests.csproj" />
+  </Folder>
 </Solution>
