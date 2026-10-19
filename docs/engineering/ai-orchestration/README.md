@@ -1,81 +1,71 @@
 ---
 id: ENG-AMR-GUIDE
-status: proposed
+status: accepted
 owner: engineering-maintainers
-last_reviewed: 2026-10-16
+last_reviewed: 2026-10-19
 ---
 
-# Kordra AMR v3 operating guide
+# AMR v4 — Architect / Developer / Reviewer
 
-Owner: [developer engineering tooling](module.md), [FEAT-AMR-001](features/quality-first-amr.md). The existing [AI review protocol](../../governance/ai-review-protocol.md) remains authoritative for source/docs reconciliation. Correctness, architecture, security, reliability and maintainability precede efficiency and tokens. This checkout had no previous AMR implementation; this extends `docs/tooling`, AGENTS, WORKFLOW and existing CI rather than adding a product service.
+The product owner approved this policy for the existing [ENG-TOOLING](module.md) / [FEAT-AMR-001](features/quality-first-amr.md) implementation. It replaces the previous Sol-driven GOAL review loop without changing product architecture, accepted ADRs, tenant permissions or production approval. Correctness, architecture integrity, security, reliability and maintainability remain mandatory. AMR stays single-agent; deterministic CLI/CI performs executable checks.
 
-## Single-agent routing and context continuity
-For persistent GOAL execution, use the [coordinator and executable workflow](goal-execution.md); `amr.py goal` extends the existing implementation with dependency scheduling, actual execution, current gates/review and private checkpoints. AMR v3 runs the coordinator in one session and does not spawn native collaboration sub-agents. `.codex/config.toml` disables sub-agent tools for new trusted project sessions; `amr.py discover` reports the effective setting. Repository instructions remain in force if project configuration is not loaded.
+## Roles
 
-“Sol” means GPT-6.1 Sol (`gpt-6.1-sol`) throughout Kordra AMR. Medium and High select reasoning effort on that same model. If a required switch target is unavailable, stay only when the already selected, runtime-advertised Kordra profile meets the task's quality floor; otherwise block. This keeps the exact current selection and records it as unverified when supplied by the coordinator. GPT-6 Sol (`gpt-6-sol`) is never a fallback.
+| Role | Selection | Responsibility |
+|---|---|---|
+| Architect | GPT-6.1 Sol High, `gpt-6.1-sol/high` | Produce a bounded design for milestones, features, boundaries, contracts, rules, acceptance and failure cases; stop for explicit human design approval. |
+| Developer / GOAL coordinator | Luna Max, `gpt-6-luna/max` | Execute approved GOAL tasks, maintain tests/docs, run deterministic gates, commit and prepare a feature PR. |
+| Default PR reviewer | Codex Auto PR Review | Review the feature PR after applicable CI; report current-head findings. |
+| Escalation debugger | Sol Medium or High | After two evidenced unsuccessful Luna fixes, debug only the reported defect and affected contracts; Medium for non-critical issues, High for critical security, concurrency, tenant isolation, irreversible effects, state integrity or distributed recovery. |
 
-| Risk | Profile | Native model / effort | Evidence required |
-|---|---|---|---|
-| Mechanical lookup | deterministic | `rg` / enumeration | No source interpretation |
-| ROUTINE | ROUTINE | gpt-6-luna / high when a switch is worth it | Bounded task, mapped owner, approved/current spec and known tests; stay on a capable current session when interruption costs more |
-| STANDARD (default) | ENGINEERING | gpt-6.1-sol / medium | Source comprehension, feature/integration/messaging/contracts |
-| CRITICAL | CRITICAL | gpt-6.1-sol / high | Auth, tenant/platform scope, secrets, state integrity, leases, retry side effects, rollback, production |
+The native model catalog must advertise the exact model/effort before dispatch. The repository's verified native catalog advertised Luna Max and GPT-6.1 Sol Medium/High; see [runtime evidence](testing-and-evidence.md). Configuration and catalog availability do not prove that a particular desktop turn used that model. Never silently substitute another model or effort.
 
-Reclassify when evidence changes. The default is GPT-6.1 Sol Medium. Recommend GPT-6.1 Sol High for security, tenant/platform scope, distributed concurrency, state integrity, recovery or significant production risk. A move from High back to Medium is considered only when at least two pending tasks are standard engineering and no critical task is queued. Do not pause for a routine DTO or CRUD task just because the model table names Luna High. There are no model-use quotas. Native Code Review selects its own review channel; independent review is mandatory for CRITICAL, and self-checking does not count. A dedicated native local reviewer is the available alternative when provider review cannot run.
+## GOAL workflow
 
-### Human-in-the-loop model switching
+Use the existing [GOAL workflow](goal-execution.md) and local checkpoint. The normal path is: GOAL → bounded Sol High design when needed → explicit human design approval → Luna implementation → deterministic tests/gates → commit → feature PR → Codex Auto PR Review → fix or bounded escalation → human merge.
 
-At an eligible task boundary, supply the current model and effort to `goal recommend`. If the route justifies a switch, AMR stores `awaiting_model_switch` with the task, rationale, recommended selection, source/content hash, Git head/branch/index and next action. `goal step` refuses to dispatch while paused. The user changes the model in Codex and explicitly continues GOAL; the coordinator validates the checkpoint before proceeding.
+A new design session is unnecessary when accepted designs, ADRs and contracts fully cover the implementation. Critical risk signals alone do not reroute a Developer task to Sol. If implementation requires a new architectural decision, stop and create a bounded Architect task. Sol design and debugging sessions finish after their assigned task; neither owns continuous GOAL execution.
 
-```bash
-python3 docs/tooling/amr.py goal status --id KORDRA-FOUNDATION
-python3 docs/tooling/amr.py goal recommend --id KORDRA-FOUNDATION \
-  --current-model gpt-6.1-sol --current-effort medium
-# After manually switching the model in Codex:
-python3 docs/tooling/amr.py goal resume --id KORDRA-FOUNDATION \
-  --model gpt-6.1-sol --effort high
-python3 docs/tooling/amr.py goal status --id KORDRA-FOUNDATION
-```
+`goal validate`, `goal accept` and milestone transitions do not invoke AI reviewers under policy v4. They preserve execution receipts, deterministic gates, contributor triage, exact-content human design approval and no-replay recovery. A successful GOAL task does not certify its PR. The default PR review and its current-head evidence remain separate.
 
-The current model passed to the local CLI is caller-reported. `goal resume` validates it against the recommendation and current model catalog, but marks it `unverified`; the local CLI cannot inspect the active desktop coordinator session. Do not treat `config/read`, a model name typed by a caller, or local checkpoint resume as proof of the model active in the chat. The serial `goal step` runner independently verifies its own `thread/start` model/effort and terminal turn; this is the only execution path that can produce a task-bound receipt for checkpoint acceptance. Direct coordinator edits remain unverified and cannot advance a task to completed.
-
-Local status values are `active`, `awaiting_model_switch`, `awaiting_approval`, `blocked` and `completed`. Approval evidence is a reference for human review, not an approval token. A blocked/unknown operation cannot replay automatically. The local CLI cannot control the desktop GOAL status; when an active native GOAL exists and the runtime exposes pause, the coordinator pauses it only after saving the local checkpoint. Otherwise it stops and reports the limitation. Resume always requires an explicit user action.
+New dispatch receipts use `policy_version: "4"`; checkpoint schemaVersion 1 remains unchanged. Completed v3 and v3.1 receipts keep their original validation rules. An unfinished historical task can migrate only its review obligations to v4 while retaining its original execution receipt and model-selection rules. Interrupted/unknown tasks are reconciled; they are never replayed automatically.
 
 ```bash
 python3 docs/tooling/amr.py discover
 python3 docs/tooling/amr.py route --task docs/engineering/ai-orchestration/task.example.json
-python3 docs/tooling/amr.py context --task docs/engineering/ai-orchestration/task.example.json
-python3 docs/tooling/amr.py validate-context
-python3 docs/tooling/amr.py launch --task docs/engineering/ai-orchestration/task.example.json --dry-run
-# Omit --dry-run to open the native interactive session with model/effort set.
-python3 docs/tooling/amr.py gates
-python3 docs/tooling/amr.py review
+python3 docs/tooling/amr.py goal status --id <goal-id>
+python3 docs/tooling/amr.py goal recommend --id <goal-id> \
+  --current-model gpt-6-luna --current-effort max
+python3 docs/tooling/amr.py goal step --id <goal-id>
+python3 docs/tooling/amr.py goal validate --id <goal-id> --task-id <task-id>
+python3 docs/tooling/amr.py goal accept --id <goal-id> --task-id <task-id> \
+  --triage .amr-local/triage.json
 ```
 
-Launch is local development only, uses workspace-write plus human on-request approvals and never provides unrestricted access flags. Inspect effective runtime: project configuration may be ignored in an untrusted/non-Git folder or overridden by the desktop chat. Config files cannot switch this active chat. The explicit launch arguments select the model in the newly launched native session. Resume an existing native session when possible instead of repeatedly launching; context validation must precede reliance on its decisions/tests. All file or contract changes invalidate a saved handoff/review; regenerate after checking the change. JSON artifacts and exit codes are specified in the [contract](contract.md).
+Architect acceptance requires a human approval object bound to the exact task digest, content digest, approver, scope and decision evidence. The CLI records that decision but cannot authenticate the person. `goal step --design-review` is rejected under v4; design approval happens after the Architect output. Proposed ADRs still require their own human decision.
 
-## Quality gates and escalation
-`gates` executes strict docs validation, the existing LAB registry scope checker and offline AMR unit/contract/regression tests. When Kordra.slnx exists it also executes locked restore, product build and product tests; failed earlier product stages block dependent stages. Python imports in unit tests also catch syntax errors. On a real Git checkout use `gates --base <verified-base-SHA>` to execute changeguard against the PR range. Existing CI enforces these gates and source/feature changes together, including tooling/config/tests and product tests/bootstrap files. Python CI uses 3.11 and no AI credentials; the separate product validation workflow uses the pinned .NET SDK.
+## Deterministic gates
 
-The initial supplied tree had no product build/database/broker. FEAT-ART-001/I1 now has a module-local domain build/test solution; no backend, database, broker or authorization service exists. Do not fabricate tenant, durability or deployment results. Further product increments must add their applicable static/integration/security/contract/failure/rollback checks. Root AGENTS negative test obligations remain in force.
-
-On failure retain command, output, affected contract and root cause. Make a focused repair. At two failed repairs of the same cause, escalate; at four stop and request investigation. Security/state/irreversible risks escalate immediately. Never delete tests or label a changed file a fixed finding without rerunning the reproduction.
-
-## Native review and human approval
-Default project configuration selects a human reviewer. Official [Auto-review guidance](https://developers.openai.com/codex/auto-review) requires an eligible approval policy and sandbox. If organization policy permits local Auto-review, select **Approve for me** in the desktop permissions control and confirm it is selected for that chat; for CLI use `--approve-for-me` or eligible on-request + `approvals_reviewer="auto_review"`. Preserve project `auto_review.extra_policy`, which supplements the built-in policy and excludes sensitive operations. Managed requirements take precedence. Do not enable Auto-review for production operations. Native review cannot authorize company resource access.
+`gates` runs strict docs, LAB case-registry checks and offline tooling tests. With `Kordra.slnx`, it also runs locked restore, Release build and product tests; failed restore/build blocks dependent stages to avoid stale binaries. On a PR, supply a verified base SHA for source-to-feature mapping. CI remains independent of AI credentials.
 
 ```bash
-python3 docs/tooling/amr.py probe-models
-python3 docs/tooling/amr.py probe-auto-review
+python3 docs/tooling/amr.py gates --base <verified-base-SHA>
+python3 docs/tooling/amr.py validate-review --receipt .amr-local/triage-ledger.json --critical
+python3 docs/tooling/amr.py validate-bir --receipt .amr-local/pr-review.json --head <verified-PR-head-SHA>
 ```
 
-These run actual native turns, not mocks. Auto-review only requests a disposable local marker in a read-only sandbox; it records the native terminal decision. It does not change this chat's permission mode or enable Auto-review globally. The supplied chat has full access/never approvals, so it has no sandbox approval requests for Auto-review to decide. [Runtime evidence](testing-and-evidence.md) separates this from the isolated probe.
+Formatting checks remain deterministic; run the repository's applicable formatter and whitespace checks. At two failed Luna repairs of one root cause, escalation requires a defect ID, reproduction evidence and affected paths; a fourth failed repair blocks for maintainer investigation. Critical defects route directly to Sol High only as a bounded debugging task. Blocking findings and failed applicable gates prevent completion.
 
-For GitHub, configure the Codex connector's repository access and enable automatic Code Review in repository review settings. On a representative PR verify the review's actor, run identity, completion and exact current head SHA; triage findings, fix and rerun checks, then observe/request the next review. `@codex review` is a supported manual trigger when connected. A comment alone, an empty findings list or a failed integration is not proof of completed review. See official [Code Review](https://developers.openai.com/codex/code-review) and [custom repository rules](https://developers.openai.com/blog/custom-code-review-rules-for-codex). Do not change remote settings or post comments until the provider/PR is identified and that action is authorized.
+## PR review and BIR
 
-For GitLab, establish the actual supported MR integration, account eligibility and documented trigger before enabling it; GitHub parity is unverified here. At initial inspection the folder had no Git metadata/remote, so provider support could not be verified. The local Code Review diagnostics connector is read-only and requires a real PR/MR identity; it cannot enable automatic review. `amr.py review` calls native `review/start` for a content snapshot and requires a native exit event. It is independent local review, with a separate status from provider automatic review.
+Codex Auto PR Review is the default independent reviewer after a feature PR and its applicable CI checks. One review is the default; allow at most three requests total per PR. Round 1 covers the full diff. Only request rounds 2–3 when there is a new head or an unresolved finding that needs follow-up; use the last verified reviewed SHA as the incremental base and include surrounding context. Group findings by category/root cause, track canonical IDs and never repost existing bugs. Do not request another review for an unchanged source tree or SHA. Blocking findings must be resolved before merge. Round exhaustion is never approval.
 
-Git setup follow-up established NukeGeng/KORDRA on GitHub. For product changes, native `codex exec review --uncommitted` now provides local diff review; FEAT-ART-001/I1 observed terminal completion with no actionable defects. The earlier `amr.py review` custom target is scoped to the AMR implementation and must not be mistaken for product-feature review. Provider automatic review still requires its own current-PR evidence.
+The [BIR protocol](bounded-incremental-review.md) uses a local deterministic ledger. The validator checks SHAs, Git ancestry, round accounting, finding deduplication and escalation; it does not call or stop the provider, authenticate provider evidence or impose a native hard cap. Manual enforcement remains necessary until a provider capability is separately verified. Native hard-cap/incremental enforcement is not claimed, and no review-trigger controller is added by this migration.
 
-## Finding triage
-Record review channel, content hash/head SHA, finding ID, severity, feature/module, source/test line, claim and evidence. Validate against the current revision. Reproduce valid findings; fix the owning module and rerun regression/relevant gates. Dismiss only with counterevidence and rationale. Unknown outcomes remain unresolved. Re-review changes; bound repair/review cycles using the same root cause. Stale/duplicate reviews never satisfy the current gate. `validate-review --receipt <local-ledger.json> --critical` validates the [ledger contract](contract.md); it cannot authenticate an approval or waive a missing required check. CI, branch protection, authorized human review and production approval retain their authority.
+To report a provider review as verified, inspect connected repository configuration, request/run identity, terminal completion and exact current PR head, then triage its findings. A local review, comment, empty findings array or ledger exit code alone is not provider execution evidence. The PR owner retains merge authority. See official [Code Review documentation](https://learn.chatgpt.com/docs/code-review).
+
+## Checkpoints and human authority
+
+Private checkpoints remain atomic under `.amr-local/goals`, retain immutable plan/objective/source/Git identities and protected write paths, and bind native execution to thread/turn. Native timeouts or crashes become unknown and are not replayed. Local selection claims remain unverified without runtime evidence bound to the turn. The local CLI cannot pause or resume the desktop GOAL.
+
+Sandbox Auto-review and Codex Auto PR Review are distinct capabilities. Neither grants merge authority, company access or production approval. Sensitive production operations still require explicit authorized human approval, target lease, locked specification and rollback/evidence controls. LAB-01 remains observe-only by default. Live model/review probes are opt-in and separate from deterministic gates.

@@ -7,6 +7,8 @@ python3 docs/tooling/doccheck.py --strict-sources  # after linking real source p
 
 Tool chỉ dùng Python stdlib. Kiểm tra: YAML frontmatter lightweight; module/feature IDs, feature links, địa chỉ markdown nội bộ, required sections, trạng thái, file hiện diện khi strict. Kiểm tra source path trong strict mode chỉ áp dụng cho implemented/verified features, tránh cản trở scaffold chưa có code. Tự động hóa không thay thế source review/test correctness/tenant security audit.
 
+Discovery bỏ qua ba thư mục workspace dành riêng `.git`, `.temp`, `.amr-local` ở mọi cấp và không đi theo directory symlink. Vì vậy bản nháp import/private backup không bị tính như tài liệu chính thức. Các file Markdown khác, kể cả chưa tracked, bị `.gitignore` bỏ qua hoặc nằm trong thư mục ẩn khác, vẫn được kiểm tra; Git ignore không thể dùng để che lỗi tài liệu chính thức.
+
 ### Detect changed source without matching docs
 ```bash
 python3 docs/tooling/changeguard.py --base origin/main
@@ -17,7 +19,7 @@ Guard dùng `git diff <base>...HEAD`, kiểm tra `src/`, `tests/`, `docs/tooling
 Run `python3 docs/tooling/scopecheck.py`; validates case IDs, phase/mutation safety mapping, owning modules and observe-only sample profile. **Does not run live infrastructure tests.**
 
 ## Quality-first AI engineering
-Use [AMR v3](../engineering/ai-orchestration/README.md) for single-agent routing, human-in-the-loop model switching, durable local checkpoints, native discovery, context handoff, local checks and independent review. Requires Python 3.11+ (stdlib only); Codex is optional for offline tests and required for live probes.
+Use [AMR v4](../engineering/ai-orchestration/README.md) for bounded Architect design, Luna-led single-agent GOAL execution, durable local checkpoints, native discovery, deterministic gates and separate Codex Auto PR Review/BIR tracking. Requires Python 3.11+ (stdlib only); Codex is optional for offline tests and required for live model probes.
 
 ```bash
 python3 -m unittest discover -s docs/tooling/tests -v

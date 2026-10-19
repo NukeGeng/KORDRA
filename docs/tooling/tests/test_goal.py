@@ -52,7 +52,7 @@ class GoalIntegration(unittest.TestCase):
     def capabilities(self, root):
         return {'models': [
             {'model': 'gpt-6.1-sol', 'efforts': ['medium', 'high']},
-            {'model': 'gpt-6-luna', 'efforts': ['high']}]}
+            {'model': 'gpt-6-luna', 'efforts': ['high', 'max']}]}
 
     def execution(self, root, task, model, effort, **kwargs):
         kwargs['on_start']('native-thread-A')
@@ -93,6 +93,23 @@ class GoalIntegration(unittest.TestCase):
         return dict(task_id='A', content=amr.tree_identity(self.root)['digest'],
                     reviewed_by='fixture-contributor', rationale='Inspected current native review', findings=[])
 
+    def architect_task(self):
+        task = self.plan['tasks'][0]
+        task.update(kind='architecture', objective='Design the bounded fixture change',
+                    paths=['feature.md'], write_paths=['feature.md'],
+                    decisions=['Do not implement source code in the design task'])
+        return task
+
+    def design_approval(self, task_id='A', *, content=None, task=None, **overrides):
+        task = task or goal.dispatched_task(self.state(), task_id)
+        approval = dict(decision='approved', task_id=task_id,
+                        task_digest=amr.task_identity(task),
+                        content=content or amr.tree_identity(self.root)['digest'],
+                        approved_by='fixture-maintainer', scope='fixture design document only',
+                        decision_evidence='explicit maintainer approval in test fixture')
+        approval.update(overrides)
+        return approval
+
     def test_persistent_status_atomic_checkpoint_and_current_triage_advance(self):
         first = goal.init(self.root, self.plan)
         self.assertEqual(first['next_task'], 'A')
@@ -110,6 +127,231 @@ class GoalIntegration(unittest.TestCase):
         self.assertEqual(self.state()['tasks']['A']['attempts'], 1)
         self.assertEqual(list(checkpoint.parent.glob('.checkpoint-*')), [])
 
+    def test_developer_tasks_never_invoke_sol_for_critical_or_final_milestone_review(self):
+        goal.init(self.root, self.plan)
+        with self.boundaries(review=lambda *args, **kwargs: self.fail('v4 must not invoke local AI review')):
+            first = goal.step(self.root, 'fixture')
+            self.assertEqual(first['tasks']['A']['policy_version'], '4')
+            self.assertEqual(first['tasks']['A']['route']['model'], 'gpt-6-luna')
+            self.assertEqual(first['tasks']['A']['review']['status'], 'not_required')
+            goal.accept(self.root, 'fixture', 'A', self.triage())
+            second = goal.step(self.root, 'fixture')
+            self.assertEqual(second['tasks']['B']['review']['status'], 'not_required')
+            triage = self.triage(); triage['task_id'] = 'B'
+            goal.accept(self.root, 'fixture', 'B', triage)
+        self.assertEqual(goal.status(self.root,'fixture')['status'],'completed')
+
+    def test_dispatch_forwards_source_bound_facts_while_parent_holds_lock(self):
+        self.plan['tasks'][0]['decisions'] = ['Caller claims design review and routing passed']
+        goal.init(self.root, self.plan)
+        before = amr.tree_identity(self.root)['digest']
+        def inspect(root, task, model, effort, **kwargs):
+            state = self.state()
+            record = state['tasks']['A']
+            self.assertEqual(record['status'], 'running')
+            facts = kwargs['pre_dispatch']
+            self.assertEqual(facts, {
+                'source': 'amr_goal.step', 'policy_version': '4', 'goal_id': 'fixture',
+                'task_id': 'A', 'task_digest': amr.task_identity(task), 'content': before,
+                'plan_digest': state['plan_digest'], 'attempt_id': record['attempt_id'],
+                'route': record['route'],
+                'execution_lock': {'owner': 'parent_coordinator', 'scope': 'checkout', 'held': True},
+                'design_approval': {'required': False, 'status': 'not_applicable'},
+            })
+            self.assertEqual(facts['route']['support'], 'advertised')
+            self.assertEqual((facts['route']['model'], facts['route']['effort']), (model, effort))
+            self.assertEqual(kwargs['goal_context'], {
+                'goal_id': 'fixture', 'objective': self.plan['objective'], 'milestone': 'M1',
+                'task_id': 'A', 'depends_on': [],
+            })
+            with self.assertRaisesRegex(ValueError, 'another goal executor'):
+                with goal.checkpoint(root, 'other'):
+                    self.fail('parent lock was released during dispatch')
+            return self.execution(root, task, model, effort, **kwargs)
+        with self.boundaries(execution=inspect):
+            goal.step(self.root, 'fixture')
+            self.review_mock.assert_not_called()
+
+    def test_architect_design_requires_exact_human_approval_after_sol_output(self):
+        self.architect_task()
+        goal.init(self.root, self.plan)
+        with self.boundaries():
+            result = goal.step(self.root, 'fixture')
+            self.review_mock.assert_not_called()
+            self.assertEqual(result['tasks']['A']['route']['model'], 'gpt-6.1-sol')
+            self.assertEqual(result['tasks']['A']['route']['effort'], 'high')
+            facts = self.execute_mock.call_args.kwargs['pre_dispatch']
+            self.assertEqual(facts['design_approval'],
+                             {'required': True, 'status': 'human_approval_after_output'})
+            with self.assertRaisesRegex(ValueError, 'explicit human approval'):
+                goal.accept(self.root, 'fixture', 'A', self.triage())
+            stale = self.triage()
+            stale['human_design_approval'] = self.design_approval(content='stale')
+            with self.assertRaisesRegex(ValueError, 'explicit human approval'):
+                goal.accept(self.root, 'fixture', 'A', stale)
+            approved = self.triage()
+            approved['human_design_approval'] = self.design_approval()
+            completed = goal.accept(self.root, 'fixture', 'A', approved)
+        self.assertEqual(completed['tasks']['A']['status'], 'completed')
+        self.review_mock.assert_not_called()
+
+    def test_critical_developer_task_uses_luna_and_separate_pr_review(self):
+        self.plan['tasks'][0]['signals']=['auth']
+        goal.init(self.root,self.plan)
+        with self.boundaries(review=lambda *args, **kwargs: self.fail('PR review is a separate workflow')):
+            result = goal.step(self.root, 'fixture')
+            self.assertEqual(result['tasks']['A']['route']['model'], 'gpt-6-luna')
+            self.assertFalse(goal.review_required(self.state(), 'A'))
+            goal.accept(self.root, 'fixture', 'A', self.triage())
+            self.review_mock.assert_not_called()
+
+    def test_final_milestone_selection_uses_dependency_schedule_not_array_tail(self):
+        self.plan['tasks'].reverse()  # B still depends on A, so B must finish last.
+        goal.init(self.root,self.plan)
+        state=self.state()
+        for record in state['tasks'].values():record['policy_version']='3.1'
+        self.assertFalse(goal.review_required(state,'A'))
+        self.assertTrue(goal.review_required(state,'B'))
+
+    def test_architect_session_returns_after_one_design_and_requires_human_approval(self):
+        self.architect_task()
+        goal.init(self.root,self.plan)
+        with self.boundaries():
+            with self.assertRaisesRegex(ValueError, 'does not consume AI design-review'):
+                goal.step(self.root, 'fixture', {'status': 'verified'})
+            self.execute_mock.assert_not_called()
+            result=goal.step(self.root,'fixture')
+            self.assertEqual(result['tasks']['A']['status'],'awaiting_triage')
+            self.assertEqual(self.execute_mock.call_count, 1)
+            self.review_mock.assert_not_called()
+            self.assertEqual(result['next_task'], None)
+            triage = self.triage()
+            triage['human_design_approval'] = self.design_approval()
+            goal.accept(self.root,'fixture','A',triage)
+
+    def test_legacy_completed_receipts_keep_original_selection_and_review_obligations(self):
+        goal.init(self.root,self.plan)
+        with self.boundaries():
+            goal.step(self.root,'fixture')
+            goal.accept(self.root,'fixture','A',self.triage())
+        state=self.state();record=state['tasks']['A'];record.pop('policy_version')
+        record['route'].update(model='gpt-6.1-sol',effort='medium')
+        record['execution'].update(requested_model='gpt-6.1-sol',observed_model='gpt-6.1-sol',
+                                   requested_effort='medium',observed_effort='medium')
+        record['review']=dict(self.review(),content=record['gates']['content'],
+                              independent=True,source_stable=True)
+        path=self.root/'.amr-local/goals/fixture.json';path.write_text(json.dumps(state))
+        self.assertEqual(goal.status(self.root,'fixture')['tasks']['A'],record)
+        with self.boundaries():
+            result=goal.step(self.root,'fixture')
+            self.assertEqual(result['tasks']['B']['route']['model'],'gpt-6-luna')
+            self.assertEqual(result['tasks']['B']['route']['effort'],'max')
+            self.assertEqual(result['tasks']['B']['policy_version'],'4')
+        state=self.state();state['tasks']['A']['review']['status']='not_required'
+        path.write_text(json.dumps(state))
+        with self.assertRaisesRegex(ValueError,'completed checkpoint lacks'):goal.status(self.root,'fixture')
+
+    def test_human_design_approval_cannot_be_reused_for_a_different_task_definition(self):
+        self.architect_task()
+        goal.init(self.root,self.plan)
+        with self.boundaries():
+            goal.step(self.root, 'fixture')
+        approval = self.design_approval()
+        other=copy.deepcopy(self.plan);other['goal_id']='other'
+        other['tasks'][0]['objective']='A different architectural decision'
+        goal.init(self.root,other)
+        with self.boundaries():
+            goal.step(self.root, 'other')
+            triage = self.triage(); triage['human_design_approval'] = approval
+            with self.assertRaisesRegex(ValueError, 'explicit human approval'):
+                goal.accept(self.root, 'other', 'A', triage)
+
+    def test_v4_blocks_without_luna_then_switches_from_sol_when_luna_is_available(self):
+        goal.init(self.root,self.plan)
+        with self.boundaries(capabilities=lambda root:{'models':[{'model':'gpt-6.1-sol','efforts':['high']}]}):
+            blocked = goal.recommend(self.root,'fixture','gpt-6.1-sol','high')
+            self.assertEqual(blocked['status'], 'blocked')
+            self.execute_mock.assert_not_called()
+            self.assertEqual(self.state()['tasks']['A']['attempts'],0)
+        with self.boundaries():
+            goal.resume(self.root, 'fixture', resolution_evidence='Luna Max catalog entry available')
+            result=goal.recommend(self.root,'fixture','gpt-6.1-sol','high')
+            self.assertEqual(result['status'],'awaiting_model_switch')
+
+    def test_architect_approval_binds_to_dispatch_normalization_after_owner_metadata_change(self):
+        task = self.architect_task()
+        task.update(spec_verified=True, tests_known=True)
+        goal.init(self.root,self.plan)
+        feature=self.root/'feature.md'
+        feature.write_text(feature.read_text().replace('status: implemented','status: proposed'))
+        normalized=amr.validate_task(copy.deepcopy(self.state()['plan']['tasks'][0]),self.root)
+        self.assertIs(normalized['spec_verified'],False)
+        with self.boundaries():
+            result=goal.step(self.root,'fixture')
+            self.assertEqual(result['tasks']['A']['status'],'awaiting_triage')
+            triage = self.triage()
+            triage['human_design_approval'] = self.design_approval(task=normalized)
+            goal.accept(self.root,'fixture','A',triage)
+            self.review_mock.assert_not_called()
+        state=goal.status(self.root,'fixture')
+        self.assertEqual(state['tasks']['A']['status'],'completed')
+        self.assertIs(state['tasks']['A']['dispatch_task']['spec_verified'],False)
+
+    def test_developer_recovery_preserves_dispatch_tests_known_downgrade(self):
+        self.plan['tasks'][0].update(kind='source',paths=['source.py'],tests_known=True)
+        self.plan['tasks'][1]['paths']=['source.py']
+        goal.init(self.root,self.plan)
+        feature=self.root/'feature.md'
+        feature.write_text(feature.read_text().replace('test_paths: ["test_source.py"]','test_paths: []'))
+        normalized=amr.validate_task(copy.deepcopy(self.state()['plan']['tasks'][0]),self.root)
+        self.assertIs(normalized['tests_known'],False)
+        with self.boundaries():
+            goal.step(self.root,'fixture')
+            goal.validate(self.root,'fixture','A')
+            goal.accept(self.root,'fixture','A',self.triage())
+        self.assertEqual(goal.status(self.root,'fixture')['tasks']['A']['status'],'completed')
+
+    def test_dispatch_snapshot_cannot_change_plan_or_promote_source_claims(self):
+        self.plan['tasks'][0]['spec_verified']=False
+        goal.init(self.root,self.plan)
+        with self.boundaries():
+            goal.step(self.root,'fixture')
+            goal.accept(self.root,'fixture','A',self.triage())
+        original=self.state();path=self.root/'.amr-local/goals/fixture.json'
+        for override in ({'objective':'unreviewed work'},{'scope':'production'},
+                         {'spec_verified':True},{'extra':'unplanned'}):
+            state=copy.deepcopy(original);record=state['tasks']['A']
+            record['dispatch_task'].update(override)
+            record['dispatch_task_digest']=goal.digest(record['dispatch_task'])
+            path.write_text(json.dumps(state))
+            with self.subTest(override=override),self.assertRaisesRegex(ValueError,'dispatch task differs'):
+                goal.status(self.root,'fixture')
+
+    def test_unknown_execution_policy_cannot_be_loaded(self):
+        goal.init(self.root,self.plan)
+        state=self.state();state['tasks']['A']['policy_version']='future'
+        (self.root/'.amr-local/goals/fixture.json').write_text(json.dumps(state))
+        with self.assertRaisesRegex(ValueError,'policy version'):goal.status(self.root,'fixture')
+
+    def test_v31_completed_sol_retention_checkpoint_remains_readable_and_bound(self):
+        goal.init(self.root,self.plan)
+        with self.boundaries():
+            goal.step(self.root,'fixture')
+            goal.accept(self.root,'fixture','A',self.triage())
+        state=self.state()
+        record=state['tasks']['A']
+        record['policy_version']='3.1'
+        record['route'].update(model='gpt-6.1-sol',effort='high',retained_selection={
+            'reason':'preferred_unavailable','preferred_model':'gpt-6-luna','preferred_effort':'max'})
+        record['execution'].update(requested_model='gpt-6.1-sol',observed_model='gpt-6.1-sol',
+                                   requested_effort='high',observed_effort='high')
+        path=self.root/'.amr-local/goals/fixture.json'
+        path.write_text(json.dumps(state))
+        self.assertEqual(goal.status(self.root,'fixture')['tasks']['A'],record)
+        state['tasks']['A']['route'].pop('retained_selection')
+        path.write_text(json.dumps(state))
+        with self.assertRaisesRegex(ValueError,'completed checkpoint lacks'):goal.status(self.root,'fixture')
+
     def test_old_checkpoint_without_control_is_read_as_active_without_replay(self):
         goal.init(self.root, self.plan)
         path = self.root/'.amr-local/goals/fixture.json'
@@ -121,6 +363,25 @@ class GoalIntegration(unittest.TestCase):
         self.assertIn('control', self.state())
         self.assertEqual(self.state()['tasks']['A']['attempts'], 0)
 
+    def test_historical_v31_architect_checkpoint_keeps_its_pinned_source_paths(self):
+        goal.init(self.root, self.plan)
+        path = self.root/'.amr-local/goals/fixture.json'
+        state = self.state()
+        task = state['plan']['tasks'][0]
+        task.update(kind='architecture', paths=['feature.md', 'source.py'],
+                    write_paths=['feature.md'])
+        state['plan_digest'] = goal.digest(state['plan'])
+        state['tasks']['A']['policy_version'] = '3.1'
+        before = json.dumps(state, indent=2, ensure_ascii=False).encode()+b'\n'
+        path.write_bytes(before)
+
+        loaded = goal.load(self.root, path)
+
+        self.assertEqual(loaded['tasks']['A']['policy_version'], '3.1')
+        self.assertEqual(loaded['plan']['tasks'][0]['paths'], ['feature.md', 'source.py'])
+        self.assertEqual(loaded['tasks']['A']['status'], 'pending')
+        self.assertEqual(path.read_bytes(), before)
+
     def test_forged_completed_control_state_cannot_claim_pending_goal_complete(self):
         goal.init(self.root, self.plan)
         path = self.root/'.amr-local/goals/fixture.json'
@@ -130,71 +391,65 @@ class GoalIntegration(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'unfinished tasks'):
             goal.status(self.root, 'fixture')
 
-    def test_routine_task_does_not_interrupt_a_capable_current_model(self):
-        plan = copy.deepcopy(self.plan)
-        plan['tasks'] = [copy.deepcopy(plan['tasks'][0])]
-        plan['tasks'][0].update(kind='docs', bounded=True, spec_verified=True, tests_known=True)
-        goal.init(self.root, plan)
-        with self.boundaries(capabilities=lambda root: {
-            'models': [{'model': 'gpt-6.1-sol', 'efforts': ['medium']}]}):
-            result = goal.recommend(self.root, 'fixture', 'gpt-6.1-sol', 'medium')
+    def test_routine_task_keeps_current_luna_max_without_interrupt(self):
+        self.plan['tasks'][0].update(kind='docs', bounded=True, spec_verified=True, tests_known=True)
+        goal.init(self.root, self.plan)
+        with self.boundaries():
+            result = goal.recommend(self.root, 'fixture', 'gpt-6-luna', 'max')
         self.assertEqual(result['status'], 'active')
         self.assertEqual(result['recommendation']['action'], 'continue')
-        self.assertIn('switching overhead', result['recommendation']['reason'])
+        self.assertEqual(result['recommendation']['recommended'], {'model':'gpt-6-luna','effort':'max'})
 
-    def test_unavailable_engineering_target_keeps_current_sol_high(self):
+    def test_unavailable_luna_max_blocks_developer_without_sol_fallback(self):
         goal.init(self.root, self.plan)
         with self.boundaries(capabilities=lambda root: {
             'models': [{'model': 'gpt-6.1-sol', 'efforts': ['high']}]}):
             result = goal.recommend(self.root, 'fixture', 'gpt-6.1-sol', 'high')
-            stepped = goal.step(self.root, 'fixture')
-        self.assertEqual(result['status'], 'active')
-        self.assertEqual(result['recommendation']['action'], 'continue')
-        self.assertEqual(result['recommendation']['recommended'],
-                         {'model': 'gpt-6.1-sol', 'effort': 'high'})
-        self.assertIn('exact Medium switch target is unavailable', result['recommendation']['reason'])
-        self.assertEqual(result['recommendation']['route']['model'], 'gpt-6.1-sol')
-        self.assertEqual(result['recommendation']['route']['effort'], 'high')
-        self.assertEqual(stepped['tasks']['A']['status'], 'awaiting_triage')
-        self.assertEqual(stepped['tasks']['A']['route']['effort'], 'high')
+        self.assertEqual(result['status'], 'blocked')
+        self.assertEqual(result['recommendation']['action'], 'blocked')
+        self.assertEqual(result['recommendation']['route']['model'], 'gpt-6-luna')
+        self.assertEqual(result['recommendation']['route']['support'], 'unsupported')
+        self.assertEqual(self.state()['tasks']['A']['attempts'], 0)
 
-    def test_short_standard_task_keeps_high_and_step_uses_the_same_selection(self):
-        plan = copy.deepcopy(self.plan)
-        plan['tasks'] = [plan['tasks'][0]]
-        goal.init(self.root, plan)
+    def test_even_short_standard_task_returns_from_high_to_luna_at_safe_boundary(self):
+        self.plan['tasks'] = [self.plan['tasks'][0]]
+        goal.init(self.root, self.plan)
         with self.boundaries():
             recommendation = goal.recommend(self.root, 'fixture', 'gpt-6.1-sol', 'high')
+            self.assertEqual(recommendation['recommendation']['action'], 'awaiting_model_switch')
+            with self.assertRaisesRegex(ValueError, 'awaiting_model_switch'):
+                goal.step(self.root, 'fixture')
+            goal.resume(self.root, 'fixture', model='gpt-6-luna', effort='max')
             result = goal.step(self.root, 'fixture')
-        self.assertEqual(recommendation['recommendation']['action'], 'continue')
-        self.assertEqual(recommendation['recommendation']['recommended'],
-                         {'model': 'gpt-6.1-sol', 'effort': 'high'})
+        self.assertEqual(result['tasks']['A']['route']['model'], 'gpt-6-luna')
+        self.assertEqual(result['tasks']['A']['route']['effort'], 'max')
         self.assertEqual(result['tasks']['A']['status'], 'awaiting_triage')
-        self.assertEqual(result['tasks']['A']['route']['effort'], 'high')
 
-    def test_unavailable_critical_target_still_blocks_lower_effort_current(self):
-        plan = copy.deepcopy(self.plan)
-        plan['tasks'][0]['signals'] = ['concurrency']
-        goal.init(self.root, plan)
+    def test_unavailable_critical_target_still_blocks_luna_max(self):
+        self.plan['tasks'][0].update(kind='complex-debugging', signals=['concurrency'],
+            failed_repairs=2, failure_evidence='two failed Luna fixes with reproduction',
+            reported_defect={'finding_id':'BUG-CONC-1','summary':'concurrent update lost',
+                'evidence':'repeatable concurrent test failure','affected_paths':['source.py']})
+        goal.init(self.root, self.plan)
         with self.boundaries(capabilities=lambda root: {
-            'models': [{'model': 'gpt-6.1-sol', 'efforts': ['medium']}]}):
-            result = goal.recommend(self.root, 'fixture', 'gpt-6.1-sol', 'medium')
+            'models': [{'model': 'gpt-6-luna', 'efforts': ['max']}]}):
+            result = goal.recommend(self.root, 'fixture', 'gpt-6-luna', 'max')
         self.assertEqual(result['status'], 'blocked')
         self.assertEqual(result['recommendation']['action'], 'blocked')
         self.assertEqual(self.execute_mock.call_count, 0)
 
-    def test_luna_high_is_not_substituted_for_standard_sol_quality_floor(self):
+    def test_luna_high_cannot_satisfy_luna_max_floor(self):
         goal.init(self.root, self.plan)
         with self.boundaries(capabilities=lambda root: {
             'models': [{'model': 'gpt-6-luna', 'efforts': ['high']}]}):
-            result = goal.recommend(self.root, 'fixture', 'gpt-6-luna', 'high')
+            with self.assertRaisesRegex(ValueError, 'not an advertised Kordra AMR profile'):
+                goal.recommend(self.root, 'fixture', 'gpt-6-luna', 'high')
             self.assertEqual(self.execute_mock.call_count, 0)
-        self.assertEqual(result['status'], 'blocked')
-        self.assertEqual(result['recommendation']['action'], 'blocked')
 
-    def test_medium_to_medium_continues_without_pause_and_marks_selection_unverified(self):
+    def test_luna_to_luna_continues_and_manual_selection_remains_unverified(self):
         goal.init(self.root, self.plan)
         with self.boundaries():
-            result = goal.recommend(self.root, 'fixture', 'gpt-6.1-sol', 'medium')
+            result = goal.recommend(self.root, 'fixture', 'gpt-6-luna', 'max')
         self.assertEqual(result['status'], 'active')
         self.assertEqual(result['recommendation']['action'], 'continue')
         self.assertEqual(result['recommendation']['selection_verification'], 'unverified')
@@ -203,44 +458,36 @@ class GoalIntegration(unittest.TestCase):
         self.assertEqual(result['native_goal_control'], 'not_available_in_local_cli')
         self.assertEqual(self.execute_mock.call_count, 0)
 
-    def test_medium_to_high_persists_switch_checkpoint_and_blocks_dispatch(self):
-        plan = copy.deepcopy(self.plan)
-        plan['tasks'][0]['signals'] = ['concurrency']
-        goal.init(self.root, plan)
+    def test_luna_to_high_persists_switch_checkpoint_and_blocks_dispatch(self):
+        self.plan['tasks'][0].update(kind='complex-debugging', signals=['concurrency'],
+            failed_repairs=2, failure_evidence='two failed Luna fixes with reproduction',
+            reported_defect={'finding_id':'BUG-CONC-1','summary':'concurrent update lost',
+                'evidence':'repeatable concurrent test failure','affected_paths':['source.py']})
+        goal.init(self.root, self.plan)
         with self.boundaries():
-            result = goal.recommend(self.root, 'fixture', 'gpt-6.1-sol', 'medium')
+            result = goal.recommend(self.root, 'fixture', 'gpt-6-luna', 'max')
             with self.assertRaisesRegex(ValueError, 'awaiting_model_switch'):
                 goal.step(self.root, 'fixture')
         self.assertEqual(result['status'], 'awaiting_model_switch')
-        self.assertEqual(result['recommendation']['recommended'],
-                         {'model': 'gpt-6.1-sol', 'effort': 'high'})
+        self.assertEqual(result['recommendation']['recommended'], {'model':'gpt-6.1-sol','effort':'high'})
         self.assertEqual(self.state()['control']['model_switch']['task_id'], 'A')
         self.assertEqual(self.state()['control']['model_switch']['current_selection_verification'], 'unverified')
         self.assertIn('Manually select', self.state()['control']['model_switch']['next_action'])
         self.assertEqual(self.execute_mock.call_count, 0)
 
-    def test_high_to_medium_is_recommended_only_for_sustained_standard_work(self):
+    def test_legacy_medium_session_is_recommended_luna_max_not_silently_reused(self):
         goal.init(self.root, self.plan)
         with self.boundaries():
-            sustained = goal.recommend(self.root, 'fixture', 'gpt-6.1-sol', 'high')
-        self.assertEqual(sustained['status'], 'awaiting_model_switch')
-        self.assertEqual(sustained['recommendation']['recommended'],
-                         {'model': 'gpt-6.1-sol', 'effort': 'medium'})
-
-        short = copy.deepcopy(self.plan)
-        short['goal_id'] = 'short'
-        short['tasks'] = [copy.deepcopy(short['tasks'][0])]
-        goal.init(self.root, short)
-        with self.boundaries():
-            brief = goal.recommend(self.root, 'short', 'gpt-6.1-sol', 'high')
-        self.assertEqual(brief['status'], 'active')
-        self.assertEqual(brief['recommendation']['action'], 'continue')
-        self.assertEqual(brief['recommendation']['recommended'],
-                         {'model': 'gpt-6.1-sol', 'effort': 'high'})
+            result = goal.recommend(self.root, 'fixture', 'gpt-6.1-sol', 'medium')
+        self.assertEqual(result['status'], 'awaiting_model_switch')
+        self.assertEqual(result['recommendation']['recommended'], {'model':'gpt-6-luna','effort':'max'})
 
     def test_manual_resume_is_explicit_and_never_claims_runtime_selection_verified(self):
         plan = copy.deepcopy(self.plan)
-        plan['tasks'][0]['signals'] = ['concurrency']
+        plan['tasks'][0].update(kind='complex-debugging', signals=['concurrency'],
+            failed_repairs=2, failure_evidence='two failed Luna fixes with reproduction',
+            reported_defect={'finding_id':'BUG-CONC-1','summary':'concurrent update lost',
+                'evidence':'repeatable concurrent test failure','affected_paths':['source.py']})
         goal.init(self.root, plan)
         with self.boundaries():
             goal.recommend(self.root, 'fixture', 'gpt-6.1-sol', 'medium')
@@ -256,7 +503,10 @@ class GoalIntegration(unittest.TestCase):
 
     def test_switch_resume_rejects_source_or_git_revision_change(self):
         plan = copy.deepcopy(self.plan)
-        plan['tasks'][0]['signals'] = ['concurrency']
+        plan['tasks'][0].update(kind='complex-debugging', signals=['concurrency'],
+            failed_repairs=2, failure_evidence='two failed Luna fixes with reproduction',
+            reported_defect={'finding_id':'BUG-CONC-1','summary':'concurrent update lost',
+                'evidence':'repeatable concurrent test failure','affected_paths':['source.py']})
         goal.init(self.root, plan)
         with self.boundaries():
             goal.recommend(self.root, 'fixture', 'gpt-6.1-sol', 'medium')
@@ -446,21 +696,16 @@ class GoalIntegration(unittest.TestCase):
                 self.review_mock.assert_not_called()
                 self.assertIsNone(result['next_task'])
 
-    def test_review_requires_terminal_exact_selection_and_real_native_channel(self):
-        for index, override in enumerate([
-            {'channel': 'self_check'}, {'observed_model': 'gpt-6-sol'},
-            {'observed_effort': 'medium'}, {'thread_id': ''}, {'turn_id': ''},
-            {'turn_status': 'failed'}, {'rerouted': True}, {'review_output': []},
-        ]):
-            plan = copy.deepcopy(self.plan); plan['goal_id'] = 'review-'+str(index)
-            goal.init(self.root, plan)
-            def invalid(*args, **kwargs):
-                review = self.review(); review.update(override); return review
-            with self.subTest(override=override), self.boundaries(review=invalid):
-                result = goal.step(self.root, plan['goal_id'])
-                self.assertEqual(result['tasks']['A']['status'], 'validation_failed')
-                with self.assertRaises(ValueError):
-                    goal.accept(self.root, plan['goal_id'], 'A', self.triage())
+    def test_local_sol_review_receipt_cannot_substitute_for_pr_review_evidence(self):
+        goal.init(self.root, self.plan)
+        with self.boundaries(review=lambda *args, **kwargs: self.fail('v4 does not invoke local AI review')):
+            result = goal.step(self.root, 'fixture')
+            self.assertEqual(result['tasks']['A']['status'], 'awaiting_triage')
+            state = self.state()
+            state['tasks']['A']['review'] = self.review()
+            (self.root/'.amr-local/goals/fixture.json').write_text(json.dumps(state))
+            with self.assertRaisesRegex(ValueError, 'verified native review identity'):
+                goal.accept(self.root, 'fixture', 'A', self.triage())
 
     def test_native_execution_commit_cannot_escape_uncommitted_review(self):
         goal.init(self.root, self.plan)
@@ -607,7 +852,7 @@ class GoalIntegration(unittest.TestCase):
             with self.subTest(mutation=mutation), self.assertRaisesRegex(ValueError, 'completed checkpoint lacks'):
                 goal.status(self.root, 'fixture')
 
-    def test_independent_review_and_contributor_triage_required(self):
+    def test_exact_content_contributor_triage_and_blocking_findings_are_required(self):
         goal.init(self.root, self.plan)
         with self.boundaries():
             goal.step(self.root, 'fixture')
@@ -621,24 +866,58 @@ class GoalIntegration(unittest.TestCase):
                 goal.accept(self.root, 'fixture', 'A', invalid)
         self.assertEqual(self.state()['tasks']['A']['status'], 'awaiting_triage')
 
-    def test_missing_native_review_evidence_cannot_complete(self):
+    def test_v4_critical_developer_validation_does_not_invoke_native_reviewer(self):
+        self.plan['tasks'][0]['signals'] = ['auth']
         goal.init(self.root, self.plan)
-        def missing(*args, **kwargs):
-            review = self.review()
-            for key in ('evidence', 'thread_id', 'turn_id'):
-                review.pop(key)
-            return review
-        with self.boundaries(review=missing):
+        with self.boundaries(review=lambda *args, **kwargs: self.fail('GOAL must not invoke an AI reviewer')):
             goal.step(self.root, 'fixture')
-            with self.assertRaises(ValueError):
-                goal.accept(self.root, 'fixture', 'A', self.triage())
+            goal.accept(self.root, 'fixture', 'A', self.triage())
+            self.review_mock.assert_not_called()
 
-    def test_failed_review_does_not_advance(self):
+    def test_historical_v31_critical_completion_still_requires_exact_native_review(self):
+        self.plan['tasks'][0]['signals'] = ['auth']
         goal.init(self.root, self.plan)
-        with self.boundaries(review=lambda *args, **kwargs: {'status': 'not_verified'}):
+        with self.boundaries():
             result = goal.step(self.root, 'fixture')
-        self.assertEqual(result['tasks']['A']['status'], 'validation_failed')
-        self.assertIsNone(result['next_task'])
+            goal.accept(self.root, 'fixture', 'A', self.triage())
+        state = self.state()
+        record = state['tasks']['A']
+        record['policy_version'] = '3.1'
+        record['route'].update(profile='CRITICAL', model='gpt-6.1-sol', effort='high')
+        record['execution'].update(requested_model='gpt-6.1-sol', observed_model='gpt-6.1-sol',
+                                   requested_effort='high', observed_effort='high')
+        valid = self.review(); valid.update(content=record['gates']['content'],
+            source_stable=True, independent=True)
+        record['review'] = valid
+        path = self.root/'.amr-local/goals/fixture.json'
+        path.write_text(json.dumps(state))
+        self.assertEqual(goal.status(self.root, 'fixture')['tasks']['A']['status'], 'completed')
+        for override in ({'channel':'self_check'}, {'observed_model':'gpt-6-sol'},
+                         {'observed_effort':'medium'}, {'thread_id':''}, {'turn_id':''},
+                         {'turn_status':'failed'}, {'rerouted':True}, {'review_output':[]}):
+            corrupted = copy.deepcopy(state)
+            corrupted['tasks']['A']['review'].update(override)
+            path.write_text(json.dumps(corrupted))
+            with self.subTest(override=override), self.assertRaisesRegex(
+                    ValueError, 'completed checkpoint lacks'):
+                goal.status(self.root, 'fixture')
+
+    def test_unfinished_v31_task_migrates_review_obligation_without_reinvoking_sol(self):
+        self.plan['tasks'][0]['signals'] = ['auth']
+        goal.init(self.root, self.plan)
+        with self.boundaries(review=lambda *args, **kwargs: self.fail('legacy review must not repeat')):
+            goal.step(self.root, 'fixture')
+            state = self.state()
+            state['tasks']['A']['policy_version'] = '3.1'
+            (self.root/'.amr-local/goals/fixture.json').write_text(json.dumps(state))
+            goal.validate(self.root, 'fixture', 'A')
+            triage = self.triage()
+            goal.accept(self.root, 'fixture', 'A', triage)
+            self.review_mock.assert_not_called()
+        record = goal.status(self.root, 'fixture')['tasks']['A']
+        self.assertEqual(record['policy_version'], '3.1')
+        self.assertEqual(record['review_policy_version'], '4')
+        self.assertEqual(record['review_policy_migration']['from'], '3.1')
 
     def test_stale_content_accept_rejected_even_with_fresh_triage(self):
         goal.init(self.root, self.plan)

@@ -2,7 +2,7 @@
 id: ENG-DEBT
 status: proposed
 owner: unassigned
-last_reviewed: 2026-10-17
+last_reviewed: 2026-10-18
 ---
 
 # Technical debt register, triage & prevention
@@ -14,8 +14,8 @@ A debt entry is a **tracked obligation**; no TODO-only debt as sole record. Ever
 | Debt ID | Module / feature | Symptom & evidence | Severity | Owner | Mitigation | Exit criterion | Status |
 |---|---|---|---|---|---|---|---|
 | DEBT-000 | `unassigned` | TEMPLATE ONLY — remove when starting project | low | unassigned | n/a | first real debt registered | example |
-| DEBT-AMR-001 | ENG-TOOLING / FEAT-AMR-001 | GitHub/NukeGeng identity, protected `main`, required checks and first module build/tests are verified; current PR still has no review on its latest published head; provider automatic review and independent owner acceptance remain unverified | medium | engineering-maintainers | Keep local/native review and provider review statuses separate; retain required human merge/production approvals | Provider or native review on exact current PR SHA, relevant CI and independent owner approval; checkpoint: first product PR | open; Git setup, main protection and local product validation completed |
-| DEBT-AMR-002 | ENG-TOOLING / FEAT-AMR-001 | Native review/start previously completed only on a stale source snapshot; later native review attempts, including the current Goal E2E, timed out without matching terminal review evidence | medium | engineering-maintainers | Preserve timeout receipts and independent findings; stop same-cause retries until runtime/protocol or provider path changes | Observe verified native/provider review exit on an exact stable current revision; checkpoint: first connected PR | open |
+| DEBT-AMR-001 | ENG-TOOLING / FEAT-AMR-001 | PR #1 merged on `2aa156f4`; merge-SHA docs/product CI passed; the only GitHub review is COMMENTED on older head `c95b0db`, not an independent APPROVED or provider automatic review | medium | engineering-maintainers | Owner explicitly chose solo-owner PR merge with zero required approvals; required CI and owner-only update rules remain. Keep local/native advisory review, GitHub review, merge authority and sensitive production approval distinct | Verify provider automatic review on an exact revision or explicitly decide to leave that integration unsupported; checkpoint: next feature PR | open; merge-policy decision recorded, provider integration unverified |
+| DEBT-AMR-002 | ENG-TOOLING / FEAT-AMR-001 | Historical Goal E2E reviews were stale/timed out. On 2026-10-18, CLI `0.163.0-alpha.10.2` completed F0-OPP0-INV-SPEC's native Sol High review with exact thread/turn exit, stable content, passing full gates and accepted contributor triage; see [runtime evidence](ai-orchestration/testing-and-evidence.md) | medium | engineering-maintainers | Retain old failure receipts and do not replay/promote those checkpoints. Each future CRITICAL task and milestone still needs current independent review under v3.1; ordinary PR review and provider integration remain separate | Verified native review exit observed on an exact stable task snapshot; not an architecture/production approval | closed for the missing stable native-review evidence; historical checkpoint failures remain historical |
 | DEBT-AMR-003 | ENG-TOOLING / FEAT-AMR-001 | Local AMR cannot inspect the active desktop coordinator model, control native GOAL status, or bind direct coordinator edits to a terminal execution receipt; manual selection stays unverified and direct edits cannot complete a checkpoint | medium | engineering-maintainers | Keep runtime claims unverified and use the serial native `goal step` runner for task-bound execution; validate checkpoint source/Git/task identity and use native desktop Goal controls for pause/continue | Session-bound model observation, coordinator execution receipts and native Goal controls are verified end-to-end; otherwise retain the explicit limits | open |
 
 ## Taxonomy
@@ -29,3 +29,13 @@ A debt entry is a **tracked obligation**; no TODO-only debt as sole record. Ever
 
 ## Debt budget (proposal)
 No fixed percent until team capacity known. Use trend metrics: debt created vs closed, age by severity, orphan owner count, untested critical feature count, docs drift count. Escalate trend, do not game a numeric score.
+
+## AMR v3.1 follow-up
+
+DEBT-AMR-001 remains open: default provider Code Review execution and native BIR hard-cap/incremental controls are unverified. BIR is manually enforced, with tested local ledger validation; no dispatch controller or provider-setting change is approved. Engineering maintainers own trigger accounting and must escalate blockers after round 3. Exit: verify provider execution on an exact PR SHA and separately verify native enforcement, or obtain explicit approval for a tested controller. DEBT-AMR-003 remains open; project defaults do not switch the active desktop chat.
+
+## DEBT-AMR-004 — Native terminal failure diagnostics
+
+Owner: engineering-maintainers / ENG-TOOLING / FEAT-AMR-001. Severity: medium; status: open. A native ephemeral task returned terminal `failed` with zero source edits, while the adapter summary retained status/model/turn identity but omitted the terminal error object; the destroyed ephemeral server could not subsequently serve thread history. Fail-closed unknown/reconciliation behavior remained intact, so no completion or automatic replay was allowed.
+
+Mitigation for the explicit local continuation: a private observer retained the actual terminal status/error unchanged while invoking the existing dispatcher; it granted no authority, changed no result and performed no retry. The later task completed and passed current gates/review. This is diagnostic evidence, not a second controller. Exit: safely retain bounded terminal error diagnostics in private receipts with exact thread/turn binding, a controlled-failure smoke and regression tests, preserving redaction, source stability, legacy receipts and no-replay rules. Provider and native GOAL-control debts remain open separately.

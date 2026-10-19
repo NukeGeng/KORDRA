@@ -1,13 +1,27 @@
 #!/usr/bin/env python3
 """Static integrity checker for DevOps Control Plane docs (stdlib only)."""
 from pathlib import Path
-import argparse, re, sys, datetime, json
+import argparse, re, sys, datetime, json, os
 ROOT=Path(__file__).resolve().parents[2]
 DOCS=ROOT/'docs'
 STATUSES={'proposed','accepted','implemented','verified','deprecated','superseded'}
 REQUIRED_FEATURE_SECTIONS=['## User story / outcome','## Pre-conditions','## Main flow','## Authorization / tenant-scope review','## Negative & recovery scenarios','## Acceptance criteria','## Source & test traceability']
 FEATURE_ROOTS=('docs/features/', 'docs/engineering/ai-orchestration/')
 LINK=re.compile(r'(?<!!)\[[^]]*\]\(([^)]+)\)')
+LOCAL_DIRECTORIES={'.git','.temp','.amr-local'}
+
+
+def markdown_files(root):
+    """Check maintained/untracked docs, excluding reserved local workspace copies.
+
+    Do not use Git ignore rules: those must not hide canonical documentation.
+    Prune local directories before descending and do not follow directory symlinks.
+    """
+    for directory, directories, names in os.walk(root,followlinks=False):
+        directories[:]=[name for name in directories if name not in LOCAL_DIRECTORIES]
+        for name in names:
+            if name.endswith('.md'):
+                yield Path(directory)/name
 
 
 def frontmatter(txt):
@@ -26,7 +40,7 @@ def main():
     parser=argparse.ArgumentParser()
     parser.add_argument('--strict-sources',action='store_true')
     args=parser.parse_args()
-    files=sorted(ROOT.rglob('*.md'))
+    files=sorted(markdown_files(ROOT))
     errors=[]; warnings=[]; ids={}; modules={}
     for p in files:
         rel=p.relative_to(ROOT).as_posix(); data=p.read_text('utf-8')
