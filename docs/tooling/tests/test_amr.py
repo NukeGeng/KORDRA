@@ -358,13 +358,20 @@ class ReviewLedger(unittest.TestCase):
 class BoundedIncrementalReview(unittest.TestCase):
     def ledger(self, count=1):
         shas = [str(i)*40 for i in range(1, 5)]
-        rounds = [dict(number=i, channel='codex_auto_code_review',
-            scope='full' if i == 1 else 'incremental', base_sha=shas[i-1], head_sha=shas[i],
-            status='verified', request_evidence='provider request '+str(i),
-            review_id='provider-review-'+str(i), completion_evidence='terminal '+str(i),
-            context='Surrounding callers, owner contracts and prior findings',
-            new_findings=[], tracked_findings=[]) for i in range(1, count+1)]
-        return dict(schemaVersion=1, policyVersion='4',
+        rounds = []
+        for i in range(1, count+1):
+            initiator = (dict(trigger='automatic', role='provider_automation',
+                              evidence='Codex summary identifies PR-open trigger') if i == 1 else
+                         dict(trigger='manual', role='luna_goal_coordinator',
+                              evidence='authorized Luna follow-up request',
+                              session_evidence='native Luna task/session reference'))
+            rounds.append(dict(number=i, channel='codex_auto_code_review',
+                scope='full' if i == 1 else 'incremental', base_sha=shas[i-1], head_sha=shas[i],
+                status='verified', request_evidence='provider request '+str(i), initiator=initiator,
+                review_id='provider-review-'+str(i), completion_evidence='terminal '+str(i),
+                context='Surrounding callers, owner contracts and prior findings',
+                new_findings=[], tracked_findings=[]))
+        return dict(schemaVersion=2, policyVersion='4',
                     pr=dict(repository='https://github.com/example/repo', number=7),
                     base_sha=shas[0], head_sha=shas[count], rounds=rounds, findings=[])
 
@@ -393,7 +400,9 @@ class BoundedIncrementalReview(unittest.TestCase):
 
     def test_historical_v31_ledger_is_compatible_and_unchanged_sha_cannot_be_reviewed_twice(self):
         ledger = self.ledger()
+        ledger['schemaVersion'] = 1
         ledger['policyVersion'] = '3.1'
+        ledger['rounds'][0].pop('initiator')
         self.assertEqual(self.result(ledger)['status'], 'ledger_valid')
         ledger = self.ledger(2)
         ledger['head_sha'] = ledger['rounds'][0]['head_sha']
@@ -401,6 +410,49 @@ class BoundedIncrementalReview(unittest.TestCase):
         result = self.result(ledger)
         self.assertEqual(result['status'], 'blocked')
         self.assertTrue(any('distinct immutable diff SHAs' in error for error in result['errors']))
+
+    def test_v4_requires_versioned_authorized_initiator_and_bound_evidence(self):
+        ledger = self.ledger()
+        ledger['schemaVersion'] = 1
+        result = self.result(ledger)
+        self.assertTrue(any('schemaVersion 2' in error for error in result['errors']))
+
+        ledger = self.ledger()
+        ledger['rounds'][0].pop('initiator')
+        self.assertTrue(any('initiator and evidence' in error for error in self.result(ledger)['errors']))
+
+        ledger = self.ledger()
+        ledger['rounds'][0]['initiator'].update(trigger='manual', role='sol_architect',
+                                                evidence='claimed session')
+        result = self.result(ledger)
+        self.assertTrue(any('unauthorized initiator role' in error for error in result['errors']))
+
+        ledger = self.ledger()
+        ledger['rounds'][0]['initiator'].update(trigger='manual', role=['sol_architect'],
+                                                evidence='malformed role value')
+        self.assertEqual(self.result(ledger)['status'], 'blocked')
+
+        ledger = self.ledger()
+        ledger['rounds'][0]['initiator'].update(trigger='automatic', role='human_maintainer')
+        self.assertTrue(any('provider_automation' in error for error in self.result(ledger)['errors']))
+
+        ledger = self.ledger()
+        ledger['rounds'][0]['initiator']['evidence'] = ''
+        self.assertTrue(any('initiator requires evidence' in error for error in self.result(ledger)['errors']))
+
+        ledger = self.ledger()
+        ledger['rounds'][0]['initiator'].update(trigger='manual', role='luna_goal_coordinator')
+        ledger['rounds'][0]['initiator'].pop('session_evidence', None)
+        self.assertTrue(any('session-bound evidence' in error for error in self.result(ledger)['errors']))
+
+        ledger = self.ledger()
+        ledger['rounds'][0]['initiator'].update(trigger='manual', role='human_maintainer')
+        self.assertTrue(any('authorization evidence' in error for error in self.result(ledger)['errors']))
+
+        ledger = self.ledger()
+        ledger['rounds'][0]['initiator'].update(trigger='manual', role='human_maintainer',
+                                                authorization_evidence='explicit maintainer approval')
+        self.assertEqual(self.result(ledger)['status'], 'ledger_valid')
 
     def test_no_fourth_round_and_exhaustion_never_approves(self):
         ledger = self.ledger(3)
@@ -458,7 +510,9 @@ class BoundedIncrementalReview(unittest.TestCase):
         self.assertEqual(self.result(ledger)['status'], 'ledger_valid')
         finding['followup_review'].update(reviewer='sol_high', observed_model='gpt-6.1-sol', observed_effort='high')
         self.assertEqual(self.result(ledger)['status'], 'blocked')
-        legacy = self.ledger(3); legacy['policyVersion'] = '3.1'
+        legacy = self.ledger(3); legacy['schemaVersion'] = 1; legacy['policyVersion'] = '3.1'
+        for review in legacy['rounds']:
+            review.pop('initiator', None)
         legacy_finding = self.add_finding(legacy, state='fixed')
         legacy_finding.update(reproduction_passed=True, followup_review=dict(status='verified',
             head_sha=legacy['head_sha'], evidence='historical Sol follow-up', reviewer='sol_high',

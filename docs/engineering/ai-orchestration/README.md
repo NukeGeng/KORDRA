@@ -62,6 +62,8 @@ Codex Auto PR Review is the default independent reviewer after a feature PR and 
 
 The [BIR protocol](bounded-incremental-review.md) uses a local deterministic ledger. The validator checks SHAs, Git ancestry, round accounting, finding deduplication and escalation; it does not call or stop the provider, authenticate provider evidence or impose a native hard cap. Manual enforcement remains necessary until a provider capability is separately verified. Native hard-cap/incremental enforcement is not claimed, and no review-trigger controller is added by this migration.
 
+Manual trigger authority belongs only to Luna as GOAL coordinator or the human maintainer. Sol Architect and debugger sessions must not post/edit PR comments, invoke `@codex review` / `@codex security review`, or start/manage BIR rounds; invoking a reviewer is still a PR-side effect. Record the initiating role and available session-bound evidence at handoff. Repository instructions and the current ledger validator are manual safeguards, not a technical block on GitHub connector actions or provider auto-triggers.
+
 To report a provider review as verified, inspect connected repository configuration, request/run identity, terminal completion and exact current PR head, then triage its findings. A local review, comment, empty findings array or ledger exit code alone is not provider execution evidence. The PR owner retains merge authority. See official [Code Review documentation](https://learn.chatgpt.com/docs/code-review).
 
 ## Checkpoints and human authority
