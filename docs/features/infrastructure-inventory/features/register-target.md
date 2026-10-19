@@ -32,6 +32,12 @@ Unreachable target becomes Pending/Unknown; stale discovery cannot support a suc
 - The `organization_id`/scope is validated on read, write, event handler and any background job.
 - Audit sensitive decisions with `actorRef`, `resourceRef`, `correlationId`, policy version.
 
+### I2 runtime-authority handoff — proposed
+
+For the bounded candidate in [FEAT-IAM-001/I2](../../identity-access/features/authorize-resource.md#i2--runtime-authority-contract-increment-proposed), MOD-INV remains the source of target identity, lifecycle eligibility, target revision and tenant/project/environment associations. Those metadata facts do not prove provider identity, credential validity or observed inventory; those remain separate owner decisions. Resolve the target side of each association against MOD-PRJ's authoritative result. Missing, disabled, ambiguous, stale or unavailable target evidence denies access and must not reveal cross-tenant existence.
+
+MOD-INV is the logical owner; the human feature custodian and exact lifecycle states eligible for read remain unassigned decisions. The existing local API inventory denial remains unchanged. This proposal adds no provider call, contract, source/test mapping or runtime behavior.
+
 ## Negative & recovery scenarios
 Bind agent from different org; namespace outside permission; insecure certificate bypass.
 - Generic tests: duplicate request/message, authorization revoked mid-flight, resource from another tenant, crash/restart, stale state/event, partial external failure where applicable.

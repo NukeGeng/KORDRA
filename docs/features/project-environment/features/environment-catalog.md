@@ -32,6 +32,12 @@ Rename environment không đổi security classification; policy change requires
 - The `organization_id`/scope is validated on read, write, event handler and any background job.
 - Audit sensitive decisions with `actorRef`, `resourceRef`, `correlationId`, policy version.
 
+### I2 runtime-authority handoff — proposed
+
+For the bounded candidate in [FEAT-IAM-001/I2](../../identity-access/features/authorize-resource.md#i2--runtime-authority-contract-increment-proposed), MOD-PRJ remains the source of project-to-tenant and environment-to-project/tenant ownership, classification, target binding and applicable policy association. Future owner evidence must bind the exact lookup and current owner revision. A project-only target requires an authoritative, resolved absence of an environment; failed or unavailable environment lookup is not absence. Names, labels and read-model projections cannot establish ownership. Missing, stale, conflicting or unavailable ownership/policy evidence denies access.
+
+MOD-PRJ is the logical owner; the human feature custodian and policy-assembly responsibility remain unassigned. This proposal adds no contract, source/test mapping, API, policy key or runtime behavior.
+
 ## Negative & recovery scenarios
 Attach target của org B; downgrade production classification without approval; duplicate resource id.
 - Generic tests: duplicate request/message, authorization revoked mid-flight, resource from another tenant, crash/restart, stale state/event, partial external failure where applicable.
