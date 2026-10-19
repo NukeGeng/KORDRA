@@ -27,6 +27,7 @@ Python 3.11+; Codex CLI for live operations. No new dependencies. Git and a conn
 6. Preserve source hashes, Git identity, decisions, consulted paths, boundaries, tests and findings. Caller-reported model/effort stays `unverified` without native turn-bound evidence; unknown outcomes are reconciled, never replayed.
 7. `goal validate`, `goal accept` and milestone transitions run deterministic gates and exact-content triage only; they do not invoke AI reviewers. The default independent reviewer runs on the feature PR after applicable CI.
 8. Use one Codex Auto PR Review by default, at most three requests total. The first covers the full diff; follow-ups cover changes since the last verified reviewed SHA with context. Track SHAs and findings, avoid unchanged revisions/duplicate findings and stop after round 3. Blocking findings must be resolved before human merge.
+9. Restrict manual GitHub PR review actions to Luna as GOAL coordinator or the human maintainer. Architect/debugger sessions return their bounded design/defect result without posting PR comments or initiating/managing BIR triggers.
 
 ## Acceptance criteria
 - Ordinary and critical Developer GOAL tasks use exact Luna Max (`gpt-6-luna/max`) when advertised; risk labels alone never invoke Sol.
@@ -35,6 +36,7 @@ Python 3.11+; Codex CLI for live operations. No new dependencies. Git and a conn
 - `goal validate`, `goal accept` and milestone completion execute deterministic gates and contributor triage without invoking an AI reviewer. No review/test/model-switch loop can auto-replay or auto-advance work.
 - Existing completed v3/v3.1 checkpoints retain their original evidence and rules. An unfinished historical task migrates only its review-policy obligation with an auditable record; unknown work is never replayed.
 - PR review defaults to one Codex Auto PR Review and is limited to three manually accounted rounds. Repeated SHA/unchanged source-tree review, reposted findings and unresolved blocking findings fail validation; exhaustion is not approval and does not route to Sol.
+- Architect/debugger sessions do not initiate or manage PR reviews. Manual trigger authority belongs to Luna as GOAL coordinator or the human maintainer; the BIR record notes the initiating role, while the current validator cannot authenticate the session or block a direct provider trigger.
 - Native model catalog support, actual turn selection, provider PR review execution, native hard-cap support, CI results and human approval are reported as separate evidence. No feature or production authority is inferred from config or tests.
 
 ## Authorization / tenant-scope review

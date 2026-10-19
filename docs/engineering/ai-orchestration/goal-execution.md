@@ -13,9 +13,9 @@ Owner: [FEAT-AMR-001](features/quality-first-amr.md), ENG-TOOLING. The existing 
 
 | Task role | Route | Boundary |
 |---|---|---|
-| Architect | `gpt-6.1-sol/high` | Design-only Markdown paths. Produces the requested bounded design, then returns. It does not implement, run routine tests or review a PR. |
+| Architect | `gpt-6.1-sol/high` | Design-only Markdown paths. Produces the requested bounded design, then returns. It does not implement, run routine tests, review a PR, post/edit PR comments, or initiate/manage BIR triggers. |
 | Developer | `gpt-6-luna/max` | Owns normal GOAL work, source changes, tests, docs, gates, commits and feature PR preparation. Critical risk labels do not alone change the model route. |
-| Escalation debugger | `gpt-6.1-sol/medium` for non-critical; `gpt-6.1-sol/high` for critical | Requires at least two recorded failed Luna repairs and a defect ID, summary, reproducible evidence and affected paths. Work remains limited to that defect and its contracts. Four failed attempts block for maintainer investigation. |
+| Escalation debugger | `gpt-6.1-sol/medium` for non-critical; `gpt-6.1-sol/high` for critical | Requires at least two recorded failed Luna repairs and a defect ID, summary, reproducible evidence and affected paths. Work remains limited to that defect and its contracts; it does not post/edit PR comments or initiate/manage BIR triggers. Four failed attempts block for maintainer investigation. |
 | PR Reviewer | Codex Auto PR Review | Default independent PR review after applicable CI. Review rounds are controlled by the separate BIR ledger. |
 
 `kind=architecture` or an explicit Architect role routes to Sol High and accepts only bounded Markdown task paths. An Architect task reaches `awaiting_triage` after its one native turn. Completion requires exact-content human approval containing the task ID/digest, content digest, approver, scope and decision evidence. Approval does not accept an ADR unless the decision record itself is explicitly approved through its governance process.
@@ -23,6 +23,8 @@ Owner: [FEAT-AMR-001](features/quality-first-amr.md), ENG-TOOLING. The existing 
 Implementation may skip a new design session when accepted design documents, the owner feature and accepted ADR/contracts fully cover it. Developer instructions prohibit silent changes to module boundaries, public contracts, permissions and state machines. If the design basis is incomplete, stop and create an Architect task or record `[NEEDS-DECISION]` with the owning document.
 
 `goal validate`, `goal accept` and milestone transitions never invoke a reviewer under v4. They run deterministic checks and require current-content contributor triage. They do not claim an independent source review, PR review, merge or production approval. Critical implementation changes use the default independent PR review and blocking-finding gates; Sol is not triggered automatically by a PR finding or exhausted review budget.
+
+Only Luna as the GOAL coordinator or the human maintainer may initiate a manual GitHub PR review request or manage BIR rounds. A Sol session must return its bounded design/debugging deliverable without external GitHub PR-thread or review-trigger actions; scoped debugger source edits remain governed by that defect task. GitHub may attribute a trigger comment to the connected account rather than the originating model session, so the handoff ledger must record the initiating role and available native evidence; this is a manual guard, not provider-enforced access control.
 
 ## GOAL coordinator flow
 
