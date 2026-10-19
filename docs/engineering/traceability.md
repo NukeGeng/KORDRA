@@ -67,7 +67,7 @@ The [2026-10-19 PR #4 trigger incident](ai-orchestration/bounded-incremental-rev
 
 ## FEAT-IAM-001 / I2.7 cross-owner authority proposal — 2026-10-19
 
-The proposal-only reconciliation maps tenant/membership facts to MOD-TEN, project/environment associations to MOD-PRJ, target ownership metadata to MOD-INV, durable append outcomes to MOD-AUD, and policy evaluation to MOD-IAM. The canonical responsibilities remain in those existing feature specs and [FEAT-IAM-001/I2.7](../features/identity-access/features/authorize-resource.md#i27--owner-reconciliation-and-decision-register-proposed). Human custodians are unassigned; authority freshness, grant resolution, consistency and audit semantics remain `NEEDS-DECISION`. All source/test mappings remain unchanged, inventory ingress remains denied, and no runtime or ADR adoption is claimed.
+The proposal-only reconciliation draft maps tenant/membership facts to MOD-TEN, project/environment associations to MOD-PRJ, target ownership metadata to MOD-INV, durable append outcomes to MOD-AUD, and policy evaluation to MOD-IAM. The canonical responsibilities remain in those existing feature specs and [FEAT-IAM-001/I2.7](../features/identity-access/features/authorize-resource.md#i27--owner-reconciliation-and-decision-register-proposed). This increment is incomplete pending named human custodians and maintainer review; authority freshness, grant resolution, consistency and audit semantics remain `NEEDS-DECISION`. All source/test mappings remain unchanged, inventory ingress remains denied, and no runtime or ADR adoption is claimed.
 
 ## FEAT-INV-001 Linux fixture recovery — 2026-10-19
 
