@@ -2,7 +2,7 @@
 id: ENG-HISTORY
 status: proposed
 owner: unassigned
-last_reviewed: 2026-10-18
+last_reviewed: 2026-10-19
 ---
 
 # Feature change log and release-note discipline
@@ -15,6 +15,7 @@ Sol clarification is tracked by FEAT-AMR-001 (ENG-TOOLING); existing router/conf
 
 | Date | Change ID | Module / Feature | Source PR/Commit | ADR / contract | Migration impact | Owner |
 |---|---|---|---|---|---|---|
+| 2026-10-19 | PR4-REVIEW-REPAIR | ENG-TOOLING / FEAT-AMR-001; local operations documentation | [PR #4 native review](https://github.com/NukeGeng/KORDRA/pull/4#pullrequestreview-5566543009) on `705c622` | Preserve legacy Architect design evidence before acceptance; require explicit task outcome and observed artifacts; align active v4 docs; clarify PostgreSQL teardown | Completed historical checkpoints stay readable; unfinished receipts lacking an outcome need explicit finalization without replay. No product architecture, ADR, permission or database change | engineering-maintainers |
 | 2026-10-18 | OP-P0-ARCH-EVIDENCE | MOD-INV / FEAT-INV-001; Foundation architecture governance | Local experiment, verified native High task/re-review, full gates and contributor triage | Retained sandbox timeout; repaired local fixture reference omission; two forbidden-edge checks and 14 HTTP assertions; proposed ADR-0010 for actual local bootstrap | No product source adoption; API-local preference recorded; explicit ADR approval and IAM/provider/rights decisions remain pending | Maintainer/architecture/security acceptance required |
 | 2026-10-18 | OP-P0-FOUNDATION-PREP | MOD-INV / FEAT-INV-001, MOD-PRJ / FEAT-PRJ-001 and MOD-SEC / FEAT-SEC-001; ENG-TOOLING evidence | Local continuation `KORDRA-OP-P0-FOUNDATION-001` from `2aa156f4`; verified Medium inventory/environment and High credential executions, full gates, stable native High reviews and contributor triage | Proposed I0 inventory/environment/credential seams; MOD-SEC ConnectionProfile ownership ambiguity fixed and re-reviewed; product source/mappings and ADR acceptance unchanged | No runtime/infrastructure operation; old failed checkpoints preserved without replay; DEBT-AMR-002 stable native-review gap resolved; High credential task completed after explicit resume; owner selected Kubernetes/Helm read-only design target; runtime decisions remain open | engineering-maintainers for task evidence; product owner remains unassigned |
 | 2026-10-18 | DOCSYNC-V1.5 | Product planning / existing module registry / ENG-TOOLING governance | Local `codex/docs-sync-v1-5` from verified `2aa156f4`; [integration evidence](doc-health.md) | 12 proposed documents; OP-01–OP-10, OP-P0–OP-P4 and all 43 A–F groups; ADR-0008/0009 and product contracts unchanged | Documentation sync plus checker-only draft discovery fix; preserve banner/domain and original GOAL outcomes; reconcile merged PR #1/CI and owner-only repository policy; no runtime, LAB change, license selection or release acceptance | engineering-maintainers for integration; product/architecture/rights owners remain explicit decisions |

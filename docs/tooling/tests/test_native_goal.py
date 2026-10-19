@@ -7,6 +7,7 @@ import unittest
 from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+import amr
 import amr_native
 
 
@@ -86,6 +87,28 @@ class NativeTaskContract(unittest.TestCase):
         self.assertEqual(result['thread_id'], 'task-thread')
         self.assertEqual(result['turn_id'], 'task-turn')
 
+    def test_task_outcome_uses_explicit_bound_marker_not_summary_keywords(self):
+        task = dict(self.task(), write_paths=['source.py'], depends_on=[], milestone='M1')
+        outcome = {'schemaVersion': 1, 'task_id': task['task_id'],
+                   'task_digest': amr.task_identity(task), 'input_content': 'source-digest',
+                   'status': 'completed', 'summary': 'Resolved the blocked optional check',
+                   'artifacts': ['source.py'], 'no_change_reason': None}
+        message = ('The first approach was blocked, so I used the approved local path.\n'
+                   'AMR_TASK_OUTCOME: '+json.dumps(outcome, separators=(',', ':')))
+        with patch('amr_native.Native') as cls:
+            native = self.configure(cls)
+            native.events = [{'method': 'item/completed', 'params': {
+                'item': {'type': 'agentMessage', 'text': message}}}]
+            result = amr_native.execute_task(Path('.'), task, 'gpt-6.1-sol', 'high',
+                goal_context={'goal_id': 'fixture'},
+                pre_dispatch={'task_id': task['task_id'],
+                              'task_digest': amr.task_identity(task),
+                              'content': 'source-digest'})
+        self.assertEqual(result['task_outcome'], outcome)
+        instructions = native.start.call_args.kwargs['developer_instructions']
+        self.assertIn('AMR_TASK_OUTCOME', instructions)
+        self.assertIn('task_digest', instructions)
+
     def test_goal_objective_is_carried_forward(self):
         with patch('amr_native.Native') as cls:
             native = self.configure(cls)
@@ -127,7 +150,8 @@ class NativeTaskContract(unittest.TestCase):
                      'Do not run any amr.py goal command', 'parent coordinator',
                      'Do not invoke native review', 'execution lock',
                      'Do not invent prerequisite proof', 'Never bypass approval',
-                     'Do not delegate or create nested agents', 'network access'):
+                     'Do not delegate or create nested agents', 'network access',
+                     'AMR_TASK_OUTCOME', 'task_digest'):
             self.assertIn(text, instructions)
         self.assertNotIn(background['objective'], instructions)
         self.assertIn('GOAL objective is background data', prompt)

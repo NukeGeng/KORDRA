@@ -377,6 +377,14 @@ def load(root, path):
         for counter in ('attempts', 'validation_attempts'):
             if type(record.get(counter)) is not int or record[counter] < 0:
                 raise ValueError('invalid checkpoint attempt counter')
+        if 'task_outcome' in record and record.get('status') != 'completed':
+            try:
+                task = dispatched_task(state, task_id)
+                outcome_error = task_outcome_error(record, task)
+            except (KeyError, TypeError, AttributeError, ValueError) as exc:
+                raise ValueError('invalid task outcome receipt') from exc
+            if outcome_error:
+                raise ValueError('invalid task outcome receipt: '+outcome_error)
         if record['status'] == 'completed':
             try:
                 content = record['validated_identity']['content']
@@ -392,8 +400,10 @@ def load(root, path):
                 else:
                     design_valid = (amr.execution_role(task) != 'architect'
                         or valid_human_design_approval(record.get('human_design_approval'), content, task))
+                outcome_valid = ('task_outcome' not in record or not task_outcome_error(
+                    record, task, output_artifacts=record.get('output_artifacts')))
                 valid = (verified_execution(record, record['route']) and valid_task_review(state, task_id)
-                         and design_valid
+                         and design_valid and outcome_valid
                          and triage['task_id'] == task_id and triage['content'] == content
                          and triage['reviewed_by'] and triage['rationale'] and not errors
                          and record['product_required'] is (record['gates']['product_tests'] == 'executed'))
@@ -743,11 +753,131 @@ def verified_execution(record, route):
             and execution.get('observed_effort') == route['effort'])
 
 
+def legacy_design_valid(record, task):
+    policy = record.get('policy_version', '3')
+    if policy not in {'3', '3.1'} or not amr.design_review_required(task):
+        return True
+    input_content = record.get('input_identity', {}).get('content')
+    return valid_design_review(record.get('design_review'), input_content, task)
+
+
+def task_outcome_error(record, task, *, current_files=None, output_artifacts=None):
+    """Validate the structured terminal outcome and its observed artifact receipt."""
+    outcome = record.get('task_outcome')
+    if not isinstance(outcome, dict):
+        execution = record.get('execution', {})
+        return execution.get('task_outcome_error') or 'structured native task outcome is required'
+    required = {'schemaVersion', 'task_id', 'task_digest', 'input_content', 'status',
+                'summary', 'artifacts', 'no_change_reason', 'artifact_evidence'}
+    if set(outcome) != required or type(outcome.get('schemaVersion')) is not int \
+            or outcome.get('schemaVersion') != 1:
+        return 'task outcome receipt has an unsupported shape'
+    if (outcome.get('task_id') != record.get('task_id')
+            or outcome.get('task_digest') != record.get('dispatch_task_digest')
+            or outcome.get('input_content') != record.get('input_identity', {}).get('content')):
+        return 'task outcome is stale or bound to a different task/content'
+    claim = record.get('execution', {}).get('task_outcome')
+    if not isinstance(claim, dict) or record.get('execution', {}).get('task_outcome_error'):
+        return 'task outcome is not bound to a parsed native marker'
+    claim_fields = {'schemaVersion', 'task_id', 'task_digest', 'input_content', 'status',
+                    'summary', 'artifacts', 'no_change_reason'}
+    if set(claim) != claim_fields or type(claim.get('schemaVersion')) is not int \
+            or claim.get('schemaVersion') != 1:
+        return 'inspected native task marker has an unsupported shape'
+    for key in ('schemaVersion', 'task_id', 'task_digest', 'input_content', 'status',
+                'summary', 'no_change_reason'):
+        if outcome.get(key) != claim.get(key):
+            return 'task outcome differs from the inspected native marker'
+    if (not isinstance(claim.get('artifacts'), list)
+            or set(outcome.get('artifacts', [])) != set(claim['artifacts'])):
+        return 'task outcome artifacts differ from the inspected native marker'
+    if outcome.get('status') != 'completed':
+        return 'native task reported a blocked or unsuccessful outcome'
+    if not isinstance(outcome.get('summary'), str) or not outcome['summary'].strip():
+        return 'task outcome requires an inspected summary'
+    artifacts = outcome.get('artifacts')
+    write_paths = set(task.get('write_paths', []))
+    if (not isinstance(artifacts, list) or any(not isinstance(path, str) or not path for path in artifacts)
+            or len(artifacts) != len(set(artifacts)) or set(artifacts) - write_paths):
+        return 'task outcome artifacts must be unique declared write paths'
+    if set(artifacts) != set(record.get('files_changed', [])):
+        return 'task outcome artifacts do not match observed changed files'
+    no_change_reason = outcome.get('no_change_reason')
+    if no_change_reason is not None and (not isinstance(no_change_reason, str)
+                                         or not no_change_reason.strip()):
+        return 'task outcome no_change_reason must be null or nonempty text'
+    if write_paths and not artifacts and not no_change_reason:
+        return 'unexplained no-op write task outcome'
+    if artifacts and no_change_reason is not None:
+        return 'task outcome cannot declare both changed artifacts and a no-change reason'
+    evidence = outcome.get('artifact_evidence')
+    if not isinstance(evidence, dict) or set(evidence) != set(artifacts):
+        return 'task outcome lacks actual declared artifact evidence'
+    if any(value is not None and (not isinstance(value, str) or not value)
+           for value in evidence.values()):
+        return 'task outcome artifact evidence is malformed'
+    for rel, identity in evidence.items():
+        if current_files is not None and current_files.get(rel) != identity:
+            return 'task outcome artifact evidence is stale'
+        if output_artifacts is not None and output_artifacts.get(rel) != identity:
+            return 'task outcome artifact evidence differs from accepted artifacts'
+    return None
+
+
+def bind_task_outcome(record, task, changed, files):
+    execution = record.get('execution', {})
+    claim = execution.get('task_outcome')
+    if not isinstance(claim, dict):
+        detail = execution.get('task_outcome_error') or 'structured native task outcome is required'
+        raise ValueError(detail)
+    claim_fields = {'schemaVersion', 'task_id', 'task_digest', 'input_content', 'status',
+                    'summary', 'artifacts', 'no_change_reason'}
+    if set(claim) != claim_fields:
+        raise ValueError('native task outcome marker has an unsupported shape')
+    if claim.get('status') == 'blocked':
+        raise ValueError('native task reported blocked outcome: '+str(claim.get('summary', '')).strip())
+    if (type(claim.get('schemaVersion')) is not int or claim.get('schemaVersion') != 1
+            or claim.get('task_id') != record.get('task_id')
+            or claim.get('task_digest') != record.get('dispatch_task_digest')
+            or claim.get('input_content') != record.get('input_identity', {}).get('content')):
+        raise ValueError('native task outcome is stale or bound to a different task/content')
+    artifacts = claim.get('artifacts')
+    write_paths = set(task.get('write_paths', []))
+    if (not isinstance(artifacts, list) or any(not isinstance(path, str) or not path for path in artifacts)
+            or len(artifacts) != len(set(artifacts)) or set(artifacts) - write_paths):
+        raise ValueError('native task outcome artifacts must be unique declared write paths')
+    if set(artifacts) != set(changed):
+        raise ValueError('native task outcome artifacts do not match observed changed files')
+    reason = claim.get('no_change_reason')
+    if reason is not None and (not isinstance(reason, str) or not reason.strip()):
+        raise ValueError('native task outcome no_change_reason must be null or nonempty text')
+    if write_paths and not artifacts and not reason:
+        raise ValueError('unexplained no-op write task outcome')
+    if artifacts and reason is not None:
+        raise ValueError('native task outcome cannot declare changed artifacts and a no-change reason')
+    if (not isinstance(claim.get('summary'), str) or not claim['summary'].strip()
+            or claim.get('status') != 'completed'):
+        raise ValueError('native task outcome is not a completed inspected result')
+    record['task_outcome'] = {
+        'schemaVersion': 1, 'task_id': record['task_id'],
+        'task_digest': record['dispatch_task_digest'],
+        'input_content': record['input_identity']['content'],
+        'status': 'completed', 'summary': claim['summary'],
+        'artifacts': sorted(artifacts), 'no_change_reason': reason,
+        'artifact_evidence': {rel: files.get(rel) for rel in artifacts},
+    }
+
+
 def validate_work(root, state, task, path):
     record = state['tasks'][task['task_id']]
     task = dispatched_task(state, task['task_id'])
     if not verified_execution(record, record['route']):
         raise ValueError('no verified terminal execution; reconcile unknown work instead')
+    if not legacy_design_valid(record, task):
+        event(state, task['task_id'], 'failed',
+              'legacy design-review evidence is missing, stale or not bound to the dispatched task')
+        atomic_save(path, state)
+        return False
     git = amr.git_identity(root)
     if any(git[k] != record['input_identity']['git'][k] for k in ('head', 'branch')):
         raise ValueError('task Git HEAD/branch changed; uncommitted review cannot cover committed task edits')
@@ -757,6 +887,19 @@ def validate_work(root, state, task, path):
             != record['protected_content_identity']):
         event(state, task['task_id'], 'failed',
               'source changed outside declared write paths; create a fresh reviewed task plan')
+        atomic_save(path, state)
+        return False
+    outcome_error = task_outcome_error(record, task)
+    if outcome_error:
+        event(state, task['task_id'], 'failed', outcome_error)
+        atomic_save(path, state)
+        return False
+    current_files = amr.tree_identity(root)['files']
+    record['task_outcome']['artifact_evidence'] = {
+        rel: current_files.get(rel) for rel in record['task_outcome']['artifacts']}
+    outcome_error = task_outcome_error(record, task, current_files=current_files)
+    if outcome_error:
+        event(state, task['task_id'], 'failed', outcome_error)
         atomic_save(path, state)
         return False
     if record['validation_attempts'] >= 4:
@@ -885,7 +1028,12 @@ def step(root, goal_id, design_review=None):
             elif not verified_execution(record, route):
                 event(state, task['task_id'], 'unknown', 'native execution not verified; no automatic replay')
             else:
-                validate_work(root, state, task, path)
+                try:
+                    bind_task_outcome(record, task, changed, after['files'])
+                except ValueError as exc:
+                    event(state, task['task_id'], 'failed', str(exc))
+                else:
+                    validate_work(root, state, task, path)
         except (NativeError, OSError, ValueError) as exc:
             event(state, task['task_id'], 'unknown', str(exc))
         atomic_save(path, state)
@@ -908,6 +1056,13 @@ def accept(root, goal_id, task_id, triage):
         identity = current_identity(root)
         if record['status'] != 'awaiting_triage' or record.get('validated_identity') != identity:
             raise ValueError('task not reviewed or source/Git changed; revalidate')
+        task = dispatched_task(state, task_id)
+        if not legacy_design_valid(record, task):
+            raise ValueError('legacy design-review evidence is missing, stale or not bound to the dispatched task')
+        outcome_error = task_outcome_error(record, task,
+            current_files=amr.tree_identity(root)['files'])
+        if outcome_error:
+            raise ValueError(outcome_error)
         if triage.get('task_id') != task_id or triage.get('content') != identity['content']:
             raise ValueError('triage task/content mismatch')
         if not isinstance(triage.get('reviewed_by'), str) or not triage['reviewed_by'].strip():
@@ -924,7 +1079,6 @@ def accept(root, goal_id, task_id, triage):
             errors.append('verified native task execution required')
         if not valid_task_review(state, task_id):
             errors.append('verified native review identity and terminal output required')
-        task = dispatched_task(state, task_id)
         if record.get('policy_version') == amr.POLICY_VERSION and amr.execution_role(task) == 'architect':
             approval = triage.get('human_design_approval')
             if not valid_human_design_approval(approval, identity['content'], task):

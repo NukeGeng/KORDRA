@@ -2,7 +2,7 @@
 id: ENG-TRACE
 status: proposed
 owner: unassigned
-last_reviewed: 2026-10-18
+last_reviewed: 2026-10-19
 ---
 
 # Requirements ↔ Module ↔ Feature ↔ Code ↔ Tests
@@ -66,3 +66,9 @@ FEAT-AMR-001 / ENG-TOOLING owns this migration through the existing `docs/toolin
 ## FEAT-INV-001 Linux fixture recovery — 2026-10-19
 
 The [Inventory architecture test](../features/infrastructure-inventory/features/register-target.md#linux-fixture-first-run-recovery--2026-10-19) now provisions an existing isolated HOME/CLI-home and a private Linux `XDG_RUNTIME_DIR` for the SDK child process. This repairs NuGet migration-mutex startup while retaining the compiled forbidden-assembly-edge checks. The corrected code passed on macOS and in a sanitized Linux SDK 10.0.400 checkout (locked restore, zero-warning Release build, Artifact 48/48 and Inventory Bootstrap 85/85). Hosted docs and product CI both passed on implementation SHA `38da931edae3c36182c46712502b242598f9e0da` ([docs](https://github.com/NukeGeng/KORDRA/actions/runs/39188847531), [product](https://github.com/NukeGeng/KORDRA/actions/runs/39188847534)). The broader registration feature and real provider reads remain incomplete. No product contract, permission, ADR or runtime behavior changed.
+
+## PR #4 review repairs — 2026-10-19
+
+FEAT-AMR-001 / ENG-TOOLING owns the existing dispatcher/native adapter and mapped goal/native tests. [Provider review 5566543009](https://github.com/NukeGeng/KORDRA/pull/4#pullrequestreview-5566543009) completed automatically on `705c6227ddebd4293ae437a0bdefc5d907ae4ec7`, triggered by PR opening. Its four canonical findings cover legacy design-receipt acceptance, task outcome evidence, stale active-policy entry points and unsafe local PostgreSQL teardown wording. The first two use the [existing task contract](ai-orchestration/contract.md#task-outcome-evidence-and-receipt-compatibility); README, AI tooling boundary and review protocol now identify v4. The [local PostgreSQL runbook](../operations/local-postgresql-setup.md) names only the three dedicated roles for optional cleanup and preserves both pre-existing superusers. No database operation is performed.
+
+The repair uses the serial Luna Developer route, not a new Architect or independent local review. Current-head provider follow-up, CI and human merge remain separate; neither this mapping nor the historical completed review approves a later SHA. Original native receipts/checkpoints remain retained; incomplete records without the new task outcome need explicit finalization rather than retrofitted success.

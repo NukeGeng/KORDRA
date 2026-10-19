@@ -54,7 +54,7 @@ Các ranh giới tenant/platform, data ownership và messaging được mô tả
 
 - **Artifact identity domain — FEAT-ART-001/I1:** thư viện .NET kiểm tra cú pháp OCI digest SHA-256/SHA-512, đối chiếu nội dung/độ dài và giữ tính bất biến; có test project riêng. Phần này chưa bao gồm registry discovery, artifact registration hay provenance verification. Xem [feature và bằng chứng kiểm thử](docs/features/artifact-management/features/immutable-artifact.md).
 - **Local API bootstrap — FEAT-INV-001/I1:** API chỉ nghe IPv4 loopback, liveness trả `alive`, inventory luôn từ chối 403. Có Contracts/runtime seam và 19 bootstrap tests; chưa có đăng nhập, đọc credential hoặc cluster thật. [ADR-0010](docs/decisions/0010-local-readonly-bootstrap.md) được duyệt đúng phạm vi này; bằng chứng local chưa là GitHub CI của bản chưa push.
-- **AMR v3.1 engineering tooling:** routing theo rủi ro, context continuity, checkpoint và quality gates trong `docs/tooling/`. Workflow dùng một coordinator, không dùng collaboration sub-agent; native/provider review chỉ được xác nhận khi có runtime evidence. Đây là công cụ hỗ trợ phát triển, không phải runtime của sản phẩm; build/tests không cần model credentials. Xem [AMR guide](docs/engineering/ai-orchestration/README.md).
+- **AMR v4 engineering tooling:** Luna Max triển khai và điều phối GOAL; Sol High thiết kế có phạm vi khi cần quyết định mới; Codex Auto PR Review review PR. Context continuity, checkpoint và quality gates nằm trong `docs/tooling/`. Workflow dùng một coordinator, không dùng collaboration sub-agent; native/provider review chỉ được xác nhận khi có runtime evidence. Đây là công cụ hỗ trợ phát triển, không phải runtime của sản phẩm; build/tests không cần model credentials. Xem [AMR guide](docs/engineering/ai-orchestration/README.md).
 - **Tài liệu kiến trúc và governance:** module/feature specifications, contracts, ADRs, traceability và runbooks. Source & Solution Architecture v1.2 cùng [ADR-0009](docs/decisions/0009-source-architecture.md) vẫn đang **proposed**.
 - **CI validation:** kiểm tra tính toàn vẹn tài liệu, source-to-feature mapping, AMR tests và domain build/tests. Badge ở trên phản ánh trạng thái workflow trên `main`.
 
@@ -127,7 +127,7 @@ KORDRA/
 | Định hướng OSS Beta và phạm vi công nghệ | [Beta acceptance](docs/product/oss-beta-acceptance.md) · [DevOps A–F](docs/product/technology-landscape.md) |
 | Kiến trúc và các quyết định đang mở | [Architecture](docs/architecture/README.md) · [ADRs](docs/decisions/README.md) |
 | Ownership và yêu cầu từng feature | [Feature registry](docs/features/README.md) |
-| Công cụ kiểm tra và AI workflow | [Tooling](docs/tooling/README.md) · [AMR v3.1](docs/engineering/ai-orchestration/README.md) |
+| Công cụ kiểm tra và AI workflow | [Tooling](docs/tooling/README.md) · [AMR v4](docs/engineering/ai-orchestration/README.md) |
 | Vận hành và thử nghiệm | [Operations](docs/operations/README.md) · [Reference environments](docs/reference-environments/README.md) |
 
 Production operations cần phê duyệt rõ ràng của con người. Không đưa secret, kubeconfig hoặc dữ liệu khách hàng vào source, tài liệu hay logs. Thử nghiệm trên môi trường tham chiếu phải theo [quy tắc an toàn LAB-01](docs/reference-environments/lab-01/experiments/safety-and-change-control.md).

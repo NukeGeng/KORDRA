@@ -207,6 +207,51 @@ def summarize(start, turn, events, model, effort):
                            if x.get('method') == 'thread/tokenUsage/updated'), 'unknown')}
 
 
+def parse_task_outcome(messages, task, pre_dispatch):
+    """Read one explicit task outcome marker and bind it to this dispatch."""
+    prefix = 'AMR_TASK_OUTCOME:'
+    markers = [line.strip()[len(prefix):].strip()
+               for message in messages for line in message.splitlines()
+               if line.strip().startswith(prefix)]
+    if len(markers) != 1:
+        return None, 'native task must return exactly one structured AMR_TASK_OUTCOME marker'
+    try:
+        outcome = json.loads(markers[0])
+    except (TypeError, json.JSONDecodeError):
+        return None, 'native task outcome marker is not valid JSON'
+    required = {'schemaVersion', 'task_id', 'task_digest', 'input_content', 'status',
+                'summary', 'artifacts', 'no_change_reason'}
+    if not isinstance(outcome, dict) or set(outcome) != required:
+        return None, 'native task outcome marker has an unsupported shape'
+    expected_digest = pre_dispatch.get('task_digest') if isinstance(pre_dispatch, dict) else None
+    expected_content = pre_dispatch.get('content') if isinstance(pre_dispatch, dict) else None
+    expected_task_id = pre_dispatch.get('task_id') if isinstance(pre_dispatch, dict) else None
+    import amr
+    if (type(outcome.get('schemaVersion')) is not int or outcome.get('schemaVersion') != 1
+            or outcome.get('task_id') != task.get('task_id')
+            or expected_task_id != task.get('task_id')
+            or not isinstance(expected_digest, str) or not expected_digest
+            or expected_digest != amr.task_identity(task)
+            or outcome.get('task_digest') != expected_digest
+            or not isinstance(expected_content, str) or not expected_content
+            or outcome.get('input_content') != expected_content):
+        return None, 'native task outcome is stale or bound to a different task/content'
+    if outcome.get('status') not in {'completed', 'blocked'}:
+        return None, 'native task outcome status must be completed or blocked'
+    if not isinstance(outcome.get('summary'), str) or not outcome['summary'].strip():
+        return None, 'native task outcome requires a summary'
+    artifacts = outcome.get('artifacts')
+    write_paths = set(task.get('write_paths', []))
+    if (not isinstance(artifacts, list) or any(not isinstance(path, str) or not path for path in artifacts)
+            or len(artifacts) != len(set(artifacts)) or set(artifacts) - write_paths):
+        return None, 'native task outcome artifacts must be unique declared write paths'
+    no_change_reason = outcome.get('no_change_reason')
+    if no_change_reason is not None and (not isinstance(no_change_reason, str)
+                                         or not no_change_reason.strip()):
+        return None, 'native task outcome no_change_reason must be null or nonempty text'
+    return outcome, None
+
+
 def execute_task(root, task, model, effort, *, sandbox='read-only', timeout=600, on_start=None,
                  goal_context=None, pre_dispatch=None):
     """Execute one local task in a native session; callers own durable task state."""
@@ -266,7 +311,11 @@ def execute_task(root, task, model, effort, *, sandbox='read-only', timeout=600,
         'use network access, access secrets or infrastructure, clusters, devices, queues or production resources. '
         'Never bypass approval, a denial, safety guards or sandbox restrictions. Stop the affected action '
         'and report a blocked requirement when necessary. Return factual changes, actual checks/results '
-        'and remaining blockers; never claim checks or review that did not run.')
+        'and remaining blockers; never claim checks or review that did not run. '
+        'End every task with exactly one machine-readable line beginning AMR_TASK_OUTCOME: followed by '
+        'JSON fields schemaVersion=1, task_id, task_digest, input_content, status (completed or blocked), '
+        'summary, artifacts (changed declared write paths), and no_change_reason (null unless a write task '
+        'made no artifact change, in which case explain why). Copy task/content identity from this dispatch.')
     prompt = (
         'Execute the actual local development task below. Read AGENTS.md and WORKFLOW.md '
         'and the consulted source documents before acting. Respect the supplied scope '
@@ -289,6 +338,9 @@ def execute_task(root, task, model, effort, *, sandbox='read-only', timeout=600,
             on_start(thread_id)
         turn = native.turn(thread_id, prompt, model, effort)
         result = summarize(start, turn, native.events, model, effort)
+        outcome, outcome_error = parse_task_outcome(result['messages'], task, pre_dispatch)
+        result['task_outcome'] = outcome
+        result['task_outcome_error'] = outcome_error
         result.update(execution='native_session', task_id=task['task_id'])
         return result
 

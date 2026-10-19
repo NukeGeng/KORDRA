@@ -2,7 +2,7 @@
 id: ENG-DEBT
 status: proposed
 owner: unassigned
-last_reviewed: 2026-10-18
+last_reviewed: 2026-10-19
 ---
 
 # Technical debt register, triage & prevention
@@ -39,3 +39,9 @@ DEBT-AMR-001 remains open: default provider Code Review execution and native BIR
 Owner: engineering-maintainers / ENG-TOOLING / FEAT-AMR-001. Severity: medium; status: open. A native ephemeral task returned terminal `failed` with zero source edits, while the adapter summary retained status/model/turn identity but omitted the terminal error object; the destroyed ephemeral server could not subsequently serve thread history. Fail-closed unknown/reconciliation behavior remained intact, so no completion or automatic replay was allowed.
 
 Mitigation for the explicit local continuation: a private observer retained the actual terminal status/error unchanged while invoking the existing dispatcher; it granted no authority, changed no result and performed no retry. The later task completed and passed current gates/review. This is diagnostic evidence, not a second controller. Exit: safely retain bounded terminal error diagnostics in private receipts with exact thread/turn binding, a controlled-failure smoke and regression tests, preserving redaction, source stability, legacy receipts and no-replay rules. Provider and native GOAL-control debts remain open separately.
+
+## Provider review evidence update — 2026-10-19
+
+DEBT-AMR-001's missing automatic-provider-execution evidence is resolved for PR #4 at `705c6227ddebd4293ae437a0bdefc5d907ae4ec7`: the native bot completed [review 5566543009](https://github.com/NukeGeng/KORDRA/pull/4#pullrequestreview-5566543009), triggered by PR opening, and returned four findings. The historical register describes what was known before this observation. The integration gap is no longer described as wholly unconfigured; the local adapter's `provider_review=not_configured` discovery value does not describe the separately configured GitHub connector.
+
+Keep the debt open for native hard-cap/incremental enforcement capability and exact-current-head follow-up. The private PR #4 BIR ledger records round 1 and canonical unresolved findings; fixes require current-head evidence before merge. No fourth trigger, new review controller, automatic Sol review or human merge authority is introduced. DEBT-AMR-003/004 remain unchanged.
