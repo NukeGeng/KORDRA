@@ -32,6 +32,12 @@ Invitation expired/revoked; org suspended; user already belongs org; role templa
 - The `organization_id`/scope is validated on read, write, event handler and any background job.
 - Audit sensitive decisions with `actorRef`, `resourceRef`, `correlationId`, policy version.
 
+### I2 runtime-authority handoff — proposed
+
+For the bounded candidate in [FEAT-IAM-001/I2](../../identity-access/features/authorize-resource.md#i2--runtime-authority-contract-increment-proposed), MOD-TEN remains the source of organization status and membership lifecycle facts. Any future owner result must bind the exact subject and tenant lookup to authoritative status, revision, validity and revocation evidence; caller-supplied tenant/principal IDs or fixture flags are not authority. Membership in multiple tenants never merges scope. Missing, stale, suspended, revoked, conflicting or unavailable evidence remains unresolved and denies protected access without disclosing tenant existence.
+
+Ownership of role-assignment persistence/resolution is still open between the relevant owners and MOD-IAM's `RoleDefinition` interpretation. MOD-TEN is the logical fact owner; the human feature custodian is unassigned. This proposal adds no contract, source/test mapping, API or runtime behavior.
+
 ## Negative & recovery scenarios
 TenantAdmin A mời người vào B; tự cấp platform.*; replay invitation; suspend bypass.
 - Generic tests: duplicate request/message, authorization revoked mid-flight, resource from another tenant, crash/restart, stale state/event, partial external failure where applicable.

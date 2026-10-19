@@ -32,6 +32,12 @@ Audit write unavailable on critical privileged action: fail closed or durable ou
 - The `organization_id`/scope is validated on read, write, event handler and any background job.
 - Audit sensitive decisions with `actorRef`, `resourceRef`, `correlationId`, policy version.
 
+### I2 runtime-authority handoff — proposed
+
+For the bounded candidate in [FEAT-IAM-001/I2](../../identity-access/features/authorize-resource.md#i2--runtime-authority-contract-increment-proposed), an audit result can satisfy a required protected-use/disclosure stage only when AUD confirms a durable record bound to that exact intent, decision, stage and authorized scope. A health probe, in-memory enqueue or `Available` flag is not a durable receipt. Proposed append outcomes are `durable`, `rejected`, `unavailable` or `unknown`; only a verified `durable` result supplies a record reference. If policy requires durable audit, rejected, unavailable or unknown outcome blocks that stage. Public denial remains opaque when denial audit also fails. This section is the canonical owner of append-result and durable-receipt semantics; IAM and enforcement consumers link here rather than redefine them.
+
+MOD-AUD is the logical owner; the human audit custodian is unassigned. Durability, idempotency, acknowledgement-loss lookup, outage behavior, retention and crash reconciliation remain decisions; no outbox, transaction, schema or runtime behavior is adopted here.
+
 ## Negative & recovery scenarios
 Tenant A exports B records; erase production approval evidence; include secret in audit.
 - Generic tests: duplicate request/message, authorization revoked mid-flight, resource from another tenant, crash/restart, stale state/event, partial external failure where applicable.
