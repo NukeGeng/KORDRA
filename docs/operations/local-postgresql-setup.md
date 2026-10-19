@@ -2,7 +2,7 @@
 id: OPS-LOCAL-POSTGRESQL
 status: verified
 owner: engineering-maintainers
-last_reviewed: 2026-10-18
+last_reviewed: 2026-10-19
 ---
 
 # Kordra local PostgreSQL setup
@@ -54,4 +54,4 @@ Use host `127.0.0.1`, port `5432`, database `kordra`, schema `app`, and role `ko
 
 Provisioning verified on the target instance: all four credentials authenticated over loopback; role flags and database owners matched this matrix; `kordra_admin` has database/schema creation rights; `kordra_app` has schema usage but not schema creation; future app tables receive only DML; future app sequences receive usage/select/update; and `kordra_test` and `kordra_app` lack access to the other Kordra database. A short-lived mode-0600 libpq passfile was removed after these checks. Credential values were not printed or retained in the receipt.
 
-This is a local database setup check, not a code integration test, schema migration, backup/restore rehearsal or production readiness check. To stop using it, remove only these two databases and four Kordra roles after confirming no needed local data; do not remove the pre-existing host role or the PostgreSQL service as part of routine cleanup.
+This is a local database setup check, not a code integration test, schema migration, backup/restore rehearsal or production readiness check. To stop using it, first confirm that no needed local data or unrelated object ownership depends on these resources. Remove only databases `kordra` and `kordra_test`, then the three dedicated roles `kordra_admin`, `kordra_app` and `kordra_test`. Retain both pre-existing superusers, `postgres` and `dangvyhao`, and the PostgreSQL service. The four credential entries above include `postgres`; that credential count is not a teardown role list. This runbook correction performs no database or role deletion.
