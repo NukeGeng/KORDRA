@@ -389,10 +389,17 @@ def bir_result(ledger, head, root=None):
     nonempty = lambda value: isinstance(value, str) and bool(value.strip())
     if not isinstance(ledger, dict):
         return {'status': 'blocked', 'errors': ['expected BIR ledger object']}
-    if (type(ledger.get('schemaVersion')) is not int or ledger['schemaVersion'] != 1
-            or ledger.get('policyVersion') not in {'3.1', POLICY_VERSION}):
+    policy_version = ledger.get('policyVersion')
+    schema_version = ledger.get('schemaVersion')
+    legacy_policy = policy_version == '3.1'
+    if legacy_policy:
+        if type(schema_version) is not int or schema_version != 1:
+            errors.append('historical v3.1 BIR ledgers require schemaVersion 1')
+    elif policy_version == POLICY_VERSION:
+        if type(schema_version) is not int or schema_version != 2:
+            errors.append('AMR v4 BIR ledgers require schemaVersion 2; migrate initiator evidence')
+    else:
         errors.append('unsupported BIR schema or policy version')
-    legacy_policy = ledger.get('policyVersion') == '3.1'
     pr = ledger.get('pr', {})
     if (not isinstance(pr, dict) or not nonempty(pr.get('repository'))
             or type(pr.get('number')) is not int or pr['number'] < 1):
@@ -451,6 +458,30 @@ def bir_result(ledger, head, root=None):
             errors.append('invalid round object'); continue
         if type(review.get('number')) is not int or review['number'] != index:
             errors.append('review rounds must be contiguous and immutable')
+        if not legacy_policy:
+            initiator = review.get('initiator')
+            if not isinstance(initiator, dict):
+                errors.append('AMR v4 round requires declared initiator and evidence')
+            else:
+                trigger = initiator.get('trigger')
+                role = initiator.get('role')
+                if not nonempty(initiator.get('evidence')):
+                    errors.append('AMR v4 round initiator requires evidence')
+                if trigger == 'automatic':
+                    if role != 'provider_automation':
+                        errors.append('automatic review must identify provider_automation as initiator')
+                elif trigger == 'manual':
+                    if not isinstance(role, str) or role not in {
+                            'luna_goal_coordinator', 'human_maintainer'}:
+                        errors.append('manual review trigger has an unauthorized initiator role')
+                    elif role == 'luna_goal_coordinator' and not nonempty(
+                            initiator.get('session_evidence')):
+                        errors.append('manual Luna trigger requires session-bound evidence')
+                    elif role == 'human_maintainer' and not nonempty(
+                            initiator.get('authorization_evidence')):
+                        errors.append('manual maintainer trigger requires authorization evidence')
+                else:
+                    errors.append('AMR v4 initiator trigger must be automatic or manual')
         start, end = review.get('base_sha'), review.get('head_sha')
         if not sha(start) or not sha(end) or start == end:
             errors.append('round requires distinct immutable diff SHAs')

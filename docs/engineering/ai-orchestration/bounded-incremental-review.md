@@ -41,13 +41,13 @@ Cause: AMR defined Sol as not being the PR reviewer but did not explicitly prohi
 
 Keep a private ledger at `.amr-local/pr-review.json` (owner-only, ignored). Track PR identity, reserved/used rounds, provider request/run IDs, reviewed SHAs, canonical finding IDs, root-cause categories and escalation references. Reconcile it against the provider timeline on every handoff; a local file is not a cross-machine source of truth. Missing history blocks further requests until reconstructed; never assume zero. External provider setting changes remain a separate owner action.
 
-## Ledger schemaVersion 1
+## Ledger schemaVersion 2 for AMR v4
 
-This PR ledger is separate from local GOAL checkpoints and does not change their schemaVersion 1. New ledgers use `policyVersion: "4"`. The validator also accepts historical v3.1 ledgers under their original Sol follow-up rules. Example of one completed default review:
+This PR ledger is separate from local GOAL checkpoints and does not change their schemaVersion 1. AMR v4 ledgers use `schemaVersion: 2` and `policyVersion: "4"`; the validator accepts historical v3.1 `schemaVersion: 1` ledgers under their original Sol follow-up rules. Existing v4 schema-1 receipts must be migrated without inventing missing initiator evidence; an unknown origin blocks further requests. Example of one completed automatic PR-open review:
 
 ```json
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "policyVersion": "4",
   "pr": {"repository": "https://github.com/example/repo", "number": 7},
   "base_sha": "1111111111111111111111111111111111111111",
@@ -60,6 +60,11 @@ This PR ledger is separate from local GOAL checkpoints and does not change their
     "head_sha": "2222222222222222222222222222222222222222",
     "status": "verified",
     "request_evidence": "provider request reference",
+    "initiator": {
+      "trigger": "automatic",
+      "role": "provider_automation",
+      "evidence": "Codex summary identifies the PR-open trigger"
+    },
     "review_id": "unique provider run/review identity",
     "completion_evidence": "terminal result on this head",
     "context": "PR intent, owner contracts, callers and tests",
@@ -69,6 +74,8 @@ This PR ledger is separate from local GOAL checkpoints and does not change their
   "findings": []
 }
 ```
+
+Every v4 round requires `initiator.trigger`, `initiator.role` and nonempty `initiator.evidence`. Automatic provider runs must use `trigger: "automatic"` with `role: "provider_automation"`. Manual requests must use `trigger: "manual"` and either `role: "luna_goal_coordinator"` with nonempty `session_evidence`, or `role: "human_maintainer"` with nonempty `authorization_evidence`. Architect/debugger roles, missing evidence and mismatched trigger/role pairs are rejected. These are declared audit fields: the validator checks presence and allowed values but cannot authenticate a session, verify an authorization reference or prevent direct GitHub actions. Do not claim that this ledger technically prevents a Sol session from posting a trigger.
 
 Round statuses are `requested`, `verified`, `failed` or `unknown`; all count. Only a completed run with a unique provider `review_id` and terminal evidence may be `verified`. Round numbers are contiguous. Round 1 is full. Follow-ups are incremental from the preceding verified round's head. `tracked_findings` carries all previous canonical IDs for audit; `new_findings` contains only first reports. The canonical findings set must equal the union of first reports.
 
