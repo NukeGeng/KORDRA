@@ -2,7 +2,7 @@
 id: ENG-FOLDER-FRAMEWORK
 status: proposed
 owner: engineering-maintainers
-last_reviewed: 2026-10-18
+last_reviewed: 2026-10-19
 ---
 
 # Repository folder framework — actual and reserved paths
@@ -11,7 +11,7 @@ The maintainer requested the folder framework **after** completing the accepted 
 
 ## Actual project graph
 
-Root `Kordra.slnx` contains exactly six projects: ArtifactManagement Domain and its existing tests (ADR-0008), InfrastructureInventory Contracts and runtime, Kordra.Api and InfrastructureInventory bootstrap tests (ADR-0010). There are four product projects and two test projects. No new runtime PackageReference was added.
+Root `Kordra.slnx` contains exactly six projects: ArtifactManagement Domain and its existing tests (ADR-0008), InfrastructureInventory Contracts and runtime, Kordra.Api and InfrastructureInventory bootstrap tests (ADR-0010). There are four product projects and two test projects. No new runtime PackageReference was added. Current local verification passes 48 Artifact tests and 85 bootstrap tests, including the separately authorized synthetic IAM policy proof.
 
 - `src/Modules/ArtifactManagement/Domain/`: immutable digest domain; [FEAT-ART-001](../features/artifact-management/features/immutable-artifact.md).
 - `src/Modules/InfrastructureInventory/Contracts/` and its parent runtime: immutable in-process read seam and unavailable reader; [FEAT-INV-001/I1](../features/infrastructure-inventory/features/register-target.md).
@@ -76,4 +76,4 @@ Keep root `Kordra.slnx`, root `tests/` and `docs/tooling/` as the working baseli
 
 The proposed [repository](../architecture/repository-structure.md), [solution](../architecture/solution-architecture.md), [module structure](../architecture/module-internal-structure.md), [dependency rules](../architecture/dependency-rules.md), [host composition](../architecture/host-composition.md) and [ADR-0009](../decisions/0009-source-architecture.md) guide review. Only [ADR-0008](../decisions/0008-domain-bootstrap-validation.md) and [ADR-0010](../decisions/0010-local-readonly-bootstrap.md) authorize the current scoped source. Before adding source: approved feature and technology/boundary decision → exact ownership mapping → implementation/tests → gates/review → evidence. A reserved README is not a source mapping.
 
-Next dependency is IAM design for the owner's **Kordra-managed local account** preference. See [FEAT-IAM-001](../features/identity-access/features/authorize-resource.md). It does not approve ADR-0003, database, credential storage or cluster access.
+The later FEAT-IAM-001 design and synthetic policy proof are recorded in the [owning feature](../features/identity-access/features/authorize-resource.md); the maintainer accepted ADR-0003 for the narrow permission/trusted-scope baseline. Product login/session/storage and runtime authorization remain unimplemented, and inventory stays denied. Reserved READMEs do not map or authorize those capabilities.

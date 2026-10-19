@@ -2,19 +2,20 @@
 id: GOV-SOURCE
 status: proposed
 owner: unassigned
-last_reviewed: 2026-10-15
+last_reviewed: 2026-10-19
 ---
 
 # Nguồn chân lý và chống tài liệu lạc hậu
 
 ## Ownership map
-- `GOAL.md`: mục tiêu/phạm vi; `AGENTS.md`/`WORKFLOW.md`: luật làm việc.
+- `GOAL.md`: product vision; `docs/product/scope.md` owns Beta scope; `docs/product/technology-landscape.md` catalogs A–F candidates (not accepted dependencies); `AGENTS.md`/`WORKFLOW.md` govern development.
+- `docs/product/operator-workstation.md` owns the proposed OP-01–OP-10 requirements; `operator-pilot-plan.md` owns the private OP-P0–OP-P4 sequencing overlay. They do not replace module/feature ownership, accepted contracts or operational approval. Product/licensing/architecture decisions remain proposed unless explicitly accepted by their authorized owner.
 - `docs/architecture/`: các invariant và liên kết giữa modules; không chứa chi tiết button/screen. Source/solution specs v1.2 đang `proposed` và chưa là baseline.
 - `docs/decisions/`: quyết định kiến trúc, immutable history (supersede thay vì xóa); `proposed` ADR không cấp quyền thay đổi baseline.
 - `docs/features/<module>/module.md`: module owner, capability, inbound/outbound dependencies.
 - `docs/features/<module>/features/<feature>.md`: hành vi, actor, permission, flow, acceptance của từng feature.
 - `docs/contracts/`: giao diện công khai và message schema liên module.
-- `docs/operations/`: runbooks thực thi/khôi phục.
+- `docs/operations/`: runbooks thực thi/khôi phục; [local PostgreSQL setup](../operations/local-postgresql-setup.md) records this machine’s local-only database and Keychain references, not product persistence.
 - `docs/engineering/technical-debt.md`: debt register, không ghi TODO rải rác làm nguồn duy nhất.
 - `docs/engineering/project-conventions.md` and `architecture-test-rules.md`: proposed code conventions and architecture-test design; actual source/CI behavior remains established by implementation and test evidence.
 
