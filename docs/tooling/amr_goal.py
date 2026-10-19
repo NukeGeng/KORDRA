@@ -1,4 +1,4 @@
-"""Serial, restart-safe goal execution using Kordra's existing AMR adapters.
+"""Serial, restart-safe GOAL execution using Kordra AMR v4 adapters.
 
 This is a local contributor checkpoint, not a deployment workflow or an
 authorization service. Model output never advances a dependency by itself.
@@ -27,10 +27,123 @@ UNRESOLVED_TASK_STATES = {'running', 'unknown', 'validation_failed', 'awaiting_t
 SAFE_BOUNDARY_TASK_STATES = {'pending', 'completed'}
 PROFILE_SELECTIONS = set(amr.PROFILES.values())
 PROFILE_CAPABILITIES = {
-    'ROUTINE': {amr.PROFILES['ROUTINE'], amr.PROFILES['ENGINEERING'], amr.PROFILES['CRITICAL']},
+    'ROUTINE': {amr.PROFILES['ROUTINE']},
+    'ENGINEERING': {amr.PROFILES['ENGINEERING']},
+    'CRITICAL': {amr.PROFILES['CRITICAL']},
+    'DEBUGGER_MEDIUM': {amr.PROFILES['DEBUGGER_MEDIUM']},
+}
+LEGACY_CAPABILITIES = {
+    'ROUTINE': set(amr.LEGACY_PROFILES.values()),
+    'ENGINEERING': {amr.LEGACY_PROFILES['ENGINEERING'], amr.LEGACY_PROFILES['CRITICAL']},
+    'CRITICAL': {amr.LEGACY_PROFILES['CRITICAL']},
+}
+V31_CAPABILITIES = {
+    'ROUTINE': {amr.PROFILES['ROUTINE']},
     'ENGINEERING': {amr.PROFILES['ENGINEERING'], amr.PROFILES['CRITICAL']},
     'CRITICAL': {amr.PROFILES['CRITICAL']},
 }
+
+
+def review_required(state, task_id):
+    record = state['tasks'][task_id]
+    policy = record.get('review_policy_version', record.get('policy_version', '3'))
+    if policy == '3':
+        return True  # Historical v3 receipts retain their original obligations.
+    if policy == amr.POLICY_VERSION:
+        return False  # v4 review belongs to the feature PR, never goal validate/accept.
+    tasks = state['plan']['tasks']
+    task = next(t for t in tasks if t['task_id'] == task_id)
+    if amr.classify(task)['risk'] == 'CRITICAL':
+        return True
+    # Determine the final scheduled task from the immutable DAG, not mutable
+    # completion flags. A reordered/tampered checkpoint cannot waive the review.
+    scheduled = set()
+    last = None
+    while len(scheduled) < len(tasks):
+        candidate = next(t for t in tasks if t['task_id'] not in scheduled
+                         and set(t['depends_on']) <= scheduled)
+        last = candidate['task_id']
+        scheduled.add(last)
+    return task_id == last
+
+
+def valid_task_review(state, task_id):
+    record = state['tasks'][task_id]
+    review = record.get('review', {})
+    if review_required(state, task_id):
+        return verified_review(review)
+    effective_policy = record.get('review_policy_version', record.get('policy_version'))
+    if (effective_policy == amr.POLICY_VERSION and review.get('status') == 'verified'
+            and review.get('content') == record['gates'].get('content')
+            and review.get('source_stable') is True):
+        return verified_review(review)  # Retain valid historical advice without making it a PR review.
+    return (record.get('policy_version') in {'3', '3.1', amr.POLICY_VERSION}
+            and review.get('status') == 'not_required'
+            and review.get('channel') == 'pr_deferred'
+            and review.get('independent') is False and review.get('source_stable') is True
+            and review.get('content') == record['gates'].get('content'))
+
+
+def migrate_unfinished_review_policy(record):
+    """Move an unfinished historical task to v4 review semantics, keeping execution history."""
+    policy = record.get('policy_version', '3')
+    if policy in {'3', '3.1'} and record.get('status') != 'completed':
+        record['review_policy_version'] = amr.POLICY_VERSION
+        record['review_policy_migration'] = {'from': policy, 'to': amr.POLICY_VERSION,
+            'scope': 'GOAL review obligations only; native execution receipt retains original policy',
+            'at': amr.now()}
+
+
+def valid_human_design_approval(approval, content, task):
+    """Bind an explicit human design decision to the exact task and artifact."""
+    if not isinstance(approval, dict):
+        return False
+    return (approval.get('decision') == 'approved'
+            and approval.get('task_id') == task['task_id']
+            and approval.get('task_digest') == amr.task_identity(task)
+            and approval.get('content') == content
+            and isinstance(approval.get('approved_by'), str) and bool(approval['approved_by'].strip())
+            and isinstance(approval.get('scope'), str) and bool(approval['scope'].strip())
+            and isinstance(approval.get('decision_evidence'), str)
+            and bool(approval['decision_evidence'].strip()))
+
+
+def valid_design_review(review, content, task):
+    if not isinstance(review, dict):
+        return False
+    triage = review.get('triage', {})
+    task_id, task_digest = task['task_id'], amr.task_identity(task)
+    return (isinstance(triage, dict) and verified_review(review)
+            and review.get('independent') is True and review.get('source_stable') is True
+            and review.get('purpose') == 'design' and review.get('task_id') == task_id
+            and review.get('task_digest') == task_digest
+            and review.get('content') == content and bool(review.get('evidence'))
+            and triage.get('content') == content and triage.get('task_id') == task_id
+            and triage.get('task_digest') == task_digest
+            and isinstance(triage.get('reviewed_by'), str) and bool(triage['reviewed_by'].strip())
+            and isinstance(triage.get('rationale'), str) and bool(triage['rationale'].strip())
+            and isinstance(triage.get('findings'), list)
+            and not amr.finding_errors(triage['findings'], content))
+
+
+def dispatched_task(state, task_id):
+    """Recover the actual source-normalized task without reinterpreting history."""
+    record = state['tasks'][task_id]
+    planned = next(t for t in state['plan']['tasks'] if t['task_id'] == task_id)
+    if record.get('policy_version', '3') == '3':
+        return copy.deepcopy(planned)
+    normalized = record.get('dispatch_task')
+    if not isinstance(normalized, dict) or record.get('dispatch_task_digest') != amr.task_identity(normalized):
+        raise ValueError('missing or corrupt dispatch-normalized task snapshot')
+    expected = copy.deepcopy(planned)
+    # validate_task can only clear these two source-derived claims, never
+    # promote them or alter the objective, scope, paths, invariants or plan.
+    for flag in ('spec_verified', 'tests_known'):
+        if flag in normalized and normalized[flag] is False:
+            expected[flag] = False
+    if amr.task_identity(normalized) != amr.task_identity(expected):
+        raise ValueError('dispatch task differs from immutable plan beyond source-derived downgrades')
+    return copy.deepcopy(normalized)
 
 
 def default_control(state):
@@ -144,7 +257,7 @@ def checkpoint(root, goal_id):
         os.close(fd)
 
 
-def validate_plan(root, plan, *, require_inputs=True):
+def validate_plan(root, plan, *, require_inputs=True, legacy_task_ids=None):
     if plan.get('schemaVersion') != 1:
         raise ValueError('unsupported plan schemaVersion')
     identifier(plan.get('goal_id'))
@@ -166,8 +279,10 @@ def validate_plan(root, plan, *, require_inputs=True):
     if not isinstance(plan.get('tasks'), list) or not plan['tasks']:
         raise ValueError('goal requires tasks')
     ids = []
+    legacy_task_ids = legacy_task_ids or set()
     for task in plan['tasks']:
-        amr.validate_task(task, root, require_inputs=require_inputs)
+        amr.validate_task(task, root, require_inputs=require_inputs,
+                          legacy_policy=task.get('task_id') in legacy_task_ids)
         ids.append(identifier(task['task_id']))
         if task['scope'] != 'local-development' or set(task.get('signals', [])) & {
                 'production', 'secrets', 'remote-execution'}:
@@ -224,8 +339,14 @@ def load(root, path):
     state = json.loads(path.read_text())
     if state.get('schemaVersion') != 1 or digest(state['plan']) != state['plan_digest']:
         raise ValueError('unsupported or corrupt goal checkpoint')
-    # Validation works on a copy: never silently rewrite the pinned plan.
-    validate_plan(root, copy.deepcopy(state['plan']), require_inputs=False)
+    # Historical role constraints are retained per dispatch receipt. New tasks
+    # always use v4 validation; reading an old checkpoint must not reinterpret
+    # its former Architect paths or silently rewrite the pinned plan.
+    legacy_task_ids = {task_id for task_id, record in state.get('tasks', {}).items()
+                       if isinstance(record, dict)
+                       and record.get('policy_version', '3') in {'3', '3.1'}}
+    validate_plan(root, copy.deepcopy(state['plan']), require_inputs=False,
+                  legacy_task_ids=legacy_task_ids)
     observed = hashlib.sha256(amr.safe_path(root, state['plan']['objective_path']).read_bytes()).hexdigest()
     if observed != state['objective_hash']:
         raise ValueError('objective changed; reconcile intent in a new plan')
@@ -235,20 +356,54 @@ def load(root, path):
     for task_id, record in state['tasks'].items():
         if record.get('task_id') != task_id:
             raise ValueError('checkpoint record task identity mismatch')
+        if record.get('policy_version', '3') not in {'3', '3.1', amr.POLICY_VERSION}:
+            raise ValueError('unsupported execution policy version')
+        if record.get('review_policy_version') not in {None, amr.POLICY_VERSION}:
+            raise ValueError('unsupported review policy migration')
+        migration = record.get('review_policy_migration')
+        if record.get('review_policy_version') == amr.POLICY_VERSION:
+            if (record.get('policy_version', '3') not in {'3', '3.1'}
+                    or not isinstance(migration, dict)
+                    or migration.get('from') != record.get('policy_version', '3')
+                    or migration.get('to') != amr.POLICY_VERSION
+                    or migration.get('scope') != 'GOAL review obligations only; native execution receipt retains original policy'
+                    or not isinstance(migration.get('at'), str) or not migration['at']):
+                raise ValueError('invalid historical review-policy migration receipt')
+        elif migration is not None:
+            raise ValueError('review-policy migration receipt has no matching migrated version')
         if record.get('status') not in {'pending', 'running', 'unknown', 'validation_failed',
                                         'awaiting_triage', 'completed', 'failed'}:
             raise ValueError('unknown checkpoint task state')
         for counter in ('attempts', 'validation_attempts'):
             if type(record.get(counter)) is not int or record[counter] < 0:
                 raise ValueError('invalid checkpoint attempt counter')
+        if 'task_outcome' in record and record.get('status') != 'completed':
+            try:
+                task = dispatched_task(state, task_id)
+                outcome_error = task_outcome_error(record, task)
+            except (KeyError, TypeError, AttributeError, ValueError) as exc:
+                raise ValueError('invalid task outcome receipt') from exc
+            if outcome_error:
+                raise ValueError('invalid task outcome receipt: '+outcome_error)
         if record['status'] == 'completed':
             try:
                 content = record['validated_identity']['content']
                 triage = record['triage']
                 ledger = dict(record['gates'], review=record['review'], findings=triage['findings'])
-                errors = amr.completion_errors(ledger, content, critical=True,
+                errors = amr.completion_errors(ledger, content, critical=review_required(state, task_id),
                                               product_required=record['product_required'])
-                valid = (verified_execution(record, record['route']) and verified_review(record['review'])
+                task = dispatched_task(state, task_id)
+                policy = record.get('policy_version', '3')
+                if policy in {'3', '3.1'}:
+                    design_valid = (not amr.design_review_required(task)
+                        or valid_design_review(record.get('design_review'), record['input_identity']['content'], task))
+                else:
+                    design_valid = (amr.execution_role(task) != 'architect'
+                        or valid_human_design_approval(record.get('human_design_approval'), content, task))
+                outcome_valid = ('task_outcome' not in record or not task_outcome_error(
+                    record, task, output_artifacts=record.get('output_artifacts')))
+                valid = (verified_execution(record, record['route']) and valid_task_review(state, task_id)
+                         and design_valid and outcome_valid
                          and triage['task_id'] == task_id and triage['content'] == content
                          and triage['reviewed_by'] and triage['rationale'] and not errors
                          and record['product_required'] is (record['gates']['product_tests'] == 'executed'))
@@ -284,7 +439,7 @@ def event(state, task_id, status, detail):
         control.update(status='awaiting_approval', pause={
             'reason': 'contributor finding triage is required; this is not production authorization',
             'created_at': amr.now(), 'baseline_identity': None,
-            'next_action': 'Inspect native review output and submit exact-content contributor triage.'})
+            'next_action': 'Inspect changes and applicable review output; submit exact-content contributor triage.'})
     elif status == 'completed':
         control.update(status='completed' if all(
             record.get('status') == 'completed' for record in state['tasks'].values()) else 'active',
@@ -353,10 +508,9 @@ def route_for_selection(route, model, effort, candidates):
     if (route.get('action') == 'continue' and route.get('support') == 'advertised'
             and (route.get('model'), route.get('effort')) == selection):
         return route
-    return {**route, 'action': 'continue', 'model': model, 'effort': effort,
-            'support': 'advertised',
-            'rationale': route.get('rationale', []) + [
-                'retain the exact advertised selection because it meets this task quality floor']}
+    if route.get('support') != 'unsupported':
+        return route  # A saved Sol choice cannot override available Luna Max.
+    return route
 
 
 def recommend(root, goal_id, current_model, current_effort):
@@ -387,14 +541,7 @@ def recommend(root, goal_id, current_model, current_effort):
         task = amr.validate_task(copy.deepcopy(task), root)
         classification = amr.classify(task)
         route = amr.resolve(classification, candidates)
-        can_keep_current = current_selection in PROFILE_CAPABILITIES.get(route.get('profile'), set())
-        # An alternative ROUTINE/ENGINEERING profile may be unavailable while
-        # the current advertised profile already meets that task's quality floor.
-        # Keep that exact current selection explicitly; never silently substitute.
-        unavailable_switch_target = (route.get('action') == 'blocked'
-                                     and route.get('support') == 'unsupported'
-                                     and can_keep_current)
-        if route.get('action') == 'blocked' and not unavailable_switch_target:
+        if route.get('action') == 'blocked':
             control.update(status='blocked', model_switch=None, pause={
                 'reason': '; '.join(route.get('rationale', [])) or 'model route unavailable',
                 'created_at': amr.now(), 'baseline_identity': current_identity(root),
@@ -409,25 +556,10 @@ def recommend(root, goal_id, current_model, current_effort):
 
         target_model, target_effort = route.get('model'), route.get('effort')
         reason = None
-        # Routine work does not justify interrupting a capable current session.
+        # v4 switches only between bounded Architect and Developer/Debugger tasks.
         if route.get('profile') is None:
             reason = 'the next task is deterministic; no model switch is needed'
             target_model, target_effort = current_model, current_effort
-        elif route.get('profile') == 'ROUTINE':
-            reason = 'keep the current session for routine work; switching overhead is not justified'
-            target_model, target_effort = current_model, current_effort
-        elif route.get('profile') == 'ENGINEERING' and current_model == 'gpt-6.1-sol' and current_effort == 'high':
-            remaining = pending_routes(root, state)
-            all_standard = all(item_route.get('profile') == 'ENGINEERING' for _, item_route in remaining)
-            if route.get('support') == 'unsupported':
-                target_model, target_effort = current_model, current_effort
-                reason = 'keep the already selected Sol High session because the exact Medium switch target is unavailable'
-            elif len(remaining) >= 2 and all_standard:
-                target_model, target_effort = amr.PROFILES['ENGINEERING']
-                reason = 'at least two pending standard tasks remain and no critical task is queued'
-            else:
-                target_model, target_effort = current_model, current_effort
-                reason = 'keep the current high-effort session; switching down is not worth this short segment'
         elif current_model == target_model and current_effort == target_effort:
             reason = 'current model and effort already match the task route'
         else:
@@ -590,8 +722,24 @@ def protected_content_identity(files, write_paths):
 def verified_execution(record, route):
     execution = record.get('execution', {})
     profile = route.get('profile')
-    return (profile in PROFILE_CAPABILITIES and route.get('action') == 'continue'
-            and (route.get('model'), route.get('effort')) in PROFILE_CAPABILITIES[profile]
+    policy = record.get('policy_version', '3')
+    capabilities = (LEGACY_CAPABILITIES if policy == '3' else
+                    V31_CAPABILITIES if policy == '3.1' else
+                    PROFILE_CAPABILITIES if policy == amr.POLICY_VERSION else {})
+    if policy == '3.1' and profile in {'ROUTINE', 'ENGINEERING'}:
+        preferred = amr.PROFILES[profile]
+        if (route.get('model'), route.get('effort')) != preferred:
+            if route.get('retained_selection') != {'reason': 'preferred_unavailable',
+                    'preferred_model': preferred[0], 'preferred_effort': preferred[1]}:
+                return False
+    if (record.get('policy_version') == amr.POLICY_VERSION and profile in amr.PROFILES
+            and (route.get('model'), route.get('effort')) != amr.PROFILES[profile]):
+        preferred_model, preferred_effort = amr.PROFILES[profile]
+        if route.get('retained_selection') != {'reason': 'preferred_unavailable',
+                'preferred_model': preferred_model, 'preferred_effort': preferred_effort}:
+            return False
+    return (profile in capabilities and route.get('action') == 'continue'
+            and (route.get('model'), route.get('effort')) in capabilities[profile]
             and route.get('support') == 'advertised'
             and execution.get('requested_model') == route['model']
             and execution.get('requested_effort') == route['effort']
@@ -605,10 +753,131 @@ def verified_execution(record, route):
             and execution.get('observed_effort') == route['effort'])
 
 
+def legacy_design_valid(record, task):
+    policy = record.get('policy_version', '3')
+    if policy not in {'3', '3.1'} or not amr.design_review_required(task):
+        return True
+    input_content = record.get('input_identity', {}).get('content')
+    return valid_design_review(record.get('design_review'), input_content, task)
+
+
+def task_outcome_error(record, task, *, current_files=None, output_artifacts=None):
+    """Validate the structured terminal outcome and its observed artifact receipt."""
+    outcome = record.get('task_outcome')
+    if not isinstance(outcome, dict):
+        execution = record.get('execution', {})
+        return execution.get('task_outcome_error') or 'structured native task outcome is required'
+    required = {'schemaVersion', 'task_id', 'task_digest', 'input_content', 'status',
+                'summary', 'artifacts', 'no_change_reason', 'artifact_evidence'}
+    if set(outcome) != required or type(outcome.get('schemaVersion')) is not int \
+            or outcome.get('schemaVersion') != 1:
+        return 'task outcome receipt has an unsupported shape'
+    if (outcome.get('task_id') != record.get('task_id')
+            or outcome.get('task_digest') != record.get('dispatch_task_digest')
+            or outcome.get('input_content') != record.get('input_identity', {}).get('content')):
+        return 'task outcome is stale or bound to a different task/content'
+    claim = record.get('execution', {}).get('task_outcome')
+    if not isinstance(claim, dict) or record.get('execution', {}).get('task_outcome_error'):
+        return 'task outcome is not bound to a parsed native marker'
+    claim_fields = {'schemaVersion', 'task_id', 'task_digest', 'input_content', 'status',
+                    'summary', 'artifacts', 'no_change_reason'}
+    if set(claim) != claim_fields or type(claim.get('schemaVersion')) is not int \
+            or claim.get('schemaVersion') != 1:
+        return 'inspected native task marker has an unsupported shape'
+    for key in ('schemaVersion', 'task_id', 'task_digest', 'input_content', 'status',
+                'summary', 'no_change_reason'):
+        if outcome.get(key) != claim.get(key):
+            return 'task outcome differs from the inspected native marker'
+    if (not isinstance(claim.get('artifacts'), list)
+            or set(outcome.get('artifacts', [])) != set(claim['artifacts'])):
+        return 'task outcome artifacts differ from the inspected native marker'
+    if outcome.get('status') != 'completed':
+        return 'native task reported a blocked or unsuccessful outcome'
+    if not isinstance(outcome.get('summary'), str) or not outcome['summary'].strip():
+        return 'task outcome requires an inspected summary'
+    artifacts = outcome.get('artifacts')
+    write_paths = set(task.get('write_paths', []))
+    if (not isinstance(artifacts, list) or any(not isinstance(path, str) or not path for path in artifacts)
+            or len(artifacts) != len(set(artifacts)) or set(artifacts) - write_paths):
+        return 'task outcome artifacts must be unique declared write paths'
+    if set(artifacts) != set(record.get('files_changed', [])):
+        return 'task outcome artifacts do not match observed changed files'
+    no_change_reason = outcome.get('no_change_reason')
+    if no_change_reason is not None and (not isinstance(no_change_reason, str)
+                                         or not no_change_reason.strip()):
+        return 'task outcome no_change_reason must be null or nonempty text'
+    if write_paths and not artifacts and not no_change_reason:
+        return 'unexplained no-op write task outcome'
+    if artifacts and no_change_reason is not None:
+        return 'task outcome cannot declare both changed artifacts and a no-change reason'
+    evidence = outcome.get('artifact_evidence')
+    if not isinstance(evidence, dict) or set(evidence) != set(artifacts):
+        return 'task outcome lacks actual declared artifact evidence'
+    if any(value is not None and (not isinstance(value, str) or not value)
+           for value in evidence.values()):
+        return 'task outcome artifact evidence is malformed'
+    for rel, identity in evidence.items():
+        if current_files is not None and current_files.get(rel) != identity:
+            return 'task outcome artifact evidence is stale'
+        if output_artifacts is not None and output_artifacts.get(rel) != identity:
+            return 'task outcome artifact evidence differs from accepted artifacts'
+    return None
+
+
+def bind_task_outcome(record, task, changed, files):
+    execution = record.get('execution', {})
+    claim = execution.get('task_outcome')
+    if not isinstance(claim, dict):
+        detail = execution.get('task_outcome_error') or 'structured native task outcome is required'
+        raise ValueError(detail)
+    claim_fields = {'schemaVersion', 'task_id', 'task_digest', 'input_content', 'status',
+                    'summary', 'artifacts', 'no_change_reason'}
+    if set(claim) != claim_fields:
+        raise ValueError('native task outcome marker has an unsupported shape')
+    if claim.get('status') == 'blocked':
+        raise ValueError('native task reported blocked outcome: '+str(claim.get('summary', '')).strip())
+    if (type(claim.get('schemaVersion')) is not int or claim.get('schemaVersion') != 1
+            or claim.get('task_id') != record.get('task_id')
+            or claim.get('task_digest') != record.get('dispatch_task_digest')
+            or claim.get('input_content') != record.get('input_identity', {}).get('content')):
+        raise ValueError('native task outcome is stale or bound to a different task/content')
+    artifacts = claim.get('artifacts')
+    write_paths = set(task.get('write_paths', []))
+    if (not isinstance(artifacts, list) or any(not isinstance(path, str) or not path for path in artifacts)
+            or len(artifacts) != len(set(artifacts)) or set(artifacts) - write_paths):
+        raise ValueError('native task outcome artifacts must be unique declared write paths')
+    if set(artifacts) != set(changed):
+        raise ValueError('native task outcome artifacts do not match observed changed files')
+    reason = claim.get('no_change_reason')
+    if reason is not None and (not isinstance(reason, str) or not reason.strip()):
+        raise ValueError('native task outcome no_change_reason must be null or nonempty text')
+    if write_paths and not artifacts and not reason:
+        raise ValueError('unexplained no-op write task outcome')
+    if artifacts and reason is not None:
+        raise ValueError('native task outcome cannot declare changed artifacts and a no-change reason')
+    if (not isinstance(claim.get('summary'), str) or not claim['summary'].strip()
+            or claim.get('status') != 'completed'):
+        raise ValueError('native task outcome is not a completed inspected result')
+    record['task_outcome'] = {
+        'schemaVersion': 1, 'task_id': record['task_id'],
+        'task_digest': record['dispatch_task_digest'],
+        'input_content': record['input_identity']['content'],
+        'status': 'completed', 'summary': claim['summary'],
+        'artifacts': sorted(artifacts), 'no_change_reason': reason,
+        'artifact_evidence': {rel: files.get(rel) for rel in artifacts},
+    }
+
+
 def validate_work(root, state, task, path):
     record = state['tasks'][task['task_id']]
+    task = dispatched_task(state, task['task_id'])
     if not verified_execution(record, record['route']):
         raise ValueError('no verified terminal execution; reconcile unknown work instead')
+    if not legacy_design_valid(record, task):
+        event(state, task['task_id'], 'failed',
+              'legacy design-review evidence is missing, stale or not bound to the dispatched task')
+        atomic_save(path, state)
+        return False
     git = amr.git_identity(root)
     if any(git[k] != record['input_identity']['git'][k] for k in ('head', 'branch')):
         raise ValueError('task Git HEAD/branch changed; uncommitted review cannot cover committed task edits')
@@ -620,9 +889,23 @@ def validate_work(root, state, task, path):
               'source changed outside declared write paths; create a fresh reviewed task plan')
         atomic_save(path, state)
         return False
+    outcome_error = task_outcome_error(record, task)
+    if outcome_error:
+        event(state, task['task_id'], 'failed', outcome_error)
+        atomic_save(path, state)
+        return False
+    current_files = amr.tree_identity(root)['files']
+    record['task_outcome']['artifact_evidence'] = {
+        rel: current_files.get(rel) for rel in record['task_outcome']['artifacts']}
+    outcome_error = task_outcome_error(record, task, current_files=current_files)
+    if outcome_error:
+        event(state, task['task_id'], 'failed', outcome_error)
+        atomic_save(path, state)
+        return False
     if record['validation_attempts'] >= 4:
         raise ValueError('validation repair limit reached; contributor investigation required')
     record['validation_attempts'] += 1
+    migrate_unfinished_review_policy(record)
     event(state, task['task_id'], 'running', 'validating completed work; execution will not replay')
     atomic_save(path, state)
     record['gates'] = amr.gates(root, state['plan']['base'])
@@ -631,6 +914,19 @@ def validate_work(root, state, task, path):
     if record['gates']['local_status'] != 'passed' or record['gates'].get('source_mapping') != 'executed':
         event(state, task['task_id'], 'validation_failed', 'required gates failed')
         atomic_save(path, state); return
+    if not review_required(state, task['task_id']):
+        existing = record.get('review', {})
+        if not (existing.get('status') == 'verified'
+                and existing.get('content') == record['validated_identity']['content']
+                and existing.get('source_stable') is True and verified_review(existing)):
+            record['review'] = {'status': 'not_required', 'channel': 'pr_deferred',
+                'independent': False, 'source_stable': True,
+                'content': record['validated_identity']['content'],
+                'reason': 'AMR v4: PR review is tracked separately; GOAL validation does not invoke an AI reviewer'}
+        event(state, task['task_id'], 'awaiting_triage',
+              'gates passed; inspect changes and findings; no independent task review claimed')
+        atomic_save(path, state)
+        return
     model, effort = amr.PROFILES['CRITICAL']
     review_before = current_identity(root)
     review = local_review(root, model, effort,
@@ -658,7 +954,7 @@ def verified_review(review):
             and review.get('observed_effort') == amr.PROFILES['CRITICAL'][1])
 
 
-def step(root, goal_id):
+def step(root, goal_id, design_review=None):
     with checkpoint(root, goal_id) as path:
         state = load(root, path)
         control = ensure_control(state)
@@ -679,12 +975,20 @@ def step(root, goal_id):
         selection = control.get('runtime_selection')
         if isinstance(selection, dict) and selection.get('task_id') == task['task_id']:
             route = route_for_selection(route, selection.get('model'), selection.get('effort'), candidates)
+            if (route.get('action') == 'continue' and route.get('support') == 'advertised'
+                    and (route.get('model'), route.get('effort')) !=
+                        (selection.get('model'), selection.get('effort'))):
+                raise ValueError('saved selection no longer eligible; run goal recommend at this safe boundary')
         record['route'] = route
         if route['action'] != 'continue' or route.get('support') != 'advertised':
             event(state, task['task_id'], 'failed', 'exact model unavailable or task requires deterministic execution')
             atomic_save(path, state); return projection(root, state)
         before = amr.tree_identity(root)
+        if design_review is not None:
+            raise ValueError('AMR v4 does not consume AI design-review receipts; use an Architect task and human approval')
         record.update(task_id=task['task_id'], attempts=record['attempts']+1, attempt_id=str(uuid.uuid4()),
+                      policy_version=amr.POLICY_VERSION,
+                      dispatch_task=copy.deepcopy(task), dispatch_task_digest=amr.task_identity(task),
                       input_identity={'content': before['digest'], 'git': amr.git_identity(root)},
                       protected_content_identity=protected_content_identity(before['files'], task['write_paths']),
                       context_paths=task['paths']+task['consulted'])
@@ -693,11 +997,27 @@ def step(root, goal_id):
         def started(thread_id):
             record['native_thread_id'] = thread_id
             atomic_save(path, state)
+        # Informational dispatch facts, constructed only after the checks above
+        # while checkpoint() still holds the checkout lock. Never derive proof
+        # from objective/decision prose or substitute this summary for receipts.
+        architect_task = amr.execution_role(task) == 'architect'
+        design_facts = {'required': architect_task,
+                        'status': 'human_approval_after_output' if architect_task else 'not_applicable'}
+        pre_dispatch = {
+            'source': 'amr_goal.step', 'policy_version': record['policy_version'],
+            'goal_id': goal_id, 'task_id': task['task_id'],
+            'task_digest': record['dispatch_task_digest'], 'content': before['digest'],
+            'plan_digest': state['plan_digest'], 'attempt_id': record['attempt_id'],
+            'route': copy.deepcopy(route),
+            'execution_lock': {'owner': 'parent_coordinator', 'scope': 'checkout', 'held': True},
+            'design_approval': design_facts,
+        }
         try:
             record['execution'] = execute_task(root, task, route['model'], route['effort'],
                 goal_context={'goal_id': goal_id, 'objective': state['plan']['objective'],
                               'milestone': state['plan']['milestone'],
                               'task_id': task['task_id'], 'depends_on': task['depends_on']},
+                pre_dispatch=pre_dispatch,
                 sandbox='workspace-write' if task['write_paths'] else 'read-only', on_start=started)
             after = amr.tree_identity(root)
             changed = sorted(p for p in before['files'].keys() | after['files'].keys()
@@ -708,7 +1028,12 @@ def step(root, goal_id):
             elif not verified_execution(record, route):
                 event(state, task['task_id'], 'unknown', 'native execution not verified; no automatic replay')
             else:
-                validate_work(root, state, task, path)
+                try:
+                    bind_task_outcome(record, task, changed, after['files'])
+                except ValueError as exc:
+                    event(state, task['task_id'], 'failed', str(exc))
+                else:
+                    validate_work(root, state, task, path)
         except (NativeError, OSError, ValueError) as exc:
             event(state, task['task_id'], 'unknown', str(exc))
         atomic_save(path, state)
@@ -718,7 +1043,7 @@ def step(root, goal_id):
 def validate(root, goal_id, task_id):
     with checkpoint(root, goal_id) as path:
         state = load(root, path)
-        task = next(t for t in state['plan']['tasks'] if t['task_id'] == task_id)
+        task = dispatched_task(state, task_id)
         if state['tasks'][task_id]['status'] not in {'validation_failed', 'awaiting_triage'}:
             raise ValueError('task is not awaiting revalidation')
         validate_work(root, state, task, path)
@@ -731,6 +1056,13 @@ def accept(root, goal_id, task_id, triage):
         identity = current_identity(root)
         if record['status'] != 'awaiting_triage' or record.get('validated_identity') != identity:
             raise ValueError('task not reviewed or source/Git changed; revalidate')
+        task = dispatched_task(state, task_id)
+        if not legacy_design_valid(record, task):
+            raise ValueError('legacy design-review evidence is missing, stale or not bound to the dispatched task')
+        outcome_error = task_outcome_error(record, task,
+            current_files=amr.tree_identity(root)['files'])
+        if outcome_error:
+            raise ValueError(outcome_error)
         if triage.get('task_id') != task_id or triage.get('content') != identity['content']:
             raise ValueError('triage task/content mismatch')
         if not isinstance(triage.get('reviewed_by'), str) or not triage['reviewed_by'].strip():
@@ -739,22 +1071,31 @@ def accept(root, goal_id, task_id, triage):
             raise ValueError('triage requires review interpretation')
         if not isinstance(triage.get('findings'), list):
             raise ValueError('triage requires explicit findings array')
+        migrate_unfinished_review_policy(record)
         ledger = dict(record['gates'], review=record['review'], findings=triage['findings'])
-        errors = amr.completion_errors(ledger, identity['content'], critical=True,
+        errors = amr.completion_errors(ledger, identity['content'], critical=review_required(state, task_id),
                                       product_required=record.get('product_required') is True)
         if not verified_execution(record, record['route']):
             errors.append('verified native task execution required')
-        if not verified_review(record['review']):
+        if not valid_task_review(state, task_id):
             errors.append('verified native review identity and terminal output required')
+        if record.get('policy_version') == amr.POLICY_VERSION and amr.execution_role(task) == 'architect':
+            approval = triage.get('human_design_approval')
+            if not valid_human_design_approval(approval, identity['content'], task):
+                errors.append('explicit human approval of the exact design task and content is required')
+        elif record.get('policy_version') == amr.POLICY_VERSION and 'human_design_approval' in triage:
+            errors.append('human design approval is valid only for an Architect task')
         if record.get('product_required') is not (record['gates'].get('product_tests') == 'executed'):
             errors.append('product requirement differs from saved gate receipt')
         if errors:
             raise ValueError('; '.join(errors))
         record['triage'] = triage
+        if record.get('policy_version') == amr.POLICY_VERSION and amr.execution_role(task) == 'architect':
+            record['human_design_approval'] = copy.deepcopy(triage['human_design_approval'])
         current_files = amr.tree_identity(root)['files']
         paths = set(record['context_paths']) | set(record.get('files_changed', []))
         record['output_artifacts'] = {name: current_files[name] for name in paths if name in current_files}
-        event(state, task_id, 'completed', 'current gates, independent native review and contributor triage recorded')
+        event(state, task_id, 'completed', 'current gates and exact-content triage recorded; PR review remains a separate gate')
         atomic_save(path, state)
         return projection(root, state)
 
@@ -784,6 +1125,8 @@ def add_parser(sub):
             p.add_argument('--task-id', required=True)
         if command == 'accept':
             p.add_argument('--triage', required=True, type=Path)
+        if command == 'step':
+            p.add_argument('--design-review', type=Path)
         if command == 'reconcile':
             p.add_argument('--evidence', required=True)
         if command == 'recommend':
@@ -805,7 +1148,7 @@ def main(root, args):
     if args.goal_command == 'status':
         return status(root, args.id)
     if args.goal_command == 'step':
-        return step(root, args.id)
+        return step(root, args.id, json.loads(args.design_review.read_text()) if args.design_review else None)
     if args.goal_command == 'validate':
         return validate(root, args.id, args.task_id)
     if args.goal_command == 'accept':

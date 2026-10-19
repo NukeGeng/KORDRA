@@ -2,7 +2,7 @@
 id: ENG-V12-NOTES
 status: proposed
 owner: unassigned
-last_reviewed: 2026-10-16
+last_reviewed: 2026-10-18
 ---
 
 # v1.2 Addendum — Source Architecture Docs Integration Notes
@@ -62,3 +62,25 @@ The read-only check ran strict document validation (157 Markdown files, 139 IDs,
 
 ## Validation disclaimer
 Static `doccheck.py` validates Markdown structure/links; it does NOT validate C# project references, source ownership, source folder existence, runtime deployment or legal ownership of OSS code.
+
+## OP-P0 acceptance readiness — 2026-10-18
+
+Current product source at `2aa156f4e6e3afe3cc648186ac6a3242781dc71b` remains the same two-project Artifact bootstrap; local documentation/tooling changes do not add a product host. Owner preferences now select Kubernetes/Helm read-only and API local on Mac first. The prepared INV/PRJ/SEC seams remain proposed.
+
+[OPP0-ARCH-SPIKE-001](../features/infrastructure-inventory/features/register-target.md#proposed-feasibility-evidence--opp0-arch-spike-001) records the original native sandbox timeout separately from the reconciled coordinator-local pass. Nine disposable projects built with zero packages and SDK-local library-packs; actual metadata checks rejected two compiled forbidden edges, then accepted restored fixtures; 14 loopback HTTP assertions passed and the listener stopped. One Host contract-reference omission was repaired; source/evidence manifests were independently checked before and after native High review. Full current gates and exact-content contributor triage completed the experiment task. An interrupted review remains failed in history; it is not an approval.
+
+| ADR-0009 criterion | Evidence / remaining limit |
+|---|---|
+| Exact current SHA and source audit | Recorded above; existing root solution/Domain/tests retained |
+| Target package/project list | Actual product has only ADR-0008 test packages; broader Marten/Wolverine/Aspire/provider versions and granularity still unresolved |
+| Minimal host PoC | Local disposable .NET/ASP.NET Core 10.0.11 feasibility pass; original native sandbox failure retained; no product host or accepted trust/identity composition |
+| Module/Contracts and Agent isolation | Synthetic direct project/built-reference negative checks pass; actual product module Contracts/Agent projects and CI enforcement do not exist |
+| Change plan and reviewers | Incremental audit exists; broad source migration, architecture/security/maintainer acceptance remain open |
+
+Do not promote broad ADR-0009 from this partial evidence. [ADR-0010](../decisions/0010-local-readonly-bootstrap.md) offers a concrete scoped bootstrap, **explicitly accepted by the maintainer on 2026-10-18**: root solution retained, exactly one inventory Contracts/runtime pair plus local API and tests, existing pinned test dependencies only, no runtime PackageReference, no positive inventory ingress or real provider/credential access. Its exact paths, alternatives, tests and rollback are reviewable in that ADR. The human approval covers only that exact scope; implementation/tests/CI evidence and subsequent IAM/provider/operational choices remain separate. The user also requested folder framework after bootstrap validation; directory reservations will not adopt ADR-0009 or create speculative projects. This is a bounded dependency step, not completion or redefinition of the full GOAL.
+
+## Post-approval scoped adoption — 2026-10-18
+
+The audit and feasibility tables above are dated pre-bootstrap evidence. After explicit ADR-0010 approval, the actual root solution now contains six projects (four product, two tests): retained Artifact Domain/tests plus Inventory Contracts/runtime, local API and bootstrap tests. No runtime packages or broad ADR-0009 source migration were adopted. Actual XML/restored-assets/PE boundary tests and two compiled forbidden-edge fixtures now run locally with the root test suite: 67 product tests passed. There is still no real Agent, persistence, IAM, provider or CI verification of this unpublished increment.
+
+The accepted bootstrap finalization has terminal native Sol 6.1 High execution, stable independent review and contributor triage; see [owner evidence](../features/infrastructure-inventory/features/register-target.md#coordinator-final-acceptance--2026-10-18). Only afterward, the maintainer-requested [folder framework](repository-folder-framework.md) reserved 45 locations using proposed README files, preserving the root solution/tests and existing AMR location. This does not accept ADR-0009 or create future projects.

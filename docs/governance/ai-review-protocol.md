@@ -2,7 +2,7 @@
 id: GOV-AI
 status: proposed
 owner: unassigned
-last_reviewed: 2026-10-15
+last_reviewed: 2026-10-19
 ---
 
 # Quy trình AI review chống đọc nhầm tài liệu cũ
@@ -26,4 +26,6 @@ last_reviewed: 2026-10-15
 > Đọc AGENTS.md, GOAL.md, WORKFLOW.md, docs/README.md; xác định owning module/feature, chỉ dùng accepted docs làm baseline; so sánh với source và tests thực tế. Xuất bảng drift, permission/tenant risks, impact contracts, tests thiếu, debt, và đề xuất file docs cần cập nhật. Không implement khi chưa nêu những vấn đề cần quyết định.
 
 ## Native runtime and review evidence
-The [AMR operating guide](../engineering/ai-orchestration/README.md) implements routing/context/check mechanics for this protocol; [local artifact contract](../engineering/ai-orchestration/contract.md). Proposed documentation stays proposed until reviewed; a successful native invocation does not accept an architecture decision. Separate selected model evidence, native sandbox decisions, local independent review and provider automatic PR/MR review. Revalidate reviews and context after source/contract changes. Findings require reproduction or counterevidence, feature ownership, severity and a bounded repair history. Production approval remains explicitly human.
+The [AMR v4 operating guide](../engineering/ai-orchestration/README.md) implements routing/context/check mechanics for this protocol; see the [local artifact contract](../engineering/ai-orchestration/contract.md). Proposed documentation stays proposed until explicitly accepted; a successful native invocation does not accept an architecture decision. Separate design approval, deterministic checks, contributor triage, native sandbox decisions and provider automatic PR review. Findings require reproduction or counterevidence, feature ownership, severity and a bounded repair history. Production approval remains explicitly human.
+
+Luna Max owns approved implementation and GOAL execution. Sol High delivers bounded designs for human approval; it does not run routine tests or default PR/milestone reviews. Sol Medium/High debugging requires a bounded defect and the escalation prerequisites in `AGENTS.md`. `goal validate`, `goal accept` and milestone transitions invoke no AI reviewers. Codex Auto PR Review is the default independent PR reviewer, including critical changes; blocking findings prevent merge. Follow the [BIR policy](../engineering/ai-orchestration/bounded-incremental-review.md) for manual request accounting, full/incremental scopes, canonical findings and escalation; three rounds never imply approval or automatically trigger Sol.

@@ -31,6 +31,7 @@ class Routing(unittest.TestCase):
         import tomllib
         config = tomllib.loads((amr.ROOT/'.codex/config.toml').read_text())
         self.assertIs(config['agents']['enabled'], False)
+        self.assertEqual((config['model'], config['model_reasoning_effort']), ('gpt-6-luna', 'max'))
 
     def test_amr01_lookup_is_deterministic(self):
         t=task(); t['kind']='lookup'
@@ -54,17 +55,22 @@ class Routing(unittest.TestCase):
         for signal in sorted(amr.RISKS):
             with self.subTest(signal=signal):
                 t=task(); t['signals']=[signal]; t['kind']='crud'
-                self.assertEqual(amr.classify(t)['profile'], 'CRITICAL')
+                route=amr.classify(t)
+                self.assertEqual(route['risk'], 'CRITICAL')
+                expected = 'CRITICAL' if signal in {'architecture', 'critical-design'} else 'ENGINEERING'
+                self.assertEqual(route['profile'], expected)
 
     def test_path_overrides_low_risk_claim(self):
         for path in ['src/Authorization.cs','src/TenantQuery.cs','.codex/config.toml',
                      'AGENTS.md','docs/reference-environments/lab-01/example.md']:
             t=task(); t['kind']='crud'; t['paths']=[path]
-            self.assertEqual(amr.classify(t)['profile'], 'CRITICAL')
+            self.assertEqual(amr.classify(t)['profile'], 'ENGINEERING')
 
     def test_amr07_escalation_is_bounded(self):
-        t=task(); t['failed_repairs']=2
-        self.assertEqual(amr.classify(t)['profile'], 'CRITICAL')
+        t=task(); t['failed_repairs']=2; t['failure_evidence']='two Luna attempts';
+        t['reported_defect']={'finding_id':'BUG-1','summary':'still failing',
+                              'evidence':'reproduction failed','affected_paths':['source.py']}
+        self.assertEqual(amr.classify(t)['profile'], 'DEBUGGER_MEDIUM')
         t['failed_repairs']=4
         self.assertEqual(amr.classify(t)['action'], 'blocked')
 
@@ -73,19 +79,25 @@ class Routing(unittest.TestCase):
         for models in ([], [{'model':'gpt-6.1-sol','efforts':['low']}],
                        [{'model':'gpt-6-luna','efforts':['medium']}]):
             self.assertEqual(amr.resolve(route,{'models':models})['action'],'blocked')
-        good=amr.resolve(route,{'models':[{'model':'gpt-6.1-sol','efforts':['medium']}]})
+        good=amr.resolve(route,{'models':[{'model':'gpt-6-luna','efforts':['max']}]})
         self.assertEqual(good['support'],'advertised')
 
-    def test_sol_profiles_reject_older_sol_even_when_available(self):
-        for signals, effort in (([], 'medium'), (['auth'], 'high')):
+    def test_profiles_use_luna_for_implementation_and_exact_specialist_routes(self):
+        cases=[(task(), 'gpt-6-luna', 'max'),
+               (dict(task(),kind='architecture'), 'gpt-6.1-sol', 'high'),
+               (dict(task(),failed_repairs=2,failure_evidence='two failed Luna repairs',
+                     reported_defect={'finding_id':'BUG-1','summary':'still failing',
+                                      'evidence':'reproduction','affected_paths':['source.py']}),
+                'gpt-6.1-sol','medium'),
+               (dict(task(),signals=['auth']), 'gpt-6-luna','max')]
+        for t, model, effort in cases:
             with self.subTest(effort=effort):
-                t=task(); t['signals']=signals
                 route=amr.classify(t)
                 older={'models':[{'model':'gpt-6-sol','efforts':['medium','high']}]}
                 self.assertEqual(amr.resolve(route,older)['action'],'blocked')
-                exact={'models':[{'model':'gpt-6.1-sol','efforts':[effort]}]}
+                exact={'models':[{'model':model,'efforts':[effort]}]}
                 resolved=amr.resolve(route,exact)
-                self.assertEqual(resolved['model'],'gpt-6.1-sol')
+                self.assertEqual(resolved['model'],model)
                 self.assertEqual(resolved['effort'],effort)
                 self.assertEqual(resolved['support'],'advertised')
                 self.assertNotEqual(resolved['action'],'blocked')
@@ -96,6 +108,39 @@ class Routing(unittest.TestCase):
         with self.assertRaises(ValueError): amr.launch_command(Path('.'),t,r)
         t['scope']='local-development'; t['signals']=['remote-execution']
         with self.assertRaises(ValueError): amr.launch_command(Path('.'),t,r)
+
+    def test_architect_and_escalation_debugger_routes_are_role_based(self):
+        for kind in ('source', 'tests', 'integration', 'bugfix', 'docs'):
+            t=task();t['kind']=kind
+            route=amr.resolve(amr.classify(t),{'models':[{'model':'gpt-6-luna','efforts':['max']}]})
+            self.assertEqual((route['model'],route['effort']),('gpt-6-luna','max'))
+        t=task();t['kind']='architecture'
+        self.assertEqual(amr.classify(t)['profile'],'CRITICAL')
+        self.assertEqual(amr.execution_role(t), 'architect')
+        t=task();t['kind']='complex-debugging'
+        self.assertEqual(amr.classify(t)['action'],'blocked')
+        t.update(failed_repairs=2,failure_evidence='two Luna attempts',reported_defect={
+            'finding_id':'BUG-2','summary':'repeatable failure','evidence':'test reproduction',
+            'affected_paths':['source.py']})
+        self.assertEqual(amr.classify(t)['profile'],'DEBUGGER_MEDIUM')
+        t['signals']=['concurrency']
+        self.assertEqual(amr.classify(t)['profile'],'CRITICAL')
+        self.assertEqual(amr.execution_role(dict(task(),kind='architecture')), 'architect')
+        self.assertTrue(amr.design_review_required(dict(task(),signals=['critical-design'])))
+        self.assertFalse(amr.design_review_required(task()))
+
+    def test_model_probe_reuses_shared_selection_even_after_native_failure(self):
+        for native_result in ({'status':'verified'}, amr.NativeError('outcome unknown')):
+            with self.subTest(result=native_result), patch.object(sys,'argv',['amr','probe-models']), \
+                    patch.object(amr,'probe_profile',side_effect=[native_result,{'status':'verified'},
+                        {'status':'verified'}]) as probe, \
+                    patch.object(amr,'save_private'),contextlib.redirect_stdout(io.StringIO()):
+                code=amr.main()
+            self.assertEqual(probe.call_count,3)
+            self.assertEqual([c.args for c in probe.call_args_list],
+                             [('gpt-6-luna','max'),('gpt-6.1-sol','high'),
+                              ('gpt-6.1-sol','medium')])
+            self.assertEqual(code,1 if isinstance(native_result,Exception) else 0)
 
     def test_launch_passes_real_model_effort_and_human_reviewer(self):
         r=dict(action='continue',support='advertised',model='gpt-6.1-sol',effort='medium')
@@ -190,6 +235,23 @@ class Context(unittest.TestCase):
             t=task(); t.update(change)
             with self.assertRaises(ValueError): amr.validate_task(t,self.root)
         self.assertEqual(amr.validate_task(task(),self.root)['task_id'],'AMR-test')
+
+    def test_debugger_requires_two_failed_repairs_and_restricts_writes_to_reported_defect(self):
+        t=task(); t.update(kind='complex-debugging', failed_repairs=2,
+            failure_evidence='two Luna repair attempts with test output',
+            reported_defect={'finding_id':'BUG-17','summary':'parser drops a value',
+                'evidence':'test_source.py reproduces it','affected_paths':['source.py']},
+            write_paths=['source.py'])
+        self.assertEqual(amr.execution_role(t), 'debugger')
+        self.assertEqual(amr.classify(t)['profile'], 'DEBUGGER_MEDIUM')
+        self.assertEqual(amr.validate_task(t,self.root)['task_id'],'AMR-test')
+        t['execution_role']='developer'
+        with self.assertRaisesRegex(ValueError, 'cannot downgrade'):
+            amr.validate_task(t,self.root)
+        t.pop('execution_role')
+        t['write_paths']=['test_source.py']
+        with self.assertRaisesRegex(ValueError, 'writes must stay within the reported defect'):
+            amr.validate_task(t,self.root)
 
     def test_amr18_unknown_usage_is_not_invented(self):
         h=amr.snapshot(self.root,task(),amr.classify(task()))
@@ -293,6 +355,177 @@ class ReviewLedger(unittest.TestCase):
         self.assertEqual(amr.completion_errors(r,'hash',product_required=True),[])
 
 
+class BoundedIncrementalReview(unittest.TestCase):
+    def ledger(self, count=1):
+        shas = [str(i)*40 for i in range(1, 5)]
+        rounds = [dict(number=i, channel='codex_auto_code_review',
+            scope='full' if i == 1 else 'incremental', base_sha=shas[i-1], head_sha=shas[i],
+            status='verified', request_evidence='provider request '+str(i),
+            review_id='provider-review-'+str(i), completion_evidence='terminal '+str(i),
+            context='Surrounding callers, owner contracts and prior findings',
+            new_findings=[], tracked_findings=[]) for i in range(1, count+1)]
+        return dict(schemaVersion=1, policyVersion='4',
+                    pr=dict(repository='https://github.com/example/repo', number=7),
+                    base_sha=shas[0], head_sha=shas[count], rounds=rounds, findings=[])
+
+    def result(self, ledger):
+        return amr.bir_result(ledger, ledger['head_sha'])
+
+    def add_finding(self, ledger, state='open', blocking=True):
+        finding = dict(id='BUG-1', category='correctness', root_cause='stale receipt',
+                       bug_key='accept/current-head', state=state, blocking=blocking,
+                       evidence='regression reproduction')
+        ledger['findings'].append(finding)
+        ledger['rounds'][0]['new_findings'] = ['BUG-1']
+        for review in ledger['rounds'][1:]:
+            review['tracked_findings'] = ['BUG-1']
+        return finding
+
+    def test_full_then_incremental_rounds_and_no_implicit_merge_approval(self):
+        for count in (1, 2, 3):
+            with self.subTest(count=count):
+                result = self.result(self.ledger(count))
+                self.assertEqual(result['status'], 'ledger_valid', result)
+                self.assertEqual(result['rounds_remaining'], 3-count)
+                self.assertFalse(result['merge_approval'])
+                self.assertEqual(result['native_hard_cap'], 'unverified')
+        self.assertEqual(result['next_action'], 'stop_automatic_review')
+
+    def test_historical_v31_ledger_is_compatible_and_unchanged_sha_cannot_be_reviewed_twice(self):
+        ledger = self.ledger()
+        ledger['policyVersion'] = '3.1'
+        self.assertEqual(self.result(ledger)['status'], 'ledger_valid')
+        ledger = self.ledger(2)
+        ledger['head_sha'] = ledger['rounds'][0]['head_sha']
+        ledger['rounds'][1].update(base_sha=ledger['head_sha'], head_sha=ledger['head_sha'])
+        result = self.result(ledger)
+        self.assertEqual(result['status'], 'blocked')
+        self.assertTrue(any('distinct immutable diff SHAs' in error for error in result['errors']))
+
+    def test_no_fourth_round_and_exhaustion_never_approves(self):
+        ledger = self.ledger(3)
+        self.add_finding(ledger)
+        result = self.result(ledger)
+        self.assertEqual(result['status'], 'blocked')
+        self.assertEqual(result['next_action'], 'escalate_to_human_maintainer')
+        self.assertTrue(any('escalation record' in e for e in result['errors']))
+        ledger['escalation'] = dict(target='human_maintainer', reason='blocking BUG-1', evidence='handoff')
+        self.assertEqual(self.result(ledger)['status'], 'blocked')
+        ledger['rounds'].append(copy.deepcopy(ledger['rounds'][-1]))
+        self.assertTrue(any('fourth' in e for e in self.result(ledger)['errors']))
+
+    def test_requests_unknowns_and_failures_consume_budget_without_faking_completion(self):
+        for state in ('requested', 'unknown', 'failed'):
+            ledger = self.ledger(3); ledger['rounds'][-1]['status'] = state
+            result = self.result(ledger)
+            self.assertEqual(result['rounds_used'], 3)
+            self.assertEqual(result['status'], 'blocked')
+            self.assertEqual(result['next_action'], 'escalate_to_human_maintainer')
+        ledger = self.ledger(2); ledger['rounds'][0]['status'] = 'unknown'
+        self.assertTrue(any('last verified' in e for e in self.result(ledger)['errors']))
+
+    def test_wrong_scope_baseline_stale_head_and_reused_provider_identity_fail(self):
+        variants = [dict(scope='full'), dict(base_sha='1'*40), dict(number=3),
+                    dict(context=''), dict(review_id='provider-review-1'),
+                    dict(completion_evidence=''), dict(channel='native_local_review')]
+        for override in variants:
+            ledger = self.ledger(2); ledger['rounds'][1].update(override)
+            self.assertEqual(self.result(ledger)['status'], 'blocked', override)
+        ledger = self.ledger()
+        self.assertEqual(amr.bir_result(ledger,'f'*40)['status'], 'blocked')
+
+    def test_dedup_and_tracking_do_not_repost_or_drop_existing_findings(self):
+        ledger = self.ledger(2)
+        finding = self.add_finding(ledger, blocking=False)
+        self.assertEqual(self.result(ledger)['status'], 'ledger_valid')
+        ledger['rounds'][1]['new_findings'] = ['BUG-1']
+        self.assertTrue(any('repost' in e for e in self.result(ledger)['errors']))
+        ledger['rounds'][1]['new_findings'] = []
+        ledger['rounds'][1]['tracked_findings'] = []
+        self.assertTrue(any('carry all' in e for e in self.result(ledger)['errors']))
+        ledger['rounds'][1]['tracked_findings'] = ['BUG-1']
+        ledger['findings'].append(dict(finding, id='BUG-2'))
+        ledger['rounds'][1]['new_findings'] = ['BUG-2']
+        self.assertTrue(any('fingerprint' in e for e in self.result(ledger)['errors']))
+        ledger = self.ledger(); self.add_finding(ledger); ledger['findings'] = []
+        self.assertTrue(any('canonical ledger' in e for e in self.result(ledger)['errors']))
+
+    def test_fixes_need_reproduction_and_exact_head_followup_after_budget_exhaustion(self):
+        ledger = self.ledger(3); finding = self.add_finding(ledger, state='fixed')
+        self.assertEqual(self.result(ledger)['status'], 'blocked')
+        finding.update(reproduction_passed=True, followup_review=dict(status='verified',
+            head_sha=ledger['head_sha'], evidence='human verified change', reviewer='human_maintainer'))
+        self.assertEqual(self.result(ledger)['status'], 'ledger_valid')
+        finding['followup_review'].update(reviewer='sol_high', observed_model='gpt-6.1-sol', observed_effort='high')
+        self.assertEqual(self.result(ledger)['status'], 'blocked')
+        legacy = self.ledger(3); legacy['policyVersion'] = '3.1'
+        legacy_finding = self.add_finding(legacy, state='fixed')
+        legacy_finding.update(reproduction_passed=True, followup_review=dict(status='verified',
+            head_sha=legacy['head_sha'], evidence='historical Sol follow-up', reviewer='sol_high',
+            observed_model='gpt-6.1-sol', observed_effort='high'))
+        self.assertEqual(self.result(legacy)['status'], 'ledger_valid')
+        finding['followup_review'].update(reviewer='human_maintainer')
+        finding['followup_review'].update(reviewer='codex_auto_code_review', review_id='provider-review-1')
+        self.assertEqual(self.result(ledger)['status'], 'blocked')
+        finding['followup_review']['review_id'] = 'provider-review-3'
+        self.assertEqual(self.result(ledger)['status'], 'ledger_valid')
+        finding['followup_review']['head_sha'] = '2'*40
+        self.assertEqual(self.result(ledger)['status'], 'blocked')
+
+    def test_dismissal_requires_current_evidence_and_no_unknown_or_malformed_states(self):
+        ledger = self.ledger(); finding = self.add_finding(ledger, state='dismissed')
+        self.assertEqual(self.result(ledger)['status'], 'blocked')
+        finding.update(rationale='consumer regression proves compatibility', validated_sha=ledger['head_sha'])
+        self.assertEqual(self.result(ledger)['status'], 'ledger_valid')
+        for value in ([], {'schemaVersion':2}, {'rounds':{},'findings':[]},
+                      dict(ledger, rounds=[None]), dict(ledger,findings=[None])):
+            self.assertEqual(amr.bir_result(value,'2'*40)['status'], 'blocked')
+
+    def test_completed_escalation_resolves_new_head_without_fourth_provider_round(self):
+        ledger=self.ledger(3);finding=self.add_finding(ledger,state='fixed')
+        ledger['head_sha']='5'*40
+        review=dict(status='verified',reviewer='human_maintainer',head_sha=ledger['head_sha'],
+                    evidence='maintainer verified current head',scope='full')
+        ledger['escalation']=dict(target='human_maintainer',reason='round-three blocker fixed',
+                                  evidence='maintainer handoff',review=review)
+        finding.update(reproduction_passed=True,followup_review=copy.deepcopy(review))
+        result=self.result(ledger)
+        self.assertEqual(result['status'],'ledger_valid',result)
+        self.assertFalse(result['provider_review_on_current_head'])
+        self.assertEqual(result['resolution_channel'],'human_maintainer')
+        self.assertEqual(result['rounds_used'],3)
+        for override in ({'status':'unknown'},{'head_sha':'4'*40},{'reviewer':'sol_high'},
+                         {'scope':'incremental','base_sha':'2'*40},{'scope':'incremental','base_sha':'4'*40,'context':''}):
+            bad=copy.deepcopy(ledger);bad['escalation']['review'].update(override)
+            self.assertEqual(self.result(bad)['status'],'blocked',override)
+
+    def test_real_git_commits_are_required_and_rebased_history_is_rejected(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root=Path(directory)
+            def git(*args):
+                return subprocess.run(['git',*args],cwd=root,check=True,capture_output=True,text=True).stdout.strip()
+            git('init','-q');git('config','user.name','BIR fixture');git('config','user.email','bir@example.invalid')
+            (root/'source.txt').write_text('base\n');git('add','source.txt');git('commit','-qm','base')
+            base=git('rev-parse','HEAD')
+            (root/'source.txt').write_text('changed\n');git('add','source.txt');git('commit','-qm','head')
+            head=git('rev-parse','HEAD')
+            ledger=self.ledger();ledger.update(base_sha=base,head_sha=head)
+            ledger['rounds'][0].update(base_sha=base,head_sha=head)
+            self.assertEqual(amr.bir_result(ledger,head,root)['status'],'ledger_valid')
+            git('commit','--allow-empty','-qm','empty PR revision'); empty_head=git('rev-parse','HEAD')
+            unchanged=self.ledger(2);unchanged.update(base_sha=base,head_sha=empty_head)
+            unchanged['rounds'][0].update(base_sha=base,head_sha=head)
+            unchanged['rounds'][1].update(base_sha=head,head_sha=empty_head)
+            self.assertTrue(any('no source-tree changes' in error
+                                for error in amr.bir_result(unchanged,empty_head,root)['errors']))
+            ledger['base_sha']='e'*40;ledger['rounds'][0]['base_sha']='e'*40
+            self.assertEqual(amr.bir_result(ledger,head,root)['status'],'blocked')
+            git('checkout','--orphan','unrelated');git('commit','--allow-empty','-qm','other')
+            unrelated=git('rev-parse','HEAD');ledger['base_sha']=unrelated
+            ledger['rounds'][0]['base_sha']=unrelated
+            self.assertTrue(any('ancestral' in e for e in amr.bir_result(ledger,head,root)['errors']))
+
+
 class NativeContract(unittest.TestCase):
     def test_native_app_server_explicitly_disables_subagents(self):
         with patch('amr_native.subprocess.Popen') as popen, \
@@ -378,6 +611,56 @@ class NativeContract(unittest.TestCase):
                 self.assertEqual(result['status'],'not_verified')
 
 
+class DocumentationInputs(unittest.TestCase):
+    def setUp(self):
+        self.temp=tempfile.TemporaryDirectory()
+        self.addCleanup(self.temp.cleanup)
+        self.root=Path(self.temp.name)
+        for path in ('AGENTS.md','GOAL.md','WORKFLOW.md','docs/README.md',
+                     'docs/governance/source-of-truth.md','docs/contracts/permissions.md'):
+            self.document(path,path)
+
+    def document(self,path,identifier,body=''):
+        target=self.root/path;target.parent.mkdir(parents=True,exist_ok=True)
+        target.write_text(f'---\nid: {identifier}\nstatus: proposed\nowner: fixture\n'
+                          f'last_reviewed: 2026-10-18\n---\n{body}\n')
+
+    def check(self):
+        output=io.StringIO()
+        with patch.object(doccheck,'ROOT',self.root),patch.object(sys,'argv',
+                ['doccheck','--strict-sources']),contextlib.redirect_stdout(output):
+            code=doccheck.main()
+        return code,output.getvalue()
+
+    def test_import_pack_and_private_backups_do_not_pollute_canonical_docs(self):
+        self.document('docs/imported.md','IMPORTED')
+        for folder in ('.temp/pack','.amr-local/preview','.git/fixtures','docs/.temp/pack'):
+            self.document(f'{folder}/copy.md','IMPORTED','[draft link](missing.md)')
+        code,output=self.check()
+        self.assertEqual(code,0,output)
+
+    def test_untracked_docs_are_checked_even_if_gitignore_hides_them(self):
+        (self.root/'.gitignore').write_text('docs/\n')
+        self.document('docs/untracked.md','UNTRACKED','[broken](missing.md)')
+        code,output=self.check()
+        self.assertEqual(code,1)
+        self.assertIn('docs/untracked.md: broken local link',output)
+
+    def test_duplicates_in_maintained_and_other_hidden_docs_still_fail(self):
+        self.document('docs/first.md','DUPLICATE')
+        self.document('.notes/second.md','DUPLICATE')
+        code,output=self.check()
+        self.assertEqual(code,1)
+        self.assertIn('duplicate id DUPLICATE',output)
+
+    def test_linked_directory_outside_checkout_is_not_scanned(self):
+        with tempfile.TemporaryDirectory() as external:
+            (Path(external)/'outside.md').write_text('No repository metadata\n')
+            (self.root/'linked').symlink_to(external,target_is_directory=True)
+            code,output=self.check()
+        self.assertEqual(code,0,output)
+
+
 class Mapping(unittest.TestCase):
     def test_feature_must_be_updated_for_tooling_and_tests(self):
         root=amr.ROOT
@@ -394,11 +677,36 @@ class Mapping(unittest.TestCase):
         self.assertTrue(any('UNMAPPED' in e for e in errors))
 
     def test_product_tests_and_bootstrap_files_need_feature_ownership(self):
-        spec='docs/features/artifact-management/features/immutable-artifact.md'
         paths={'global.json','Kordra.slnx','tests/ArtifactManagement.Domain.Tests/OCIImageDigestTests.cs',
                '.github/workflows/product-ci.yml'}
-        _,errors=changeguard.check_changes(amr.ROOT,paths|{spec})
+        # Shared bootstrap files require every owner, including ADR-0010's Inventory owner.
+        specs=list((amr.ROOT/'docs/features').glob('*/features/*.md'))
+        specs+=list((amr.ROOT/'docs/engineering/ai-orchestration/features').glob('*.md'))
+        owners={}
+        for spec in sorted(specs):
+            meta=changeguard.frontmatter(spec.read_text('utf-8'))
+            mappings=json.loads(meta.get('source_paths','[]'))+json.loads(meta.get('test_paths','[]'))
+            owned={path for path in paths if any(changeguard.matches(mapping,path) for mapping in mappings)}
+            if owned:
+                owners[spec.relative_to(amr.ROOT).as_posix()]=(meta['feature_id'],owned)
+        expected_owners={
+            'docs/features/artifact-management/features/immutable-artifact.md':'FEAT-ART-001',
+            'docs/features/infrastructure-inventory/features/register-target.md':'FEAT-INV-001',
+        }
+        for spec,feature_id in expected_owners.items():
+            with self.subTest(expected_owner=feature_id):
+                self.assertIn(spec,owners)
+                self.assertEqual(owners[spec][0],feature_id)
+                self.assertTrue({'Kordra.slnx','.github/workflows/product-ci.yml'} <= owners[spec][1])
+        _,errors=changeguard.check_changes(amr.ROOT,paths|set(owners))
         self.assertEqual(errors,[])
+        for spec,(feature_id,owned) in sorted(owners.items()):
+            with self.subTest(omitted_owner=feature_id):
+                _,errors=changeguard.check_changes(amr.ROOT,paths|(set(owners)-{spec}))
+                self.assertCountEqual(errors,[
+                    f'STALE {path} belongs to {feature_id} ({spec}) but feature doc not updated in PR'
+                    for path in sorted(owned)
+                ])
         _,errors=changeguard.check_changes(amr.ROOT,{'tests/UnownedTests.cs'})
         self.assertTrue(any('UNMAPPED' in e for e in errors))
 

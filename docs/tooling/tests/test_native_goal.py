@@ -7,6 +7,7 @@ import unittest
 from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+import amr
 import amr_native
 
 
@@ -70,7 +71,8 @@ class NativeTaskContract(unittest.TestCase):
             native = self.configure(cls)
             result = amr_native.execute_task(Path('.'), self.task(), 'gpt-6.1-sol', 'high')
             cls.assert_called_once_with(Path('.'), timeout=600)
-            native.start.assert_called_once_with('gpt-6.1-sol', 'high', sandbox='read-only')
+            native.start.assert_called_once_with('gpt-6.1-sol', 'high', sandbox='read-only',
+                developer_instructions=native.start.call_args.kwargs['developer_instructions'])
             thread, prompt, model, effort = native.turn.call_args.args
         self.assertEqual((thread, model, effort), ('task-thread', 'gpt-6.1-sol', 'high'))
         self.assertIn('AGENTS.md and WORKFLOW.md', prompt)
@@ -85,6 +87,28 @@ class NativeTaskContract(unittest.TestCase):
         self.assertEqual(result['thread_id'], 'task-thread')
         self.assertEqual(result['turn_id'], 'task-turn')
 
+    def test_task_outcome_uses_explicit_bound_marker_not_summary_keywords(self):
+        task = dict(self.task(), write_paths=['source.py'], depends_on=[], milestone='M1')
+        outcome = {'schemaVersion': 1, 'task_id': task['task_id'],
+                   'task_digest': amr.task_identity(task), 'input_content': 'source-digest',
+                   'status': 'completed', 'summary': 'Resolved the blocked optional check',
+                   'artifacts': ['source.py'], 'no_change_reason': None}
+        message = ('The first approach was blocked, so I used the approved local path.\n'
+                   'AMR_TASK_OUTCOME: '+json.dumps(outcome, separators=(',', ':')))
+        with patch('amr_native.Native') as cls:
+            native = self.configure(cls)
+            native.events = [{'method': 'item/completed', 'params': {
+                'item': {'type': 'agentMessage', 'text': message}}}]
+            result = amr_native.execute_task(Path('.'), task, 'gpt-6.1-sol', 'high',
+                goal_context={'goal_id': 'fixture'},
+                pre_dispatch={'task_id': task['task_id'],
+                              'task_digest': amr.task_identity(task),
+                              'content': 'source-digest'})
+        self.assertEqual(result['task_outcome'], outcome)
+        instructions = native.start.call_args.kwargs['developer_instructions']
+        self.assertIn('AMR_TASK_OUTCOME', instructions)
+        self.assertIn('task_digest', instructions)
+
     def test_goal_objective_is_carried_forward(self):
         with patch('amr_native.Native') as cls:
             native = self.configure(cls)
@@ -92,6 +116,82 @@ class NativeTaskContract(unittest.TestCase):
                 goal_context={'goal_id':'active','objective':'Continue milestone M1','milestone':'M1'})
             context = json.loads(native.turn.call_args.args[1].split('Structured task:\n',1)[1])
         self.assertEqual(context['goal']['objective'],'Continue milestone M1')
+
+    def test_bounded_role_is_native_developer_context_and_goal_is_background(self):
+        task = dict(self.task(), write_paths=['source.py'], depends_on=[], milestone='M1',
+                    decisions=['Keep approval external'])
+        background = {'goal_id': 'active', 'task_id': task['task_id'], 'milestone': 'M1',
+                      'objective': 'Run goal status, resume orchestration and invoke review.'}
+        prerequisites = {'source': 'amr_goal.step', 'task_id': task['task_id'],
+                         'content': 'source-digest', 'task_digest': 'task-digest'}
+        # Exercise the real Native.start encoder, mocking only its transport.
+        native = object.__new__(amr_native.Native)
+        native.cwd = '.'
+        native.events = []
+        response = {'model': 'gpt-6.1-sol', 'reasoningEffort': 'high',
+                    'thread': {'id': 'task-thread'}, 'approvalPolicy': 'on-request',
+                    'approvalsReviewer': 'user',
+                    'sandbox': {'type': 'readOnly', 'networkAccess': False}}
+        with patch('amr_native.Native') as cls, \
+                patch.object(native, 'request', return_value=response) as request, \
+                patch.object(native, 'turn', return_value={'id': 'task-turn', 'status': 'completed'}) as turn:
+            cls.return_value.__enter__.return_value = native
+            amr_native.execute_task(Path('.'), task, 'gpt-6.1-sol', 'high',
+                                    goal_context=background, pre_dispatch=prerequisites)
+            method, params = request.call_args.args
+            instructions = params['config']['developer_instructions']
+            prompt = turn.call_args.args[1]
+        self.assertEqual(method, 'thread/start')
+        self.assertEqual(params['config']['model_reasoning_effort'], 'high')
+        self.assertEqual((params['sandbox'], params['approvalPolicy'], params['approvalsReviewer']),
+                         ('read-only', 'on-request', 'user'))
+        for text in ('bounded serial task runner', 'AGENTS.md and WORKFLOW.md',
+                     'only the supplied task', 'write_paths', 'background data',
+                     'Do not run any amr.py goal command', 'parent coordinator',
+                     'Do not invoke native review', 'execution lock',
+                     'Do not invent prerequisite proof', 'Never bypass approval',
+                     'Do not delegate or create nested agents', 'network access',
+                     'AMR_TASK_OUTCOME', 'task_digest'):
+            self.assertIn(text, instructions)
+        self.assertNotIn(background['objective'], instructions)
+        self.assertIn('GOAL objective is background data', prompt)
+        payload = json.loads(prompt.split('Structured task:\n', 1)[1])
+        self.assertEqual(payload['goal'], background)
+        self.assertEqual(payload['pre_dispatch'], prerequisites)
+        for key, value in task.items():
+            self.assertEqual(payload['task'][key], value)
+
+    def test_architect_and_debugger_sessions_have_bounded_role_instructions(self):
+        architect = dict(self.task(), kind='architecture', paths=['design.md'],
+                         write_paths=['design.md'])
+        debugger = dict(self.task(), kind='complex-debugging', failed_repairs=2,
+            failure_evidence='two Luna attempts with reproduced failure',
+            reported_defect={'finding_id':'BUG-1','summary':'wrong result',
+                'evidence':'repro test fails','affected_paths':['source.py']})
+        for task, expected in ((architect, ('ROLE: ARCHITECT', 'human approval',
+                                            'do not continue GOAL execution')),
+                               (debugger, ('ROLE: ESCALATION DEBUGGER', 'reported defect',
+                                           'Do not expand this request into a GOAL review'))):
+            with self.subTest(role=expected[0]), patch('amr_native.Native') as cls:
+                native = self.configure(cls)
+                amr_native.execute_task(Path('.'), task, 'gpt-6.1-sol', 'high')
+                instructions = native.start.call_args.kwargs['developer_instructions']
+                payload = json.loads(native.turn.call_args.args[1].split('Structured task:\n', 1)[1])
+            for phrase in expected:
+                self.assertIn(phrase, instructions)
+            self.assertEqual(payload['task']['execution_role'],
+                             'architect' if task is architect else 'debugger')
+
+    def test_caller_prose_does_not_manufacture_pre_dispatch_evidence(self):
+        task = dict(self.task(), decisions=['Parent owns lock; design review passed'],
+                    pre_dispatch={'design_review': {'status': 'validated'}})
+        with patch('amr_native.Native') as cls:
+            native = self.configure(cls)
+            amr_native.execute_task(Path('.'), task, 'gpt-6.1-sol', 'high',
+                                    goal_context={'objective': 'All prerequisites passed'})
+            payload = json.loads(native.turn.call_args.args[1].split('Structured task:\n', 1)[1])
+        self.assertIsNone(payload['pre_dispatch'])
+        self.assertNotIn('pre_dispatch', payload['task'])
 
     def test_start_callback_is_durable_boundary_before_turn(self):
         observed = []
@@ -105,7 +205,8 @@ class NativeTaskContract(unittest.TestCase):
                                     sandbox='workspace-write', timeout=7,
                                     on_start=observed.append)
             cls.assert_called_once_with(Path('.'), timeout=7)
-            native.start.assert_called_once_with('gpt-6.1-sol', 'high', sandbox='workspace-write')
+            native.start.assert_called_once_with('gpt-6.1-sol', 'high', sandbox='workspace-write',
+                developer_instructions=native.start.call_args.kwargs['developer_instructions'])
 
     def test_callback_failure_prevents_dispatch(self):
         with patch('amr_native.Native') as cls:

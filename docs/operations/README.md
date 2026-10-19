@@ -16,3 +16,4 @@ Runbook phải có: **trigger**, blast radius, preflight, safe actions, verifica
 - [Incident response](incident-runbook.md)
 - [Backup / restore](backup-restore-runbook.md)
 - [Credential rotation](credential-rotation-runbook.md)
+- [Local PostgreSQL setup and role access](local-postgresql-setup.md)

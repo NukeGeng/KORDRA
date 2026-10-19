@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
-"""Kordra AMR v3: single-agent routing and evidence alongside existing governance checks."""
+"""Kordra AMR v4: Architect / Developer / Reviewer single-agent engineering."""
 import argparse
 import datetime
 import hashlib
 import json
 import os
+import re
 from pathlib import Path
 import subprocess
 import sys
@@ -15,16 +16,24 @@ from changeguard import frontmatter, matches
 
 ROOT = Path(__file__).resolve().parents[2]
 EXCLUDED_PARTS = {'.git', '.amr-local', '__pycache__', 'bin', 'obj', 'TestResults'}
-PROFILES = {'ROUTINE': ('gpt-6-luna', 'high'),
-            'ENGINEERING': ('gpt-6.1-sol', 'medium'),
-            'CRITICAL': ('gpt-6.1-sol', 'high')}
+POLICY_VERSION = '4'
+PROFILES = {'ROUTINE': ('gpt-6-luna', 'max'),
+            'ENGINEERING': ('gpt-6-luna', 'max'),
+            'CRITICAL': ('gpt-6.1-sol', 'high'),
+            'DEBUGGER_MEDIUM': ('gpt-6.1-sol', 'medium')}
+# Only historical execution receipts may use these v3 selections.
+LEGACY_PROFILES = {'ROUTINE': ('gpt-6-luna', 'high'),
+                   'ENGINEERING': ('gpt-6.1-sol', 'medium'),
+                   'CRITICAL': ('gpt-6.1-sol', 'high')}
 RISKS = {'auth', 'tenancy', 'platform', 'secrets', 'state-integrity', 'concurrency',
-         'idempotency', 'rollback', 'production', 'remote-execution', 'migration'}
+         'idempotency', 'rollback', 'production', 'remote-execution', 'migration',
+         'architecture', 'critical-design', 'complex-debugging', 'reliability', 'milestone-review'}
 SIGNALS = RISKS | {'integration', 'messaging', 'contracts', 'source-uncertainty', 'stale-docs'}
 REQUIRED_TASK = ('task_id', 'objective', 'feature_id', 'module_id', 'actor',
                  'scope', 'permission', 'paths', 'consulted', 'invariants',
                  'decisions', 'tests', 'findings', 'next_action')
-KINDS = {'lookup', 'docs', 'format', 'crud', 'dto', 'tests', 'source', 'feature', 'integration', 'review'}
+KINDS = {'lookup', 'docs', 'format', 'crud', 'dto', 'tests', 'source', 'feature',
+         'integration', 'review', 'bugfix', 'architecture', 'complex-debugging'}
 
 
 def safe_path(root, relative):
@@ -38,7 +47,7 @@ def safe_path(root, relative):
     return path
 
 
-def validate_task(task, root, *, require_inputs=True):
+def validate_task(task, root, *, require_inputs=True, legacy_policy=False):
     for key in REQUIRED_TASK:
         if key not in task:
             raise ValueError(f'missing task field: {key}')
@@ -86,12 +95,42 @@ def validate_task(task, root, *, require_inputs=True):
     signals = task.get('signals', [])
     if not isinstance(signals, list) or any(s not in SIGNALS for s in signals):
         raise ValueError('unknown risk signal')
-    attempts = task.get('failed_repairs', 0)
-    if type(attempts) is not int or attempts < 0:
-        raise ValueError('failed_repairs must be a nonnegative integer')
-    if attempts and not task.get('failure_evidence'):
-        raise ValueError('failed repairs require command/output/root-cause evidence')
+    if not legacy_policy:
+        attempts = task.get('failed_repairs', 0)
+        if type(attempts) is not int or attempts < 0:
+            raise ValueError('failed_repairs must be a nonnegative integer')
+        if attempts and not task.get('failure_evidence'):
+            raise ValueError('failed repairs require command/output/root-cause evidence')
+        role = execution_role(task)
+        if task.get('execution_role') and task['execution_role'] != role:
+            raise ValueError('execution_role cannot downgrade an Architect or required debugger route')
+        if role not in {'architect', 'developer', 'debugger'}:
+            raise ValueError('execution_role must be architect, developer or debugger')
+        if role == 'architect' and any(Path(p).suffix.lower() != '.md' for p in task['paths']):
+            raise ValueError('Architect tasks are bounded design documents; source implementation belongs to Developer')
+    if not legacy_policy and role == 'debugger':
+        defect = task.get('reported_defect')
+        if attempts < 2 or not isinstance(defect, dict):
+            raise ValueError('Debugger escalation requires two failed Luna repairs and a reported defect')
+        if not all(isinstance(defect.get(k), str) and defect[k].strip()
+                   for k in ('finding_id', 'summary', 'evidence')):
+            raise ValueError('Debugger scope requires finding ID, summary and reproducible evidence')
+        affected = defect.get('affected_paths')
+        if (not isinstance(affected, list) or not affected
+                or any(p not in task['paths'] for p in affected)):
+            raise ValueError('Debugger paths must be restricted to the reported defect')
+        if 'write_paths' in task and any(p not in affected for p in task['write_paths']):
+            raise ValueError('Debugger writes must stay within the reported defect paths')
     return task
+
+
+def execution_role(task):
+    explicit = task.get('execution_role')
+    if task.get('kind') == 'architecture' or set(task.get('signals', [])) & {'architecture', 'critical-design'}:
+        return 'architect'
+    if task.get('kind') == 'complex-debugging' or task.get('failed_repairs', 0) >= 2:
+        return 'debugger'
+    return explicit or 'developer'
 
 
 def classify(task):
@@ -112,20 +151,42 @@ def classify(task):
     if attempts >= 4:
         return {'risk': 'CRITICAL', 'profile': 'CRITICAL', 'action': 'blocked',
                 'rationale': ['repair limit reached for this root cause; human investigation required']}
-    if signals & RISKS or attempts >= 2:
-        return {'risk': 'CRITICAL', 'profile': 'CRITICAL', 'action': 'continue',
-                'rationale': sorted(signals & RISKS) +
-                    (['two evidenced failed repairs: escalate'] if attempts >= 2 else [])}
+    role = execution_role(task)
+    risk = 'CRITICAL' if signals & RISKS or attempts >= 2 else 'STANDARD'
+    if role == 'architect':
+        return {'risk': 'CRITICAL', 'profile': 'CRITICAL', 'action': 'continue', 'role': role,
+                'rationale': ['bounded architecture/design work; return after design for human approval']}
+    if role == 'debugger':
+        if attempts < 2:
+            return {'risk': risk, 'profile': 'CRITICAL', 'action': 'blocked', 'role': role,
+                    'rationale': ['debugger escalation waits for two evidenced Luna repair attempts']}
+        high_risk = signals & {'auth', 'tenancy', 'platform', 'secrets', 'state-integrity',
+                               'concurrency', 'rollback', 'production', 'remote-execution',
+                               'migration', 'reliability'}
+        profile = 'CRITICAL' if high_risk else 'DEBUGGER_MEDIUM'
+        return {'risk': 'CRITICAL' if high_risk else 'STANDARD', 'profile': profile,
+                'action': 'continue', 'role': role,
+                'rationale': ['bounded reported-defect escalation after two Luna repairs'] + sorted(high_risk)}
     if task.get('kind') == 'lookup' and not signals:
         return {'risk': 'ROUTINE', 'profile': None, 'action': 'deterministic',
-                'rationale': ['use rg/file enumeration; no model needed']}
+                'role': role, 'rationale': ['use rg/file enumeration; no model needed']}
     routine = task.get('kind') in {'docs', 'format', 'crud', 'dto', 'tests'}
     if routine and not signals and all(task.get(k) is True for k in (
             'bounded', 'spec_verified', 'tests_known')) and not task['findings']:
-        return {'risk': 'ROUTINE', 'profile': 'ROUTINE', 'action': 'continue',
+        return {'risk': risk, 'profile': 'ROUTINE', 'action': 'continue', 'role': role,
                 'rationale': ['bounded task with verified spec, ownership and known tests']}
-    return {'risk': 'STANDARD', 'profile': 'ENGINEERING', 'action': 'continue',
+    return {'risk': risk, 'profile': 'ENGINEERING', 'action': 'continue', 'role': role,
             'rationale': sorted(signals) or ['substantive source work or unverified scope']}
+
+
+def design_review_required(task):
+    return task.get('kind') == 'architecture' or bool(
+        set(task.get('signals', [])) & {'architecture', 'critical-design'})
+
+
+def task_identity(task):
+    """Bind design advice to the full validated task, including its boundaries."""
+    return hashlib.sha256(json.dumps(task, sort_keys=True).encode()).hexdigest()
 
 
 def resolve(route, capabilities):
@@ -289,7 +350,17 @@ def completion_errors(receipt, digest, critical=False, product_required=False):
     if critical and (review.get('status') != 'verified' or review.get('independent') is not True
                      or review.get('content') != digest or not review.get('evidence')):
         errors.append('current independent review evidence required')
-    for finding in receipt.get('findings', []):
+    errors.extend(finding_errors(receipt.get('findings', []), digest))
+    if receipt.get('requires_human_approval') and not receipt.get('human_approval_evidence'):
+        errors.append('explicit human approval evidence required; native review is insufficient')
+    return errors
+
+
+def finding_errors(findings, digest):
+    errors = []
+    if not isinstance(findings, list) or any(not isinstance(f, dict) for f in findings):
+        return ['findings must be an explicit array of objects']
+    for finding in findings:
         state = finding.get('state')
         if not finding.get('id') or not finding.get('evidence'):
             errors.append('finding ID and validation evidence required')
@@ -304,9 +375,182 @@ def completion_errors(receipt, digest, critical=False, product_required=False):
                 errors.append('dismissal requires evidence-based rationale')
         elif state != 'open' or finding.get('blocking', True):
             errors.append('unresolved blocking or unknown finding')
-    if receipt.get('requires_human_approval') and not receipt.get('human_approval_evidence'):
-        errors.append('explicit human approval evidence required; native review is insufficient')
     return errors
+
+
+def bir_result(ledger, head, root=None):
+    """Validate a manually maintained PR ledger, without triggering any review.
+
+    Evidence references are contributor assertions, not provider attestation.
+    In particular this cannot enforce a limit in the native review service.
+    """
+    errors = []
+    sha = lambda value: isinstance(value, str) and bool(re.fullmatch(r'[0-9a-f]{40}', value))
+    nonempty = lambda value: isinstance(value, str) and bool(value.strip())
+    if not isinstance(ledger, dict):
+        return {'status': 'blocked', 'errors': ['expected BIR ledger object']}
+    if (type(ledger.get('schemaVersion')) is not int or ledger['schemaVersion'] != 1
+            or ledger.get('policyVersion') not in {'3.1', POLICY_VERSION}):
+        errors.append('unsupported BIR schema or policy version')
+    legacy_policy = ledger.get('policyVersion') == '3.1'
+    pr = ledger.get('pr', {})
+    if (not isinstance(pr, dict) or not nonempty(pr.get('repository'))
+            or type(pr.get('number')) is not int or pr['number'] < 1):
+        errors.append('explicit repository and PR number required')
+    base = ledger.get('base_sha')
+    if not sha(head) or ledger.get('head_sha') != head or not sha(base):
+        errors.append('exact current head and immutable base SHAs required')
+    rounds = ledger.get('rounds', [])
+    findings = ledger.get('findings', [])
+    if not isinstance(rounds, list) or not isinstance(findings, list):
+        return {'status': 'blocked', 'errors': errors + ['rounds/findings must be arrays']}
+    count = len(rounds)  # A request consumes a round even if failed or unknown.
+    if not 1 <= count <= 3:
+        errors.append('BIR requires 1–3 rounds; no fourth automated request permitted')
+    seen, fingerprints, by_id = set(), set(), {}
+    for finding in findings:
+        if not isinstance(finding, dict) or any(not nonempty(finding.get(key)) for key in (
+                'id', 'category', 'root_cause', 'bug_key', 'evidence')):
+            errors.append('finding requires stable ID/category/root cause/bug key/evidence')
+            continue
+        ident = finding['id']
+        key = tuple(' '.join(finding[k].lower().split()) for k in ('category', 'root_cause', 'bug_key'))
+        if ident in by_id or key in fingerprints:
+            errors.append('duplicate canonical finding or root-cause/bug fingerprint')
+        by_id[ident] = finding
+        fingerprints.add(key)
+        if type(finding.get('blocking')) is not bool:
+            errors.append('finding blocking flag must be boolean')
+        state = finding.get('state')
+        if state == 'fixed':
+            followup = finding.get('followup_review', {})
+            valid_followup = (isinstance(followup, dict) and followup.get('status') == 'verified'
+                and followup.get('head_sha') == head and nonempty(followup.get('evidence')))
+            if valid_followup:
+                reviewer = followup.get('reviewer')
+                if reviewer == 'codex_auto_code_review':
+                    valid_followup = any(isinstance(r, dict) and r.get('status') == 'verified'
+                        and r.get('head_sha') == head and r.get('review_id') == followup.get('review_id')
+                        and nonempty(r.get('review_id')) for r in rounds)
+                elif reviewer == 'sol_high' and legacy_policy:
+                    valid_followup = (followup.get('observed_model'), followup.get('observed_effort')) == PROFILES['CRITICAL']
+                elif reviewer != 'human_maintainer':
+                    valid_followup = False
+            if finding.get('reproduction_passed') is not True or not valid_followup:
+                errors.append('fixed finding requires reproduction and current-head follow-up review')
+        elif state == 'dismissed':
+            if not nonempty(finding.get('rationale')) or finding.get('validated_sha') != head:
+                errors.append('dismissal requires rationale and current-head evidence')
+        elif state != 'open' or finding.get('blocking', True):
+            errors.append('unresolved blocking or unknown finding')
+    previous, review_ids, reviewed_heads = None, set(), set()
+    commits = {base, head} if sha(base) and sha(head) else set()
+    ancestry = [(base, head)] if commits else []
+    for index, review in enumerate(rounds, 1):
+        if not isinstance(review, dict):
+            errors.append('invalid round object'); continue
+        if type(review.get('number')) is not int or review['number'] != index:
+            errors.append('review rounds must be contiguous and immutable')
+        start, end = review.get('base_sha'), review.get('head_sha')
+        if not sha(start) or not sha(end) or start == end:
+            errors.append('round requires distinct immutable diff SHAs')
+        else:
+            if end in reviewed_heads:
+                errors.append('PR revision was already reviewed; do not repeat an unchanged review')
+            reviewed_heads.add(end)
+            commits.update((start, end)); ancestry.extend(((start, end), (end, head)))
+        if index == 1:
+            if review.get('scope') != 'full' or start != base:
+                errors.append('round 1 must cover full PR diff from pinned base')
+        elif (previous is None or previous.get('status') != 'verified'
+              or review.get('scope') != 'incremental' or start != previous.get('head_sha')):
+            errors.append('follow-up requires last verified reviewed SHA as incremental base')
+        if (review.get('status') not in {'requested', 'verified', 'failed', 'unknown'}
+                or review.get('channel') != 'codex_auto_code_review'
+                or not nonempty(review.get('request_evidence')) or not nonempty(review.get('context'))):
+            errors.append('round requires request evidence, context and known status')
+        if review.get('status') == 'verified':
+            review_id = review.get('review_id')
+            if (not nonempty(review_id) or review_id in review_ids
+                    or not nonempty(review.get('completion_evidence'))):
+                errors.append('verified round requires unique provider identity and terminal evidence')
+            if nonempty(review_id):
+                review_ids.add(review_id)
+        if root is not None and sha(start) and sha(end):
+            trees = []
+            for commit in (start, end):
+                tree = subprocess.run(['git', 'rev-parse', commit+'^{tree}'], cwd=root,
+                    capture_output=True, text=True, timeout=15)
+                trees.append(tree.stdout.strip() if tree.returncode == 0 else None)
+            if trees[0] is not None and trees[0] == trees[1]:
+                errors.append('review range has no source-tree changes; do not duplicate an unchanged PR review')
+        new, tracked = review.get('new_findings'), review.get('tracked_findings')
+        if (not isinstance(new, list) or not isinstance(tracked, list)
+                or any(not nonempty(x) for x in new + tracked)):
+            errors.append('round requires explicit finding ID arrays')
+        else:
+            if len(set(new)) != len(new) or set(new) & seen:
+                errors.append('do not repost previously reported findings')
+            if set(tracked) != seen or len(tracked) != len(set(tracked)):
+                errors.append('carry all earlier canonical findings without dropping unresolved bugs')
+            seen.update(new)
+        previous = review
+    if seen != set(by_id):
+        errors.append('round findings must match canonical ledger; no untracked or dropped findings')
+    provider_current = (previous is not None and previous.get('status') == 'verified'
+                        and previous.get('head_sha') == head)
+    escalation = ledger.get('escalation', {})
+    escalation_review = escalation.get('review', {}) if isinstance(escalation, dict) else {}
+    escalation_targets = {'human_maintainer'} | ({'sol_high'} if legacy_policy else set())
+    escalated_current = (count == 3 and isinstance(escalation, dict) and isinstance(escalation_review, dict)
+        and escalation.get('target') in escalation_targets
+        and nonempty(escalation.get('reason')) and nonempty(escalation.get('evidence'))
+        and escalation_review.get('reviewer') == escalation.get('target')
+        and escalation_review.get('status') == 'verified'
+        and escalation_review.get('head_sha') == head and nonempty(escalation_review.get('evidence')))
+    if escalated_current:
+        if escalation_review.get('reviewer') == 'sol_high' and legacy_policy:
+            escalated_current = (escalation_review.get('observed_model'),
+                                 escalation_review.get('observed_effort')) == PROFILES['CRITICAL']
+        if escalation_review.get('scope') == 'incremental':
+            last_verified = next((r for r in reversed(rounds)
+                                  if isinstance(r, dict) and r.get('status') == 'verified'), None)
+            escalated_current = (escalated_current and last_verified is not None
+                and escalation_review.get('base_sha') == last_verified.get('head_sha')
+                and nonempty(escalation_review.get('context')))
+        elif escalation_review.get('scope') != 'full':
+            escalated_current = False
+    if not provider_current and not escalated_current:
+        errors.append('completed provider review on current PR head required')
+    if root is not None:
+        for commit in commits:
+            cp = subprocess.run(['git', 'rev-parse', '--verify', commit+'^{commit}'], cwd=root,
+                                capture_output=True, text=True, timeout=15)
+            if cp.returncode or cp.stdout.strip() != commit:
+                errors.append('review SHA is not a locally verified commit')
+        for older, newer in ancestry:
+            if sha(older) and sha(newer):
+                cp = subprocess.run(['git', 'merge-base', '--is-ancestor', older, newer],
+                                    cwd=root, capture_output=True, timeout=15)
+                if cp.returncode:
+                    errors.append('review history is not ancestral; reconcile base changes/force pushes manually')
+    exhausted = count >= 3
+    if exhausted and errors:
+        escalation = ledger.get('escalation', {})
+        if (not isinstance(escalation, dict)
+                or escalation.get('target') not in escalation_targets
+                or not nonempty(escalation.get('reason')) or not nonempty(escalation.get('evidence'))):
+            errors.append('exhausted review budget with remaining work requires escalation record')
+    return {'status': 'blocked' if errors else 'ledger_valid', 'errors': sorted(set(errors)),
+            'rounds_used': count, 'rounds_remaining': max(0, 3-count),
+            'next_action': ('escalate_to_human_maintainer' if exhausted and errors else
+                            'stop_automatic_review' if exhausted else
+                            'reconcile_or_request_next_bounded_round' if errors else 'no_review_required_for_this_head'),
+            'merge_approval': False, 'native_hard_cap': 'unverified',
+            'provider_review_on_current_head': provider_current,
+            'resolution_channel': (escalation_review['reviewer'] if escalated_current else
+                                   'codex_auto_code_review' if provider_current else None),
+            'enforcement': 'manual; validator does not trigger or stop provider reviews'}
 
 
 def launch_command(root, task, route):
@@ -338,9 +582,14 @@ def main():
             p.add_argument('--dry-run', action='store_true')
     sub.add_parser('validate-context')
     p = sub.add_parser('gates'); p.add_argument('--base')
+    p = sub.add_parser('validate-bir', help='validate manual BIR PR ledger; never dispatch reviews')
+    p.add_argument('--receipt', required=True, type=Path)
+    p.add_argument('--head', required=True)
     sub.add_parser('probe-models')
     sub.add_parser('probe-auto-review')
-    sub.add_parser('review')
+    p = sub.add_parser('review')
+    p.add_argument('--task', type=Path)
+    p.add_argument('--purpose', choices=('code', 'design'), default='code')
     p = sub.add_parser('validate-review')
     p.add_argument('--receipt', type=Path, required=True)
     p.add_argument('--critical', action='store_true')
@@ -348,7 +597,10 @@ def main():
     args = parser.parse_args()
     result = {}
     code = 0
-    if args.command == 'goal':
+    if args.command == 'validate-bir':
+        result = bir_result(json.loads(args.receipt.read_text()), args.head, ROOT)
+        code = 0 if result['status'] == 'ledger_valid' else 1
+    elif args.command == 'goal':
         result = amr_goal.main(ROOT, args)
     elif args.command == 'discover':
         result = discover(ROOT)
@@ -376,11 +628,14 @@ def main():
         code = 1 if result['local_status'] != 'passed' else 0
     elif args.command == 'probe-models':
         result = {}
+        probed = {}
         for profile, (model, effort) in PROFILES.items():
-            try:
-                result[profile] = probe_profile(model, effort)
-            except (NativeError, OSError) as exc:
-                result[profile] = {'status': 'failed', 'reason': str(exc)}
+            if (model, effort) not in probed:
+                try:
+                    probed[model, effort] = probe_profile(model, effort)
+                except (NativeError, OSError) as exc:
+                    probed[model, effort] = {'status': 'failed', 'reason': str(exc)}
+            result[profile] = probed[model, effort]
             save_private(ROOT, 'model-probes.json', result)
         code = 0 if all(x['status'] == 'verified' for x in result.values()) else 1
     elif args.command == 'probe-auto-review':
@@ -394,22 +649,34 @@ def main():
         save_private(ROOT, 'auto-review.json', result)
         code = 0 if result['status'] == 'verified' else 1
     elif args.command == 'review':
+        task = validate_task(json.loads(args.task.read_text()), ROOT) if args.task else None
+        if args.purpose == 'design' and task is None:
+            raise ValueError('design review requires explicit --task context')
         before = tree_identity(ROOT)['digest']
         instructions = (
-            'Independently review FEAT-AMR-001 in docs/tooling/amr.py, amr_native.py, '
+            'Independently review FEAT-AMR-001 in docs/tooling/amr.py, amr_goal.py, amr_native.py, '
             'doccheck.py, changeguard.py, tests, .codex/config.toml and related docs. '
             'Read AGENTS.md. Focus on runtime correctness, fail-closed model/effort '
             'selection, stale evidence, approval boundaries and false passing gates. '
             'Review the current repository content and Git diff when available. '
             'Use read-only tools. Return actionable defects with paths/lines; '
-            'do not claim provider PR review or modify files.')
+            'do not claim provider PR review or modify files. Do not access secrets.')
+        if task:
+            instructions = ('Independently review the '+args.purpose+' for this exact task. '
+                'Read AGENTS.md, WORKFLOW.md, owning feature, consulted docs and relevant source. '
+                'For design, assess boundaries, failure paths and acceptance before implementation. '
+                'Return actionable findings; never approve an ADR, merge or production operation. '
+                'Use read-only tools; do not access secrets or modify files. Task:\n'+json.dumps(task))
         try:
             result = local_review(ROOT, *PROFILES['CRITICAL'], instructions=instructions)
         except (NativeError, OSError) as exc:
             result = {'status': 'failed', 'reason': str(exc), 'outcome': 'unknown',
                       'channel': 'native_local_review'}
         after = tree_identity(ROOT)['digest']
-        result.update(content=before, independent=True, created_at=now())
+        result.update(content=before, independent=True, created_at=now(), purpose=args.purpose,
+                      task_id=task['task_id'] if task else None,
+                      task_digest=task_identity(task) if task else None,
+                      evidence='native:'+str(result.get('thread_id'))+':'+str(result.get('turn_id')))
         result['source_stable'] = before == after
         if before != after and result['status'] == 'verified':
             result['status'] = 'stale'

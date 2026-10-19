@@ -2,7 +2,7 @@
 id: CTR-PERMISSIONS
 status: proposed
 owner: unassigned
-last_reviewed: 2026-10-15
+last_reviewed: 2026-10-18
 ---
 
 # Permission catalog, role templates & scope matrix
@@ -58,3 +58,7 @@ last_reviewed: 2026-10-15
 
 ## Migration for new role
 Create data-backed role template, permission mapping, UI display and grant policy; backfill no implicit grants; review impact on cached claims, policy version and pending workflows; add deny/allow tests and audit. Production change must include owner signoff.
+
+## Candidate policy proof evidence — 2026-10-18
+
+[FEAT-IAM-001/I1](../features/identity-access/features/authorize-resource.md#i1--synthetic-policy-proof-authorized-test-only-candidate) validates the existing `target.read` project/environment scope candidate in synthetic fixtures. Exact subject/organization/owner-chain matching, exclusive expiry, revocation, missing authority, platform-only denial and explicit policy deny are covered by 66 locally passing cases. The proof models one grant per evaluation with no implicit scope conversion or grant inheritance. It adds no public API/message contract, permission key, schema version or consumer migration. Trusted provenance is assumed by the fixture. [ADR-0003](../decisions/0003-tenant-authorization.md) is now human-accepted only for its narrow policy baseline; this broader catalog remains proposed and actual identity/session, membership/resource-owner, policy freshness, audit and support-grant contracts remain prerequisites before runtime adoption.

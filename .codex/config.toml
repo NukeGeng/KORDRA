@@ -1,7 +1,8 @@
-# Single-agent defaults for new trusted project sessions. The active desktop
-# chat may override these; amr discover reports effective values separately.
-model = "gpt-6.1-sol"
-model_reasoning_effort = "medium"
+# AMR v4 Developer and GOAL coordinator default for new trusted project
+# sessions. Specialist routing is selected explicitly by docs/tooling/amr.py;
+# the active desktop chat may override this project default.
+model = "gpt-6-luna"
+model_reasoning_effort = "max"
 approval_policy = "on-request"
 approvals_reviewer = "user"
 sandbox_mode = "workspace-write"

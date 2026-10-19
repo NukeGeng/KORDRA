@@ -2,7 +2,7 @@
 id: FEAT-ART-001
 status: proposed
 owner: unassigned
-last_reviewed: 2026-10-16
+last_reviewed: 2026-10-18
 module_id: MOD-ART
 feature_id: FEAT-ART-001
 phase: MVP
@@ -58,9 +58,9 @@ I1 acceptance: Given a supported lowercase OCI digest, parsing preserves its ide
 - Add tracing/audit and update technical-debt / runbook if unresolved risk.
 
 ## Source & test traceability
-- I1 source/test paths above exist in this branch. The first increment is implemented and locally validated; the feature remains proposed/partial because its registration/integration flow and broader architecture acceptance are incomplete.
+- I1 source/test paths above were merged via PR #1. The first increment is implemented and locally validated; the feature remains proposed/partial because its registration/integration flow and broader architecture acceptance are incomplete.
 - Actual local validation: .NET SDK 10.0.400; locked restore succeeded; Release build produced zero warnings/errors; `dotnet test Kordra.slnx --configuration Release --no-build --no-restore --logger trx` passed **48/48**, zero skipped; `dotnet format Kordra.slnx --verify-no-changes --no-restore` passed.
 - Existing AMR gates passed strict documentation validation, 39 offline LAB registry cases, **47 Python tests**, locked product restore, product build and all 48 product tests with a stable source identity. These are local checks, not infrastructure/registry/tenant-isolation evidence.
 - Independent native review: `codex exec ... review --uncommitted` completed with exit 0 and a terminal `turn.completed` event, reporting no actionable defects. Full write-producing Python/.NET checks were blocked in the reviewer's read-only sandbox; the separate AMR gate run executed them. Raw receipts remain private under `.amr-local/artifact-native-review*`; no provider automatic review is inferred.
-- I1 implementation and regression tests are committed in [b20090b186c5c5a7b76622df5bb6b877675e32eb](https://github.com/NukeGeng/KORDRA/commit/b20090b186c5c5a7b76622df5bb6b877675e32eb). Current head and remote CI must be checked in the PR/Git history for branch `feat/artifact-identity-foundation`; no unobserved CI outcome is claimed by this note. No registry, tenant-policy, durable messaging or driver integration is delivered.
+- I1 implementation and regression tests originated in [b20090b186c5c5a7b76622df5bb6b877675e32eb](https://github.com/NukeGeng/KORDRA/commit/b20090b186c5c5a7b76622df5bb6b877675e32eb) and were merged through [PR #1](https://github.com/NukeGeng/KORDRA/pull/1) at `2aa156f4e6e3afe3cc648186ac6a3242781dc71b`. Rechecked on 2026-10-18: [docs CI](https://github.com/NukeGeng/KORDRA/actions/runs/39000192554) and [product CI](https://github.com/NukeGeng/KORDRA/actions/runs/39000192528) both succeeded on that exact merge SHA. This is a dated checkpoint, not a live CI claim. No registry, tenant-policy, durable messaging or driver integration is delivered.
 - Open decisions: ADR-0008 is explicitly accepted for the scoped bootstrap. `[NEEDS-DECISION]`: product module owner; ADR-0001–0007 and registration dependencies remain proposed.
