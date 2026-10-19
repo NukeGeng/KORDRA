@@ -363,14 +363,28 @@ public sealed class ArchitectureTests
             // PATH locates the installed SDK; Windows also needs its OS directory.
             foreach (var key in new[] { "PATH", "SystemRoot" })
                 if (Environment.GetEnvironmentVariable(key) is { } value) start.Environment[key] = value;
-            start.Environment["DOTNET_CLI_HOME"] = System.IO.Path.Combine(Path, "cli");
-            start.Environment["HOME"] = System.IO.Path.Combine(Path, "home");
+            var cliHome = System.IO.Path.Combine(Path, "cli");
+            var home = System.IO.Path.Combine(Path, "home");
+            Directory.CreateDirectory(cliHome);
+            Directory.CreateDirectory(home);
+            start.Environment["DOTNET_CLI_HOME"] = cliHome;
+            start.Environment["HOME"] = home;
             start.Environment["NUGET_PACKAGES"] = System.IO.Path.Combine(Path, "packages");
             var temporary = System.IO.Path.Combine(Path, "tmp");
             Directory.CreateDirectory(temporary);
             start.Environment["TMPDIR"] = temporary;
             start.Environment["TEMP"] = temporary;
             start.Environment["TMP"] = temporary;
+            if (OperatingSystem.IsLinux())
+            {
+                var runtimeDirectory = System.IO.Path.Combine(Path, "runtime");
+                Directory.CreateDirectory(runtimeDirectory);
+                var privateDirectory = UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute;
+                File.SetUnixFileMode(home, privateDirectory);
+                File.SetUnixFileMode(cliHome, privateDirectory);
+                File.SetUnixFileMode(runtimeDirectory, privateDirectory);
+                start.Environment["XDG_RUNTIME_DIR"] = runtimeDirectory;
+            }
             start.Environment["DOTNET_GENERATE_ASPNET_CERTIFICATE"] = "false";
             start.Environment["DOTNET_CLI_TELEMETRY_OPTOUT"] = "1";
             start.Environment["DOTNET_SKIP_FIRST_TIME_EXPERIENCE"] = "1";
