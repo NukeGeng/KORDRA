@@ -69,3 +69,7 @@ Only after that acceptance, 45 proposed folder READMEs and [the framework guide]
 ## AMR v4 and current full-gate result — 2026-10-19
 
 After the synthetic IAM policy proof and AMR v4 migration, `python3 docs/tooling/amr.py gates --base 2aa156f4e6e3afe3cc648186ac6a3242781dc71b` passed on the complete local worktree with `source_stable=true`. Strict docs checked 220 Markdown files, 202 tracked IDs and 21 module entries with zero errors/warnings; scopecheck passed all 39 cases; 146 AMR/tooling tests passed; locked .NET restore and Release build passed with zero warnings/errors; product tests passed 48 Artifact and 85 bootstrap cases; source ownership mapped 27 changed paths with zero problems. This is current local verification, not remote CI, PR review or merge evidence.
+
+## Clients repository boundary — 2026-10-20
+
+Product Markdown discovery now validates and prunes only the explicitly declared Clients submodule. It still checks untracked/ignored canonical Product docs and similarly named nested folders. FEAT-CLIENTS-001 provides malformed declaration, symlink, pin and real Git identity regressions; `.gitmodules` and gitlink updates are source-owned changes. Clients checks its own standalone documentation and Product reference in its own CI. This prevents frontend documentation from being misclassified as Product metadata and does not waive either repository's validation. See [setup evidence](clients-development.md#setup-evidence).

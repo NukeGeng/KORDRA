@@ -16,7 +16,7 @@ def matches(mapping, changed):
 
 def check_changes(root, changed):
     governed=('src/', 'tests/', 'docs/tooling/', '.codex/', '.github/workflows/')
-    src=sorted(s for s in changed if (s.startswith(governed) or s in {'global.json', 'Kordra.slnx'})
+    src=sorted(s for s in changed if (s.startswith(governed) or s in {'global.json', 'Kordra.slnx', '.gitmodules', 'clients'})
                and not s.endswith(('.md','.txt')))
     docs=[]
     specs=list((root/'docs/features').glob('*/features/*.md'))

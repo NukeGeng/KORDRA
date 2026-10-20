@@ -20,6 +20,8 @@ Root `Kordra.slnx` contains exactly six projects: ArtifactManagement Domain and 
 
 ## Reserved folders
 
+**Clients Git ownership update — 2026-10-19:** accepted [ADR-0012](../decisions/0012-clients-git-submodule.md) moves the four existing Clients reservations into the independent KORDRA-Clients repository, mounted at the same `clients/` path. Product now tracks one gitlink rather than those four README blobs. The original framework's 45 reserved locations remain logical paths: 41 Product-owned reservations and four Clients-owned reservations. None becomes an implemented UI. See [the operating guide](clients-development.md).
+
 Every location below contains only a proposed README. Parent directories are created as needed. Folder presence does not mean a feature, module registration, driver, UI, deployment or Enterprise product exists. Module names follow the [proposed mapping](project-conventions.md); module specs retain their current status and ownership.
 
 | Reserved path | Canonical owner / adoption prerequisite |

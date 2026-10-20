@@ -719,11 +719,18 @@ class Mapping(unittest.TestCase):
     def test_feature_must_be_updated_for_tooling_and_tests(self):
         root=amr.ROOT
         spec='docs/engineering/ai-orchestration/features/quality-first-amr.md'
+        clients_spec='docs/engineering/ai-orchestration/features/clients-repository.md'
+        shared={'docs/tooling/amr.py','.github/workflows/docs-ci.yml'}
         for path in ('docs/tooling/amr.py','docs/tooling/tests/test_amr.py',
                      '.codex/config.toml','.github/workflows/docs-ci.yml'):
             _,errors=changeguard.check_changes(root,{path})
-            self.assertTrue(any('STALE' in e for e in errors))
+            self.assertTrue(any('STALE' in e and spec in e for e in errors))
             _,errors=changeguard.check_changes(root,{path,spec})
+            if path in shared:
+                self.assertTrue(any('STALE' in e and clients_spec in e for e in errors))
+                _,errors=changeguard.check_changes(root,{path,clients_spec})
+                self.assertTrue(any('STALE' in e and spec in e for e in errors))
+                _,errors=changeguard.check_changes(root,{path,spec,clients_spec})
             self.assertEqual(errors,[])
 
     def test_unmapped_source_fails(self):
