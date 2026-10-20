@@ -13,6 +13,7 @@ import tomllib
 
 from amr_native import NativeError, discover, local_review, probe_auto_review, probe_profile
 from changeguard import frontmatter, matches
+from submodulecheck import configured_roots, pin_identity
 
 ROOT = Path(__file__).resolve().parents[2]
 EXCLUDED_PARTS = {'.git', '.amr-local', '__pycache__', 'bin', 'obj', 'TestResults'}
@@ -210,7 +211,8 @@ def tree_identity(root):
     Private receipts live in .amr-local and never invalidate their own snapshot.
     Do not follow symlinks or collect content outside the repository.
     """
-    files = {}
+    boundaries = configured_roots(root)
+    files = {rel: pin_identity(root) for rel in boundaries}
     for parent, dirs, names in os.walk(root, followlinks=False):
         for name in sorted(dirs):
             p = Path(parent)/name
@@ -219,6 +221,7 @@ def tree_identity(root):
                 files[p.relative_to(root).as_posix()] = hashlib.sha256(
                     os.readlink(p).encode()+b'\0mode='+str(p.lstat().st_mode).encode()).hexdigest()
         dirs[:] = sorted(d for d in dirs if d not in EXCLUDED_PARTS
+                         and (Path(parent)/d).relative_to(root).as_posix() not in boundaries
                          and not (Path(parent)/d).is_symlink())
         for name in sorted(names):
             p = Path(parent)/name
@@ -246,7 +249,7 @@ def git_identity(root):
     index_bytes = index.stdout if index.returncode == 0 else b''
     return {'head': read('rev-parse', 'HEAD'),
             'branch': read('branch', '--show-current'),
-            'status': read('status', '--porcelain'),
+            'status': read('status', '--porcelain', '--ignore-submodules=all'),
             'index': hashlib.sha256(index_bytes).hexdigest()}
 
 
@@ -295,6 +298,8 @@ def gates(root, base=None):
         ('docs', [sys.executable, 'docs/tooling/doccheck.py', '--strict-sources']),
         ('scope', [sys.executable, 'docs/tooling/scopecheck.py']),
         ('unit', [sys.executable, '-m', 'unittest', 'discover', '-s', 'docs/tooling/tests', '-v'])]
+    if (root/'.gitmodules').exists():
+        commands.append(('clients', [sys.executable, 'docs/tooling/submodulecheck.py']))
     has_product = (root/'Kordra.slnx').is_file()
     if has_product:
         commands.extend([

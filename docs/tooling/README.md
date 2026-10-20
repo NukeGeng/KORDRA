@@ -10,6 +10,15 @@ Tool chỉ dùng Python stdlib. Kiểm tra: YAML frontmatter lightweight; module
 Discovery bỏ qua ba thư mục workspace dành riêng `.git`, `.temp`, `.amr-local` ở mọi cấp và không đi theo directory symlink. Vì vậy bản nháp import/private backup không bị tính như tài liệu chính thức. Các file Markdown khác, kể cả chưa tracked, bị `.gitignore` bỏ qua hoặc nằm trong thư mục ẩn khác, vẫn được kiểm tra; Git ignore không thể dùng để che lỗi tài liệu chính thức.
 
 ### Detect changed source without matching docs
+
+The only accepted independent repository boundary is `clients/` declared by `.gitmodules` under [ADR-0012](../decisions/0012-clients-git-submodule.md). Product Markdown discovery prunes that root after validating the exact path/portable URL; arbitrary nested repositories or ignore rules cannot exempt Product documents. The Clients gitlink and `.gitmodules` have FEAT-CLIENTS-001 ownership mappings. Product context identity hashes the indexed pin and ignores the independent frontend worktree; staged pins, Product source, index and HEAD remain tracked. A pre-split snapshot must be refreshed explicitly before reuse; completed execution receipts are preserved.
+
+```sh
+python3 docs/tooling/submodulecheck.py                    # declaration + indexed pin; no frontend scan
+python3 docs/tooling/submodulecheck.py --require-checkout # isolated CI clone only; exact clean checkout
+```
+
+The `clients-pin` CI job checks a fresh remote submodule checkout; the default local Product gate does not require an active frontend worktree to be clean or reset it. Clients CI/tests are owned by its own repository. See [workflow and setup evidence](../engineering/clients-development.md).
 ```bash
 python3 docs/tooling/changeguard.py --base origin/main
 ```

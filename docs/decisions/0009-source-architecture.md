@@ -43,6 +43,7 @@ If accepted after the evidence below, adopt **Option C** for the following bound
 This proposal would establish the target layout, project/dependency boundaries, candidate persistence/message technologies and host responsibilities listed above. It does not accept product permission rules, tenant/platform scope, deployment state machines, customer-broker inventory ownership, OSS licensing or production operations. The current implementation remains the two-project bootstrap under the root solution until a separately reviewed migration moves it; any such move must update README, CI, AMR gate discovery, changeguard, feature mappings and tests in one increment.
 
 ## Relationship to existing ADRs
+- Accepted [ADR-0012](0012-clients-git-submodule.md) now governs only the independent Git ownership of `clients/` at the same root path. This is a scoped exception to the historical monorepo proposal, not acceptance of this source/solution/technology baseline.
 - Complements [ADR-0001](0001-modular-monolith.md); does **not** silently supersede it.
 - Must remain consistent with ADR-0002 durable delivery, ADR-0003 resource authorization, ADR-0004 reconciliation ownership, ADR-0006 driver capabilities, ADR-0007 testbed isolation.
 

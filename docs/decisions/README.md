@@ -24,3 +24,4 @@ ADR tracks **why** a design was chosen; status initially `proposed`, so not a fi
 
 | [0010](0010-local-readonly-bootstrap.md) | Accepted scoped Mac-local host/inventory bootstrap; synthetic tests only, denied ingress until identity/provider decisions |
 | [0011](0011-local-postgresql-roles.md) | Accepted local-only PostgreSQL database/role layout; does not adopt product persistence or messaging technology |
+| [0012](0012-clients-git-submodule.md) | Accepted narrow independent Clients repository/submodule at the original root path; no UI stack or broader ADR-0009 acceptance |

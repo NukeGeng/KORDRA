@@ -8,6 +8,7 @@ last_reviewed: 2026-10-19
 # Nguồn chân lý và chống tài liệu lạc hậu
 
 ## Ownership map
+- `clients/` is a gitlink into [KORDRA-Clients](https://github.com/NukeGeng/KORDRA-Clients) under accepted [ADR-0012](../decisions/0012-clients-git-submodule.md). Clients owns frontend implementation/docs/tests; Product retains canonical business/API contracts and the integration pin. The [operating guide](../engineering/clients-development.md) owns cross-repository procedure. The separate Website is not migrated. This narrow Git split does not accept the proposed source/solution baseline.
 - `GOAL.md`: product vision; `docs/product/scope.md` owns Beta scope; `docs/product/technology-landscape.md` catalogs A–F candidates (not accepted dependencies); `AGENTS.md`/`WORKFLOW.md` govern development.
 - `docs/product/operator-workstation.md` owns the proposed OP-01–OP-10 requirements; `operator-pilot-plan.md` owns the private OP-P0–OP-P4 sequencing overlay. They do not replace module/feature ownership, accepted contracts or operational approval. Product/licensing/architecture decisions remain proposed unless explicitly accepted by their authorized owner.
 - `docs/architecture/`: các invariant và liên kết giữa modules; không chứa chi tiết button/screen. Source/solution specs v1.2 đang `proposed` và chưa là baseline.
