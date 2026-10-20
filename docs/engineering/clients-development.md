@@ -2,7 +2,7 @@
 id: ENG-CLIENTS-DEVELOPMENT
 status: accepted
 owner: engineering-maintainers
-last_reviewed: 2026-10-19
+last_reviewed: 2026-10-20
 ---
 
 # Product and Clients independent development
@@ -66,3 +66,9 @@ Clients [main ruleset 25408245](https://github.com/NukeGeng/KORDRA-Clients/rules
 The native GitHub installation now visibly includes KORDRA-Clients, following owner authentication. The native per-repository Code Review page for `github-1425676424` shows automatic review enabled, trigger `When PR opens`, exhaustive review off, and author scope following the owner's enabled personal preferences. Only Clients settings were changed. This verifies configuration, not execution: no test-only Clients PR or manual review trigger was created. Native BIR hard-cap support remains unverified.
 
 On 2026-10-20, `python3 docs/tooling/amr.py gates --base 63a7951f48b4441e880defaf315c3755ff79842b` passed with stable source: strict docs 219 Markdown/0 errors/0 warnings in this workspace, scope 39/39, tooling 168 tests, pin metadata validation, locked restore, Release build 0 warnings/errors, Product tests 48 Artifact + 85 Inventory Bootstrap, and source ownership 9 changed paths/0 problems. The one earlier mapping failure was fixed by requiring both owner documents for shared paths. The recorded Product tests validate existing behavior, not a frontend application. Only evidence text is added after that local run; final PR CI validates its exact published revision. This feature branch still requires current CI/provider evidence and human merge; Product main is not claimed migrated until that merge. No additional local AI review, Website access, application dependency or runtime server is used.
+
+### Remote clone verification — 2026-10-20
+
+Fresh public HTTPS clones passed with system/global Git configuration and interactive credentials disabled: recursive Product clone at setup commit `1b3ec84` initialized Clients at `387c56edc75df8332775e267e8cac50462b781dd`, passed exact/clean pin validation and strict Product docs (218 tracked Markdown files, zero errors/warnings); standalone Clients clone passed six tests and scaffold validation without a Product checkout; a separate uninitialized Product clone passed strict docs and indexed-pin validation. The standalone history's extracted commit contains exactly the four expected former Clients READMEs. Private command receipts are retained locally.
+
+The additional local Markdown file in the main workspace is an ignored local-only account document; it is absent from both public clones. No credentials or account contents are included in evidence. These results validate repository setup and isolation, not UI/browser functionality. Product source/tests were unchanged after the full local gate; this evidence-only update receives doccheck and exact-head PR CI.
