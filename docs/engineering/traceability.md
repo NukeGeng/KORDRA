@@ -96,7 +96,7 @@ Maintainer-approved overall direction maps through the [delivery design](../arch
 
 | Use case / milestone | Owner features | Contract / decision | Current readiness |
 |---|---|---|---|
-| Local enrollment/login/session/recovery | FEAT-IAM-002 / MOD-IAM | [Authentication v1](../contracts/local-authentication-v1.md), ADR-0012 | Foundation T01–T07 accepted for implementation; source/test evidence follows in implementation commits |
+| Local enrollment/login/session/recovery | FEAT-IAM-002 / MOD-IAM | [Authentication v1](../contracts/local-authentication-v1.md), ADR-0012 | T01 persistence implemented; T02 audit and T03 login remain pending |
 | Current tenant/grants/catalog/target and protected read | IAM-001, TEN-001, PRJ-001, INV-001, AUD-001 | [Authority/admission v1](../contracts/authority-admission-v1.md), ADR-0012 | I2.7 behavior preserved; T04–T07 accepted for implementation, proof pending |
 | Profile/credential and real read-only observations | SEC-001, INV-001, OBS-001 | Owner OP-P0 slices, provider/allowlist/identity decisions | T08–T09 remain provider/operational decision-gated |
 | Artifact → frozen release → scoped approval | ART-001, REL-001, APR-001 | [Release/execution v1](../contracts/release-execution-v1.md), ADR-0005 adoption | T10–T11 design-gated; existing digest implementation retained |
@@ -104,3 +104,12 @@ Maintainer-approved overall direction maps through the [delivery design](../arch
 | Independent clients integration | Product API owners → separate clients owner | [Client handoff v1](../contracts/client-api-handoff-v1.md) | Contract handoff proposed only; no clients/Website source, test, process or submodule action |
 
 Existing 14 owner feature pages now have bounded implementation slices with actors, scopes, dependency gates and named acceptance cases. At design-package authoring time, IAM-002 had empty source_paths/test_paths; the subsequent T01 implementation evidence below supersedes that status. No real product/account/DB/provider test was executed by authoring the package itself. Architect model provenance and exact design hash manifest are private handoff evidence, not a GOAL execution receipt. No debt added/closed or ADR automatically accepted.
+
+
+## FEAT-IAM-002 T01 persistence — current implementation evidence, 2026-10-20
+
+T01 follow-up: the same mapped IAM test file now includes an exact persisted-column/ignored-field regression and explicit fail-closed missing-locator errors for xUnit 2.9. The suite contains 17 cases; current execution/gate evidence is separate from historical terminal checkpoints. The owner's requested Sol 6.1 Low continuation is a task-local override, not a routing or architecture change.
+
+The preceding design-package paragraph records the authoring-time state and is superseded for T01 only. `local-account-session.md` maps the implemented IdentityAccess persistence project, additive migration, separate explicit DbMigrator, and isolated test project. Locked restore, Release build (0 warnings/errors), EF pending-model check, all 16 IAM tests, and full local AMR gates passed; the full gate included 159 tooling tests, 48 Artifact tests, 85 Inventory Bootstrap tests, strict docs, scope and source mapping. The migration round trip ran only against isolated `kordra_test`; the `kordra_app` privilege probe used read-only catalog queries. No production/runtime database was migrated or modified. This verifies T01 persistence and its mapped tests only. Login/session endpoints and behavior, audit foundation, owner facts, authorization/admission and protected inventory remain incomplete. The native T01 GOAL checkpoint is failed after a sandbox-limited attempt and has no completion receipt; it was not replayed, and local gate success does not change that checkpoint status.
+
+The T01 status was reconciled on 2026-10-21: the original failed native checkpoint remains unchanged, while the separate maintainer-authorized evidence-recovery successor is completed from current artifact hashes, exact native-context evidence and the already-passing applicable gates. The recovery did not replay T01, alter its original receipt, or start T02.

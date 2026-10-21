@@ -233,3 +233,9 @@ The finalization above is **local task acceptance** only. ADR-0010's clean GitHu
 PR #2's first `artifact-domain` run failed in `CompiledNegativeFixtures_RejectActualRuntimeAndArtifactAssemblyEdges` before fixture compilation: the sanitized child process pointed `HOME` at a path that did not exist, and Linux .NET could not initialize NuGet's named migration mutex without a valid runtime directory ([failed CI run](https://github.com/NukeGeng/KORDRA/actions/runs/39188376089)). The fixture now creates its isolated HOME and CLI-home first, then supplies a user-only `XDG_RUNTIME_DIR` on Linux. Its empty NuGet source list, product assembly inputs, forbidden-edge assertions and cleanup bounds are unchanged. The upstream runtime behavior is tracked in [dotnet/runtime #135726](https://github.com/dotnet/runtime/issues/135726).
 
 Current local verification: the targeted fixture passed on macOS. A sanitized tracked-file checkout with the corrected test passed locked restore, Release build (zero warnings/errors), and the exact root test command in `mcr.microsoft.com/dotnet/sdk:10.0.400` on Linux: Artifact 48/48 and Inventory Bootstrap 85/85, zero skipped. Hosted `docs-integrity` and `artifact-domain` checks then passed on implementation commit [`38da931`](https://github.com/NukeGeng/KORDRA/commit/38da931edae3c36182c46712502b242598f9e0da): [documentation run](https://github.com/NukeGeng/KORDRA/actions/runs/39188847531) and [product run](https://github.com/NukeGeng/KORDRA/actions/runs/39188847534). This validates the bootstrap increment on that SHA; it does not complete full FEAT-INV-001 registration.
+
+
+
+## Shared Foundation composition — T01 review
+
+T01 adds IAM persistence, its isolated tests and explicit migrator to the root solution. Shared CI uses a disposable loopback PostgreSQL fixture. Artifact behavior and health-only/inventory-denied API behavior are unchanged; architecture tests enforce the exact T01 graph and approved package pins.

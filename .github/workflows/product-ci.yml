@@ -8,14 +8,45 @@ permissions:
 jobs:
   artifact-domain:
     runs-on: ubuntu-latest
+    # Ephemeral synthetic fixture only; never use this trust configuration for deployment.
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_HOST_AUTH_METHOD: trust
+        ports:
+          - 127.0.0.1:5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      KORDRA_IAM_TEST_CONNECTION_STRING: Host=127.0.0.1;Port=5432;Database=kordra_test;Username=kordra_test
+      KORDRA_IAM_RUNTIME_PROBE_CONNECTION_STRING: Host=127.0.0.1;Port=5432;Database=kordra;Username=kordra_app
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-dotnet@v4
         with:
           global-json-file: global.json
+      - name: Initialize isolated PostgreSQL role and database fixture
+        run: |
+          docker exec -i "${{ job.services.postgres.id }}" psql -U postgres --set ON_ERROR_STOP=1 <<'SQL'
+          CREATE ROLE kordra_admin LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE;
+          CREATE ROLE kordra_app LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE;
+          CREATE ROLE kordra_test LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE;
+          CREATE DATABASE kordra OWNER kordra_admin;
+          CREATE DATABASE kordra_test OWNER kordra_test;
+          REVOKE ALL ON DATABASE kordra FROM PUBLIC;
+          GRANT CONNECT ON DATABASE kordra TO kordra_admin, kordra_app;
+          REVOKE ALL ON DATABASE kordra_test FROM PUBLIC;
+          GRANT CONNECT ON DATABASE kordra_test TO kordra_test;
+          \connect kordra
+          REVOKE CREATE ON SCHEMA public FROM PUBLIC;
+          CREATE SCHEMA app AUTHORIZATION kordra_admin;
+          GRANT USAGE ON SCHEMA app TO kordra_app;
+          SQL
       - name: Restore pinned validation dependencies
         run: dotnet restore Kordra.slnx --locked-mode
       - name: Build product solution and tests
         run: dotnet build Kordra.slnx --configuration Release --no-restore
-      - name: Test artifact domain and local inventory bootstrap boundaries
+      - name: Test product foundation and denied inventory boundaries
         run: dotnet test Kordra.slnx --configuration Release --no-build --no-restore --logger trx

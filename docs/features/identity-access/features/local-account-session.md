@@ -6,8 +6,8 @@ last_reviewed: 2026-10-20
 module_id: MOD-IAM
 feature_id: FEAT-IAM-002
 phase: Foundation / M1-A
-source_paths: []
-test_paths: []
+source_paths: [".github/workflows/product-ci.yml", "Kordra.slnx", "dotnet-tools.json", "src/Modules/IdentityAccess/Kordra.Modules.IdentityAccess.csproj", "src/Modules/IdentityAccess/packages.lock.json", "src/Modules/IdentityAccess/Infrastructure/KordraIdentityDbContext.cs", "src/Modules/IdentityAccess/Infrastructure/KordraIdentityUser.cs", "src/Modules/IdentityAccess/Infrastructure/KordraSession.cs", "src/Modules/IdentityAccess/Infrastructure/IdentityAccessDbContextFactory.cs", "src/Modules/IdentityAccess/Infrastructure/Migrations/InitialIdentityPersistence.cs", "src/Modules/IdentityAccess/Infrastructure/Migrations/KordraIdentityDbContextModelSnapshot.cs", "src/Host/Kordra.DbMigrator/Kordra.DbMigrator.csproj", "src/Host/Kordra.DbMigrator/packages.lock.json", "src/Host/Kordra.DbMigrator/Program.cs", "src/Host/Kordra.DbMigrator/IdentityAccessMigrationCommand.cs"]
+test_paths: ["tests/IdentityAccess.Tests/IdentityAccess.Tests.csproj", "tests/IdentityAccess.Tests/packages.lock.json", "tests/IdentityAccess.Tests/IdentityAccessPersistenceTests.cs", "tests/IdentityAccess.Tests/TestDatabaseConfiguration.cs"]
 ---
 
 # FEAT-IAM-002 — Local accounts and revocable browser sessions
@@ -78,8 +78,17 @@ Unknown account, credential stuffing, body subject substitution, cookie fixation
 
 ## Source & test traceability
 
-T01 persistence, T02 audit and T03 authentication behavior are approved for implementation under ADR-0012. No new product source/test mapping is claimed by this design commit. The implementation commits add exact mappings and validation evidence.
+T01 implements the exact IAM persistence model, additive migration/snapshot, local role-checked DbContext factory, and separate offline IAM migrator listed in `source_paths`. The schema is `app`; IAM tables use the `iam_` prefix and contain no tenant, assignment, or audit-owned records. `Kordra.Api` remains unchanged and does not reference IAM persistence or the migrator. The migration rollback path refuses to drop account/session data.
+
+`IdentityAccessPersistenceTests.cs` maps the allowed local database target, IAM-only model, API/migrator assembly boundary, role separation, isolated PostgreSQL round trip, and a read-only privilege probe for the runtime role. Locked restore and Release build passed with zero warnings/errors; the 16 IAM tests passed against the isolated `kordra_test` database, including the runtime-role catalog probe. The round-trip test applies the additive migration and uses a transaction with synthetic rows; it never resets the database. `dotnet-ef migrations has-pending-model-changes` found no unscaffolded model changes. The full local AMR gates also passed: 159 tooling tests, 48 Artifact tests, 85 Inventory Bootstrap tests, 16 IAM tests, strict docs, scope, and source mapping. This is local source/test evidence, not hosted CI. The original attempted native T01 checkpoint remains failed and unreplayed; the separate [T01 evidence-recovery successor](../../../engineering/traceability.md#feat-iam-002-t01-persistence--current-implementation-evidence-2026-10-20) is completed from exact current artifacts and gate evidence. Login/session behavior, audit writes, tenant/project/target ownership, authorization, and positive inventory remain unimplemented and out of T01 scope. Relevant [Luna tasks T01–T03](../../../engineering/luna-implementation-handoff.md) retain their dependency order.
+
+The T01 follow-up adds a model-only regression for the exact IAM entity/column allowlist and ignored Identity fields, bringing the suite to 17 cases. Missing private database locators fail explicitly rather than using an unsupported dynamic-skip marker under xUnit 2.9; database and runtime-privilege verification remain mandatory. The maintainer requested direct continuation with `gpt-6.1-sol/low` for this task only. Current deterministic results are retained separately from the historical failed native checkpoints; this does not change AMR routing, contracts, production behavior or dependency scope.
 
 ## Open decisions, ADR and debt
 
 ADR-0012 is the concrete first implementation decision. No additional provider/library is left for Luna to invent. Package incompatibility, an unproved session/audit race or unsupported local HTTPS/key behavior blocks the affected task with evidence. Multi-host identity, persistent sessions across restart, public recovery and production MFA are later explicitly designed scope; this feature cannot establish production readiness. No existing debt is closed by this design.
+
+
+## Review commit boundaries — T01 and T02
+
+T01 adds only IAM principal/session persistence, the explicit IAM migration command and its 17 tests. Product CI provisions a disposable PostgreSQL 15 fixture with separate synthetic roles/databases; trust authentication is restricted to that ephemeral runner service, bound to loopback, and requires no committed password or developer credential. Local tests retain the private locator and exact-target guards. Hosted CI execution remains pending until the commits are pushed.

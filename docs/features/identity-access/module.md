@@ -36,8 +36,7 @@ Token hết hạn, cache permission stale, permission escalation. Đây là test
 - [FEAT-IAM-002 — Local accounts and revocable browser sessions](features/local-account-session.md)
 
 ## Implementation mapping
-
-The separate FEAT-IAM-002 feature owns approved T01–T03 design. Persistence and runtime implementation follow in their own commits. FEAT-IAM-001 retains its existing synthetic policy evidence.
+FEAT-IAM-002 maps the implemented T01 persistence slice and tests in its [feature record](features/local-account-session.md). FEAT-IAM-001 remains a synthetic test-only policy proof with no product evaluator mapping. These are feature-level mappings; they do not mean the whole IAM module or authentication behavior is complete.
 
 ## Definition of done
 Tuân thủ [DoD](../../engineering/definition-of-done.md), [module boundaries](../../engineering/module-boundaries.md), [architecture](../../architecture/bounded-contexts.md).
@@ -47,7 +46,7 @@ LAB-01 covers **cross-tenant test cases**; see [coverage matrix](../../reference
 
 ## Local-account design preference — 2026-10-18
 
-On 2026-10-18 the owner selected Kordra-managed local accounts as a design preference. The separate local-account feature and authentication contract were later accepted for Foundation T01–T07 under ADR-0012 on 2026-10-20. T01 persistence and its isolated migration tests are approved for implementation. No login/session endpoint or runtime authentication behavior is implemented yet, and login grants no implicit platform-to-tenant access.
+On 2026-10-18 the owner selected Kordra-managed local accounts as a design preference. The separate local-account feature and authentication contract were later accepted for Foundation T01–T07 under ADR-0012 on 2026-10-20. T01 IAM persistence and its isolated migration tests are now implemented and locally verified. No login/session endpoint or runtime authentication behavior is implemented yet, and login grants no implicit platform-to-tenant access.
 
 ## Current synthetic policy evidence — 2026-10-18
 

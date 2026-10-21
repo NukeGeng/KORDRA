@@ -9,4 +9,15 @@
     <Project Path="src/Host/Kordra.Api/Kordra.Api.csproj" />
     <Project Path="tests/InfrastructureInventory.Bootstrap.Tests/InfrastructureInventory.Bootstrap.Tests.csproj" />
   </Folder>
+  <Folder Name="/src/" />
+  <Folder Name="/src/Host/">
+    <Project Path="src/Host/Kordra.DbMigrator/Kordra.DbMigrator.csproj" />
+  </Folder>
+  <Folder Name="/src/Modules/" />
+  <Folder Name="/src/Modules/IdentityAccess/">
+    <Project Path="src/Modules/IdentityAccess/Kordra.Modules.IdentityAccess.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/IdentityAccess.Tests/IdentityAccess.Tests.csproj" />
+  </Folder>
 </Solution>

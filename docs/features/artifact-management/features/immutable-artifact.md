@@ -71,3 +71,9 @@ I1 acceptance: Given a supported lowercase OCI digest, parsing preserves its ide
 - Independent native review: `codex exec ... review --uncommitted` completed with exit 0 and a terminal `turn.completed` event, reporting no actionable defects. Full write-producing Python/.NET checks were blocked in the reviewer's read-only sandbox; the separate AMR gate run executed them. Raw receipts remain private under `.amr-local/artifact-native-review*`; no provider automatic review is inferred.
 - I1 implementation and regression tests originated in [b20090b186c5c5a7b76622df5bb6b877675e32eb](https://github.com/NukeGeng/KORDRA/commit/b20090b186c5c5a7b76622df5bb6b877675e32eb) and were merged through [PR #1](https://github.com/NukeGeng/KORDRA/pull/1) at `2aa156f4e6e3afe3cc648186ac6a3242781dc71b`. Rechecked on 2026-10-18: [docs CI](https://github.com/NukeGeng/KORDRA/actions/runs/39000192554) and [product CI](https://github.com/NukeGeng/KORDRA/actions/runs/39000192528) both succeeded on that exact merge SHA. This is a dated checkpoint, not a live CI claim. No registry, tenant-policy, durable messaging or driver integration is delivered.
 - Open decisions: ADR-0008 is explicitly accepted for the scoped bootstrap. `[NEEDS-DECISION]`: product module owner; ADR-0001–0007 and registration dependencies remain proposed.
+
+
+
+## Shared Foundation composition — T01 review
+
+T01 adds IAM persistence, its isolated tests and explicit migrator to the root solution. Shared CI uses a disposable loopback PostgreSQL fixture. Artifact behavior and health-only/inventory-denied API behavior are unchanged; architecture tests enforce the exact T01 graph and approved package pins.
