@@ -2,8 +2,12 @@ using System.Security.Cryptography;
 using Kordra.Api;
 using Kordra.DbMigrator;
 using Kordra.Modules.IdentityAccess.Infrastructure;
+using Kordra.Modules.IdentityAccess.Infrastructure.Migrations;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
+using Microsoft.EntityFrameworkCore.Storage;
 using Npgsql;
 using Xunit;
 
@@ -228,6 +232,51 @@ public sealed class IdentityAccessPersistenceTests
         {
             await transaction.RollbackAsync();
         }
+    }
+
+    [Fact]
+    public async Task Corrective_migration_removes_inherited_history_privileges_without_changing_application_tables()
+    {
+        var connectionString = TestDatabaseConfiguration.TryGetConnectionString()
+            ?? throw new InvalidOperationException("The isolated IAM database locator is required.");
+        var options = new DbContextOptionsBuilder<KordraIdentityDbContext>()
+            .UseNpgsql(connectionString, postgres => postgres.MigrationsHistoryTable(
+                KordraIdentityDbContext.MigrationHistoryTableName, KordraIdentityDbContext.SchemaName)).Options;
+        await using var dbContext = new KordraIdentityDbContext(options);
+        await dbContext.Database.MigrateAsync();
+        await dbContext.Database.MigrateAsync();
+        Assert.Contains("20261021130000_RestrictIdentityMigrationHistory",
+            await dbContext.Database.GetAppliedMigrationsAsync());
+
+        await using var transaction = await dbContext.Database.BeginTransactionAsync();
+        // Reproduce default-grant leakage on an already-created history table, including PUBLIC.
+        await dbContext.Database.ExecuteSqlRawAsync(
+            "GRANT ALL PRIVILEGES ON TABLE app.iam_ef_migrations_history TO PUBLIC, kordra_app;");
+        var query = "SELECT has_table_privilege('kordra_app', 'app.iam_ef_migrations_history', @privilege)";
+        var connection = (NpgsqlConnection)dbContext.Database.GetDbConnection();
+        var nativeTransaction = (NpgsqlTransaction)transaction.GetDbTransaction();
+        await using var command = new NpgsqlCommand(query, connection, nativeTransaction);
+        command.Parameters.AddWithValue("privilege", "UPDATE");
+        Assert.True((bool)(await command.ExecuteScalarAsync())!);
+
+        var migration = new RestrictIdentityMigrationHistory();
+        foreach (var sql in dbContext.GetService<IMigrationsSqlGenerator>().Generate(migration.UpOperations))
+        {
+            await dbContext.Database.ExecuteSqlRawAsync(sql.CommandText);
+        }
+
+        foreach (var privilege in new[] { "SELECT", "INSERT", "UPDATE", "DELETE", "TRUNCATE", "REFERENCES", "TRIGGER" })
+        {
+            command.Parameters[0].Value = privilege;
+            Assert.False((bool)(await command.ExecuteScalarAsync())!, privilege);
+        }
+
+        // The correction changes ACLs only; the owner can still track migrations and access IAM rows.
+        Assert.Equal(1, await dbContext.Database.ExecuteSqlRawAsync(
+            "UPDATE app.iam_ef_migrations_history SET \"ProductVersion\" = \"ProductVersion\" WHERE \"MigrationId\" = '20261021130000_RestrictIdentityMigrationHistory'"));
+        _ = await dbContext.Principals.CountAsync();
+        _ = await dbContext.Sessions.CountAsync();
+        await transaction.RollbackAsync();
     }
 
     [Fact]
