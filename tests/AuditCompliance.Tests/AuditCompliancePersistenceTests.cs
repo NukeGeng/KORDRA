@@ -1,3 +1,5 @@
+using System.Data.Common;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 using Kordra.Api;
 using Kordra.DbMigrator;
 using Kordra.Modules.AuditCompliance.Contracts;
@@ -14,6 +16,67 @@ namespace Kordra.Modules.AuditCompliance.Tests;
 
 public sealed class AuditCompliancePersistenceTests
 {
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task Append_deadline_includes_stalled_disposal_and_late_commit_is_resolved_by_lookup(bool denial)
+    {
+        var connectionString = new NpgsqlConnectionStringBuilder(CreateSingleConnectionPoolString())
+        {
+            ApplicationName = $"audit-cleanup-{Guid.NewGuid():N}"
+        }.ConnectionString;
+        await MigrateAsync(connectionString);
+        Assert.Equal(AuditAppendStatus.Durable,
+            (await CreateStore(connectionString).AppendAsync(AuditIntentCanonicalizerTests.CreateIntent())).Status);
+        var cleanup = new DelayedDisposalInterceptor();
+        var options = new DbContextOptionsBuilder<AuditDbContext>(AuditDbContextFactory.CreateTestOptions(connectionString))
+            .AddInterceptors(cleanup).Options;
+        var store = new AuditAppendStore(new AuditTestContextFactory(options));
+        var intent = AuditIntentCanonicalizerTests.CreateIntent();
+        if (denial)
+        {
+            intent = intent with { Stage = AuditIntentStage.Outcome, ActionOutcome = AuditActionOutcome.Denied };
+        }
+
+        try
+        {
+            var stopwatch = Stopwatch.StartNew();
+            var result = await store.AppendAsync(intent).AsTask().WaitAsync(TimeSpan.FromSeconds(3));
+            stopwatch.Stop();
+            await cleanup.Entered.Task.WaitAsync(TimeSpan.FromSeconds(2));
+            Assert.Equal(AuditAppendStatus.Unknown, result.Status);
+            Assert.Null(result.Receipt);
+            Assert.True(stopwatch.Elapsed < TimeSpan.FromMilliseconds(denial ? 500 : 1500));
+        }
+        finally
+        {
+            cleanup.Release.TrySetResult();
+        }
+
+        // The timed-out operation retained its resources until cleanup; no concurrent early pool return.
+        await using var probe = new NpgsqlConnection(connectionString);
+        using var probeDeadline = new CancellationTokenSource(TimeSpan.FromSeconds(3));
+        await probe.OpenAsync(probeDeadline.Token);
+        await probe.CloseAsync();
+        var lookup = await CreateStore(connectionString).LookupAsync(intent.IntentId);
+        Assert.Equal(AuditLookupStatus.Found, lookup.Status);
+        Assert.NotNull(lookup.Receipt);
+    }
+
+    private sealed class DelayedDisposalInterceptor : DbConnectionInterceptor
+    {
+        public TaskCompletionSource Entered { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public TaskCompletionSource Release { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public override async ValueTask<InterceptionResult> ConnectionDisposingAsync(
+            DbConnection connection, ConnectionEventData eventData, InterceptionResult result)
+        {
+            Entered.TrySetResult();
+            await Release.Task; // Intentionally model a provider cleanup that does not honor cancellation.
+            return result;
+        }
+    }
+
     [Fact]
     public void Contracts_are_BCL_only_and_expose_only_append_and_exact_lookup()
     {

@@ -30,14 +30,16 @@ public sealed class AuditTransactionContext : IAsyncDisposable
     private readonly DbTransaction _transaction;
     private readonly AuditDbContext _auditContext;
     private readonly long _deadlineTimestamp;
+    private readonly CancellationToken _lifetimeCancellationToken;
     private AuditEntry? _entry;
     private bool _completed;
     private bool _commitAttempted;
 
-    private AuditTransactionContext(DbTransaction transaction, AuditDbContext auditContext)
+    private AuditTransactionContext(DbTransaction transaction, AuditDbContext auditContext, CancellationToken cancellationToken)
     {
         _transaction = transaction;
         _auditContext = auditContext;
+        _lifetimeCancellationToken = cancellationToken;
         _deadlineTimestamp = Stopwatch.GetTimestamp() + Stopwatch.Frequency;
     }
 
@@ -58,7 +60,7 @@ public sealed class AuditTransactionContext : IAsyncDisposable
         try
         {
             await context.Database.UseTransactionAsync(transaction, cancellationToken);
-            return new AuditTransactionContext(transaction, context);
+            return new AuditTransactionContext(transaction, context, cancellationToken);
         }
         catch
         {
@@ -100,7 +102,7 @@ public sealed class AuditTransactionContext : IAsyncDisposable
             if (existing is not null)
             {
                 var sameHash = CryptographicOperations.FixedTimeEquals(existing.CanonicalIntentHash, canonical.Hash);
-                if (!await TryRollbackAsync())
+                if (!await TryRollbackAsync(cancellationToken))
                 {
                     return new AuditTransactionStageOutcome(AuditTransactionStageStatus.Unavailable, null, null);
                 }
@@ -116,7 +118,7 @@ public sealed class AuditTransactionContext : IAsyncDisposable
         }
         catch
         {
-            await TryRollbackAsync();
+            await TryRollbackAsync(cancellationToken);
             return new AuditTransactionStageOutcome(AuditTransactionStageStatus.Unavailable, null, null);
         }
     }
@@ -137,7 +139,7 @@ public sealed class AuditTransactionContext : IAsyncDisposable
         }
         catch (DbUpdateException exception)
         {
-            var rolledBack = await TryRollbackAsync();
+            var rolledBack = await TryRollbackAsync(cancellationToken);
             if (!rolledBack)
             {
                 return AuditAppendOutcome.Unknown();
@@ -147,14 +149,14 @@ public sealed class AuditTransactionContext : IAsyncDisposable
                 postgresException.SqlState == PostgresErrorCodes.UniqueViolation &&
                 postgresException.ConstraintName == "uq_aud_intents_intent_id")
             {
-                return await ResolveUniqueConflictAsync();
+                return await ResolveUniqueConflictAsync(cancellationToken);
             }
 
             return AuditAppendOutcome.Unavailable();
         }
         catch
         {
-            var rolledBack = await TryRollbackAsync();
+            var rolledBack = await TryRollbackAsync(cancellationToken);
             return rolledBack ? AuditAppendOutcome.Unavailable() : AuditAppendOutcome.Unknown();
         }
 
@@ -173,24 +175,26 @@ public sealed class AuditTransactionContext : IAsyncDisposable
         }
     }
 
-    public async Task RollbackAsync()
+    public async Task RollbackAsync(CancellationToken cancellationToken = default)
     {
         if (_completed || _commitAttempted)
         {
             return;
         }
 
-        _ = await TryRollbackAsync();
+        _ = await TryRollbackAsync(cancellationToken);
     }
 
-    private async Task<AuditAppendOutcome> ResolveUniqueConflictAsync()
+    private async Task<AuditAppendOutcome> ResolveUniqueConflictAsync(CancellationToken cancellationToken)
     {
         if (_entry is null)
         {
             return AuditAppendOutcome.Unavailable();
         }
 
-        using var lookupDeadline = new CancellationTokenSource(TimeSpan.FromMilliseconds(100));
+        using var lookupDeadline = CreateBudget(cancellationToken);
+        lookupDeadline.CancelAfter(TimeSpan.FromMilliseconds(Math.Min(100,
+            Math.Max(0, (_deadlineTimestamp - Stopwatch.GetTimestamp()) * 1000d / Stopwatch.Frequency))));
         try
         {
             await _auditContext.Database.UseTransactionAsync((DbTransaction?)null, lookupDeadline.Token);
@@ -211,7 +215,7 @@ public sealed class AuditTransactionContext : IAsyncDisposable
         }
     }
 
-    private async Task<bool> TryRollbackAsync()
+    private async Task<bool> TryRollbackAsync(CancellationToken cancellationToken = default)
     {
         if (_completed || _commitAttempted)
         {
@@ -220,9 +224,10 @@ public sealed class AuditTransactionContext : IAsyncDisposable
 
         try
         {
-            await _transaction.RollbackAsync(CancellationToken.None);
+            using var budget = CreateBudget(cancellationToken);
+            await _transaction.RollbackAsync(budget.Token);
             _completed = true;
-            await _auditContext.Database.UseTransactionAsync((DbTransaction?)null, CancellationToken.None);
+            await _auditContext.Database.UseTransactionAsync((DbTransaction?)null, budget.Token);
             return true;
         }
         catch
@@ -235,7 +240,7 @@ public sealed class AuditTransactionContext : IAsyncDisposable
     {
         var ticksLeft = _deadlineTimestamp - Stopwatch.GetTimestamp();
         var remaining = ticksLeft <= 0 ? TimeSpan.Zero : TimeSpan.FromSeconds((double)ticksLeft / Stopwatch.Frequency);
-        var budget = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        var budget = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, _lifetimeCancellationToken);
         budget.CancelAfter(remaining);
         return budget;
     }

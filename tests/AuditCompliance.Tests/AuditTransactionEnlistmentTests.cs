@@ -1,3 +1,6 @@
+using System.Data;
+using System.Data.Common;
+using System.Diagnostics;
 using Kordra.Modules.AuditCompliance.Contracts;
 using Kordra.Modules.AuditCompliance.Infrastructure;
 using Npgsql;
@@ -7,6 +10,47 @@ namespace Kordra.Modules.AuditCompliance.Tests;
 
 public sealed class AuditTransactionEnlistmentTests
 {
+    [Fact]
+    public async Task Rollback_uses_the_original_deadline_instead_of_waiting_for_unbounded_cleanup()
+    {
+        await using var connection = new NpgsqlConnection(TestDatabaseConfiguration.RequireConnectionString());
+        await connection.OpenAsync();
+        await using var transaction = await connection.BeginTransactionAsync();
+        using var deadline = new CancellationTokenSource();
+        using var delayed = new DelayedRollbackTransaction(connection, transaction);
+        await using var audit = await AuditTransactionContext.CreateAsync(connection, delayed, deadline.Token);
+        try
+        {
+            deadline.CancelAfter(TimeSpan.FromMilliseconds(100));
+            var stopwatch = Stopwatch.StartNew();
+            await audit.RollbackAsync().WaitAsync(TimeSpan.FromSeconds(2));
+            Assert.True(delayed.ObservedToken.CanBeCanceled);
+            Assert.True(delayed.ObservedToken.IsCancellationRequested);
+            Assert.True(stopwatch.Elapsed < TimeSpan.FromMilliseconds(500));
+        }
+        finally
+        {
+            delayed.ReleaseRollback.TrySetResult();
+        }
+    }
+
+    private sealed class DelayedRollbackTransaction(DbConnection connection, DbTransaction inner) : DbTransaction
+    {
+        public TaskCompletionSource ReleaseRollback { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public CancellationToken ObservedToken { get; private set; }
+        public override IsolationLevel IsolationLevel => inner.IsolationLevel;
+        protected override DbConnection DbConnection => connection;
+        public override void Commit() => inner.Commit();
+        public override void Rollback() => throw new InvalidOperationException("Synchronous cleanup is not permitted.");
+
+        public override async Task RollbackAsync(CancellationToken cancellationToken = default)
+        {
+            ObservedToken = cancellationToken;
+            await ReleaseRollback.Task.WaitAsync(cancellationToken);
+            await inner.RollbackAsync(cancellationToken);
+        }
+    }
+
     [Fact]
     public async Task Commit_failure_returns_unknown_and_exact_lookup_does_not_invent_a_receipt()
     {

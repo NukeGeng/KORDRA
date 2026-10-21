@@ -21,14 +21,45 @@ public sealed class AuditAppendStore(IDbContextFactory<AuditDbContext> contextFa
         appendBudget.CancelAfter(isDenial ? TimeSpan.FromMilliseconds(100) : TimeSpan.FromSeconds(1));
         cancellationToken = appendBudget.Token;
 
+        var commitStarted = 0;
+        // The operation retains sole ownership of its resources until disposal completes. If a provider
+        // stalls during cancellation/cleanup, do not block the caller or return that connection early.
+        var operation = AppendCoreAsync(intent, () => Volatile.Write(ref commitStarted, 1), cancellationToken);
+        try
+        {
+            return await operation.WaitAsync(cancellationToken);
+        }
+        catch (OperationCanceledException)
+        {
+            return Volatile.Read(ref commitStarted) == 0
+                ? AuditAppendOutcome.Unavailable()
+                : AuditAppendOutcome.Unknown();
+        }
+    }
+
+    private async Task<AuditAppendOutcome> AppendCoreAsync(
+        AuditIntent intent,
+        Action commitStarted,
+        CancellationToken cancellationToken)
+    {
+        var commitMayHaveStarted = false;
         try
         {
             await using var anchor = await contextFactory.CreateDbContextAsync(cancellationToken);
+            cancellationToken.ThrowIfCancellationRequested();
             await anchor.Database.OpenConnectionAsync(cancellationToken);
+            cancellationToken.ThrowIfCancellationRequested();
             var connection = anchor.Database.GetDbConnection();
             await using var transaction = await connection.BeginTransactionAsync(cancellationToken);
             await using var enlistment = await AuditTransactionContext.CreateAsync(connection, transaction, cancellationToken);
             var staged = await enlistment.StageAsync(intent, cancellationToken);
+            cancellationToken.ThrowIfCancellationRequested();
+            if (staged.Status == AuditTransactionStageStatus.Staged)
+            {
+                commitMayHaveStarted = true;
+                commitStarted();
+            }
+
             return staged.Status switch
             {
                 AuditTransactionStageStatus.Staged => await enlistment.CommitAsync(cancellationToken),
@@ -39,7 +70,7 @@ public sealed class AuditAppendStore(IDbContextFactory<AuditDbContext> contextFa
         }
         catch
         {
-            return AuditAppendOutcome.Unavailable();
+            return commitMayHaveStarted ? AuditAppendOutcome.Unknown() : AuditAppendOutcome.Unavailable();
         }
     }
 
