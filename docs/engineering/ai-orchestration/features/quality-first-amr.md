@@ -13,6 +13,8 @@ test_paths: ["docs/tooling/tests/test_amr.py", "docs/tooling/tests/test_goal.py"
 # FEAT-AMR-001 — Quality-first AI engineering orchestration
 
 ## User story / outcome
+
+The owner-approved [Clients repository split](../../../decisions/0013-clients-git-submodule.md) adds one bounded traversal exception: Product docs/context scans exclude the declared Clients worktree and bind content to its indexed gitlink instead. Local Clients dirt/commits are ignored by Product Git status identity until the pin is staged; Product index, HEAD and canonical source changes remain detected. The exact topology and pin are validated by [FEAT-CLIENTS-001](clients-repository.md). AMR model routing, task control and historical execution receipts are unchanged. Pre-split snapshots require an explicit refresh before unfinished work resumes; completed checkpoints are not rewritten or replayed. Boundary regressions are mapped by FEAT-CLIENTS-001.
 Repository contributors use bounded Architect design when needed, Luna-led GOAL execution, deterministic quality gates and one default Codex Auto PR Review with a bounded follow-up budget. AMR v4 replaces the v3.1 policy in the existing engineering tooling and checkpoint flow; it does not create a competing orchestrator or change product architecture.
 
 ## Pre-conditions

@@ -124,3 +124,9 @@ Final deterministic gates passed after the append-budget and commit-failure regr
 ## T02 private checkpoint evidence
 
 All 38 outputs were inspected for the completed evidence-recovery successor; the original seven checkpoint files remain byte-identical. Private receipts are excluded from Git. Hosted CI/review and merge remain pending.
+
+## FEAT-CLIENTS-001 / independent frontend repository — 2026-10-20
+
+ENG-TOOLING owns the approved [ADR-0013](../decisions/0013-clients-git-submodule.md) migration: Product retains `clients/` as one gitlink, with its source/docs/test content independently owned by [KORDRA-Clients](https://github.com/NukeGeng/KORDRA-Clients). The [feature](ai-orchestration/features/clients-repository.md) maps `.gitmodules`, pin validation, guarded Product traversal/context, CI and boundary regressions; shared tooling remains co-owned with FEAT-AMR-001. Clients retains an extracted history and bootstrap `387c56edc75df8332775e267e8cac50462b781dd`, with [passing standalone CI](https://github.com/NukeGeng/KORDRA-Clients/actions/runs/39262407727). All four former reservation files are byte-identical at the extraction commit; bootstrap updates their links for standalone use.
+
+The [operating guide](clients-development.md) defines workspace, pin, contract and service ownership. Source/stack/IAM/Website/production scope is unchanged; frontend runtime is absent. Product GOAL remains paused, completed checkpoints are preserved, and pre-split unfinished snapshots require explicit refresh without replay. Product integration CI and human merge remain separate from the already published Clients bootstrap.

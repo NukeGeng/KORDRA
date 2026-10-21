@@ -23,7 +23,9 @@ Root `Kordra.slnx` contains twelve projects after T02: eight product projects (A
 
 ## Reserved folders
 
-The original reservation created the paths below with proposed READMEs. `src/Modules/IdentityAccess`, `src/Modules/AuditCompliance` and `src/Host/Kordra.DbMigrator` were subsequently adopted for the exact FEAT-IAM-002 T01 slice under ADR-0012 and are documented as implemented paths above. Remaining locations below are still reservations only: their presence does not mean a feature, module registration, driver, UI, deployment or Enterprise product exists. Module names follow the [proposed mapping](project-conventions.md); module specs retain their current status and ownership.
+**Clients Git ownership update — 2026-10-19:** accepted [ADR-0013](../decisions/0013-clients-git-submodule.md) moves the four existing Clients reservations into the independent KORDRA-Clients repository, mounted at the same `clients/` path. Product now tracks one gitlink rather than those four README blobs. The original framework's 45 reserved locations remain logical paths: 41 Product-owned reservations and four Clients-owned reservations. None becomes an implemented UI. See [the operating guide](clients-development.md).
+
+The original reservation created the paths below with proposed READMEs. `src/Modules/IdentityAccess`, `src/Modules/AuditCompliance` and `src/Host/Kordra.DbMigrator` were subsequently adopted for the exact FEAT-IAM-002 T01 and FEAT-AUD-001 T02 slices under ADR-0012 and are documented as implemented paths above. Remaining locations below are still reservations only: their presence does not mean a feature, module registration, driver, UI, deployment or Enterprise product exists. Module names follow the [proposed mapping](project-conventions.md); module specs retain their current status and ownership.
 
 | Reserved path | Canonical owner / adoption prerequisite |
 |---|---|

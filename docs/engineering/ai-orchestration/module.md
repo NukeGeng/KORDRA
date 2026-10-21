@@ -15,5 +15,6 @@ Actors are repository contributors and reviewers. Local filesystem access is gov
 Feature registry:
 
 - [FEAT-AMR-001 — Quality-first AMR](features/quality-first-amr.md)
+- [FEAT-CLIENTS-001 — Independent Clients repository](features/clients-repository.md)
 
 Existing sources: `docs/tooling/`, the [AI review protocol](../../governance/ai-review-protocol.md), root AGENTS and WORKFLOW. Extend these rather than building another AI platform.

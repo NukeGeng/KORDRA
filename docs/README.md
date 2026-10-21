@@ -22,6 +22,7 @@ last_reviewed: 2026-10-20
 | Evidence lifecycle & AI tool boundary | [`engineering/status-evidence-policy.md`](engineering/status-evidence-policy.md), [`engineering/ai-tooling-boundary.md`](engineering/ai-tooling-boundary.md) |
 | Kiến trúc / component | [`architecture/`](architecture/README.md) |
 | Source tree / .NET solution structure | [Architecture proposal and repository audit](architecture/README.md), [ADR-0009](decisions/0009-source-architecture.md) |
+| Product / frontend repository ownership | [Clients submodule workflow](engineering/clients-development.md), [accepted narrow ADR-0012](decisions/0013-clients-git-submodule.md) |
 | Tại sao đã chọn X? | [`decisions/`](decisions/README.md) |
 | Module nào sở hữu nghiệp vụ? | [`governance/module-feature-definition.md`](governance/module-feature-definition.md), [`features/`](features/README.md) |
 | Thay đổi permission hoặc Super Admin | [`architecture/security-multitenancy.md`](architecture/security-multitenancy.md), [`contracts/permissions.md`](contracts/permissions.md) |

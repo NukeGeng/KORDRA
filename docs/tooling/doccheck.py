@@ -2,6 +2,7 @@
 """Static integrity checker for DevOps Control Plane docs (stdlib only)."""
 from pathlib import Path
 import argparse, re, sys, datetime, json, os
+from submodulecheck import configured_roots
 ROOT=Path(__file__).resolve().parents[2]
 DOCS=ROOT/'docs'
 STATUSES={'proposed','accepted','implemented','verified','deprecated','superseded'}
@@ -17,8 +18,10 @@ def markdown_files(root):
     Do not use Git ignore rules: those must not hide canonical documentation.
     Prune local directories before descending and do not follow directory symlinks.
     """
+    boundaries=configured_roots(root)
     for directory, directories, names in os.walk(root,followlinks=False):
-        directories[:]=[name for name in directories if name not in LOCAL_DIRECTORIES]
+        directories[:]=[name for name in directories if name not in LOCAL_DIRECTORIES
+                        and (Path(directory)/name).relative_to(root).as_posix() not in boundaries]
         for name in names:
             if name.endswith('.md'):
                 yield Path(directory)/name
@@ -40,7 +43,12 @@ def main():
     parser=argparse.ArgumentParser()
     parser.add_argument('--strict-sources',action='store_true')
     args=parser.parse_args()
-    files=sorted(markdown_files(ROOT))
+    try:
+        boundaries=configured_roots(ROOT)
+        files=sorted(markdown_files(ROOT))
+    except (OSError, ValueError) as exc:
+        print(f'ERROR: repository boundary: {exc}')
+        return 1
     errors=[]; warnings=[]; ids={}; modules={}
     for p in files:
         rel=p.relative_to(ROOT).as_posix(); data=p.read_text('utf-8')
@@ -79,7 +87,7 @@ def main():
                             if args.strict_sources and meta.get('status') in ('implemented','verified'):
                                 if not refs: errors.append(f'{rel}: {key} empty for {meta.get("status")}')
                                 for s in refs:
-                                    if not (ROOT/s).exists(): errors.append(f'{rel}: missing source/test file {s}')
+                                    if s not in boundaries and not (ROOT/s).exists(): errors.append(f'{rel}: missing source/test file {s}')
                         except (ValueError,TypeError, json.JSONDecodeError): errors.append(f'{rel}: invalid JSON array metadata {key}')
                     if meta.get('status') in ('implemented','verified') and meta.get('owner')=='unassigned': warnings.append(f'{rel}: implemented/verified but unassigned owner')
         # Read markdown links outside inline/fenced code with best effort (not a full Markdown parser).
