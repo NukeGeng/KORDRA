@@ -10,6 +10,36 @@ namespace Kordra.Modules.AuditCompliance.Tests;
 
 public sealed class AuditTransactionEnlistmentTests
 {
+    [Theory]
+    [InlineData(1)]
+    [InlineData(9)]
+    public async Task Receipt_round_trip_preserves_exact_postgres_timestamp_precision(int subMicrosecondTicks)
+    {
+        var connectionString = TestDatabaseConfiguration.RequireConnectionString();
+        await AuditCompliancePersistenceTests.MigrateAsync(connectionString);
+        var recordedAt = new DateTimeOffset(2026, 10, 21, 7, 38, 10, TimeSpan.Zero)
+            .AddTicks(1_234_560 + subMicrosecondTicks);
+        await using var connection = new NpgsqlConnection(connectionString);
+        await connection.OpenAsync();
+        await using var transaction = await connection.BeginTransactionAsync();
+        await using var audit = await AuditTransactionContext.CreateAsync(
+            connection, transaction, timeProvider: new FixedTimestampProvider(recordedAt));
+        var intent = AuditIntentCanonicalizerTests.CreateIntent();
+        Assert.Equal(AuditTransactionStageStatus.Staged, (await audit.StageAsync(intent)).Status);
+        var committed = await audit.CommitAsync();
+        Assert.Equal(AuditAppendStatus.Durable, committed.Status);
+        Assert.NotNull(committed.Receipt);
+        Assert.Equal(recordedAt.AddTicks(-subMicrosecondTicks), committed.Receipt.RecordedAtUtc);
+        var lookup = await AuditCompliancePersistenceTests.CreateStore(connectionString).LookupAsync(intent.IntentId);
+        Assert.Equal(AuditLookupStatus.Found, lookup.Status);
+        Assert.Equal(committed.Receipt, lookup.Receipt);
+    }
+
+    private sealed class FixedTimestampProvider(DateTimeOffset timestamp) : TimeProvider
+    {
+        public override DateTimeOffset GetUtcNow() => timestamp;
+    }
+
     [Fact]
     public async Task Rollback_uses_the_original_deadline_instead_of_waiting_for_unbounded_cleanup()
     {

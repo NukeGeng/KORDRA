@@ -31,22 +31,26 @@ public sealed class AuditTransactionContext : IAsyncDisposable
     private readonly AuditDbContext _auditContext;
     private readonly long _deadlineTimestamp;
     private readonly CancellationToken _lifetimeCancellationToken;
+    private readonly TimeProvider _timeProvider;
     private AuditEntry? _entry;
     private bool _completed;
     private bool _commitAttempted;
 
-    private AuditTransactionContext(DbTransaction transaction, AuditDbContext auditContext, CancellationToken cancellationToken)
+    private AuditTransactionContext(
+        DbTransaction transaction, AuditDbContext auditContext, CancellationToken cancellationToken, TimeProvider timeProvider)
     {
         _transaction = transaction;
         _auditContext = auditContext;
         _lifetimeCancellationToken = cancellationToken;
+        _timeProvider = timeProvider;
         _deadlineTimestamp = Stopwatch.GetTimestamp() + Stopwatch.Frequency;
     }
 
     public static async Task<AuditTransactionContext> CreateAsync(
         DbConnection connection,
         DbTransaction transaction,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        TimeProvider? timeProvider = null)
     {
         ArgumentNullException.ThrowIfNull(connection);
         ArgumentNullException.ThrowIfNull(transaction);
@@ -60,7 +64,7 @@ public sealed class AuditTransactionContext : IAsyncDisposable
         try
         {
             await context.Database.UseTransactionAsync(transaction, cancellationToken);
-            return new AuditTransactionContext(transaction, context, cancellationToken);
+            return new AuditTransactionContext(transaction, context, cancellationToken, timeProvider ?? TimeProvider.System);
         }
         catch
         {
@@ -112,7 +116,7 @@ public sealed class AuditTransactionContext : IAsyncDisposable
                     : new AuditTransactionStageOutcome(AuditTransactionStageStatus.Rejected, null, "intent_conflict");
             }
 
-            _entry = AuditEntry.Create(canonical, DateTimeOffset.UtcNow);
+            _entry = AuditEntry.Create(canonical, _timeProvider.GetUtcNow());
             _auditContext.Entries.Add(_entry);
             return new AuditTransactionStageOutcome(AuditTransactionStageStatus.Staged, null, null);
         }

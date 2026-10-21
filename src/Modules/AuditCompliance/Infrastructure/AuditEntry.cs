@@ -51,7 +51,10 @@ public sealed class AuditEntry
         ResultSizeBytes = canonical.Intent.ResultSizeBytes,
         CanonicalIntent = canonical.CanonicalJson,
         CanonicalIntentHash = [.. canonical.Hash],
-        RecordedAtUtc = recordedAtUtc.ToUniversalTime()
+        // PostgreSQL timestamps preserve microseconds, while .NET can supply 100 ns ticks.
+        // Return exactly the value that will survive a database round trip.
+        RecordedAtUtc = new DateTimeOffset(
+            recordedAtUtc.UtcTicks - recordedAtUtc.UtcTicks % TimeSpan.TicksPerMicrosecond, TimeSpan.Zero)
     };
 
     internal AuditReceipt ToReceipt() => new(
