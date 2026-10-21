@@ -235,7 +235,6 @@ PR #2's first `artifact-domain` run failed in `CompiledNegativeFixtures_RejectAc
 Current local verification: the targeted fixture passed on macOS. A sanitized tracked-file checkout with the corrected test passed locked restore, Release build (zero warnings/errors), and the exact root test command in `mcr.microsoft.com/dotnet/sdk:10.0.400` on Linux: Artifact 48/48 and Inventory Bootstrap 85/85, zero skipped. Hosted `docs-integrity` and `artifact-domain` checks then passed on implementation commit [`38da931`](https://github.com/NukeGeng/KORDRA/commit/38da931edae3c36182c46712502b242598f9e0da): [documentation run](https://github.com/NukeGeng/KORDRA/actions/runs/39188847531) and [product run](https://github.com/NukeGeng/KORDRA/actions/runs/39188847534). This validates the bootstrap increment on that SHA; it does not complete full FEAT-INV-001 registration.
 
 
+## Shared Foundation composition — T01/T02 review
 
-## Shared Foundation composition — T01 review
-
-T01 adds IAM persistence, its isolated tests and explicit migrator to the root solution. Shared CI uses a disposable loopback PostgreSQL fixture. Artifact behavior and health-only/inventory-denied API behavior are unchanged; architecture tests enforce the exact T01 graph and approved package pins.
+T01 adds only IAM persistence and its separate migrator/test projects to the root solution. T02 adds AUD Contracts/persistence/tests and the AUD migrator command. Shared product CI uses a disposable loopback PostgreSQL fixture; the Artifact implementation and health-only/inventory-denied API behavior are preserved. The existing architecture tests constrain the exact owner-approved graph and pinned packages at each commit.

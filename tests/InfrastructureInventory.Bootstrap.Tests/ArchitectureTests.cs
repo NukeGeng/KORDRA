@@ -18,10 +18,13 @@ public sealed class ArchitectureTests
     private const string Host = "src/Host/Kordra.Api/Kordra.Api.csproj";
     private const string Artifact = "src/Modules/ArtifactManagement/Domain/Kordra.ArtifactManagement.Domain.csproj";
     private const string IdentityAccess = "src/Modules/IdentityAccess/Kordra.Modules.IdentityAccess.csproj";
+    private const string AuditContracts = "src/Modules/AuditCompliance/Contracts/Kordra.Modules.AuditCompliance.Contracts.csproj";
+    private const string AuditCompliance = "src/Modules/AuditCompliance/Kordra.Modules.AuditCompliance.csproj";
     private const string DbMigrator = "src/Host/Kordra.DbMigrator/Kordra.DbMigrator.csproj";
     private const string BootstrapTests = "tests/InfrastructureInventory.Bootstrap.Tests/InfrastructureInventory.Bootstrap.Tests.csproj";
     private const string ArtifactTests = "tests/ArtifactManagement.Domain.Tests/ArtifactManagement.Domain.Tests.csproj";
     private const string IdentityTests = "tests/IdentityAccess.Tests/IdentityAccess.Tests.csproj";
+    private const string AuditTests = "tests/AuditCompliance.Tests/AuditCompliance.Tests.csproj";
 
     [Fact]
     public void ProductProjects_EnforceActualXmlGraphAndRestoredDependencies()
@@ -44,7 +47,8 @@ public sealed class ArchitectureTests
         var solutionProjects = solution.Descendants("Project")
             .Select(element => Absolute(root, RequiredAttribute(element, "Path"))).Order().ToArray();
         Assert.Equal(graph.Keys.Concat([
-            Absolute(root, BootstrapTests), Absolute(root, ArtifactTests), Absolute(root, IdentityTests)
+            Absolute(root, BootstrapTests), Absolute(root, ArtifactTests), Absolute(root, IdentityTests),
+            Absolute(root, AuditTests)
         ]).Order(), solutionProjects);
         var actualProductProjects = Directory.EnumerateFiles(Path.Combine(root, "src"), "*.csproj", SearchOption.AllDirectories)
             .Where(path => !IsBuildOutput(path)).Order().ToArray();
@@ -79,7 +83,15 @@ public sealed class ArchitectureTests
             ReadProjectEdges(Absolute(root, BootstrapTests)).Order());
         Assert.Equal(new[] { Absolute(root, Host), Absolute(root, DbMigrator), Absolute(root, IdentityAccess) }.Order(),
             ReadProjectEdges(Absolute(root, IdentityTests)).Order());
-
+        var auditTests = XDocument.Load(Absolute(root, AuditTests));
+        var auditPackages = auditTests.Descendants("PackageReference").ToDictionary(
+            element => RequiredAttribute(element, "Include"), element => RequiredAttribute(element, "Version"));
+        Assert.Equal(pinned.OrderBy(pair => pair.Key), auditPackages.OrderBy(pair => pair.Key));
+        Assert.All(auditTests.Descendants("PackageReference"), element => Assert.Equal("all", (string?)element.Attribute("PrivateAssets")));
+        Assert.Equal(new[]
+        {
+            Absolute(root, Host), Absolute(root, DbMigrator), Absolute(root, AuditCompliance), Absolute(root, AuditContracts)
+        }.Order(), ReadProjectEdges(Absolute(root, AuditTests)).Order());
     }
 
     [Fact]
@@ -182,13 +194,24 @@ public sealed class ArchitectureTests
         [Absolute(root, Host)] = [Absolute(root, Inventory), Absolute(root, Contracts)],
         [Absolute(root, Artifact)] = [],
         [Absolute(root, IdentityAccess)] = [],
-        [Absolute(root, DbMigrator)] = [Absolute(root, IdentityAccess)]
+        [Absolute(root, AuditContracts)] = [],
+        [Absolute(root, AuditCompliance)] = [Absolute(root, AuditContracts)],
+        [Absolute(root, DbMigrator)] = [Absolute(root, IdentityAccess), Absolute(root, AuditCompliance)]
     };
 
     private static IReadOnlyDictionary<string, string> ApprovedPackages(string root, string project)
     {
         var identity = Absolute(root, IdentityAccess);
+        var audit = Absolute(root, AuditCompliance);
         var migrator = Absolute(root, DbMigrator);
+        if (project == audit)
+        {
+            return new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["Microsoft.EntityFrameworkCore.Design"] = "10.0.11",
+                ["Npgsql.EntityFrameworkCore.PostgreSQL"] = "10.0.3"
+            };
+        }
         if (project == identity)
         {
             return new Dictionary<string, string>(StringComparer.Ordinal)

@@ -35,8 +35,7 @@ Audit sink down, unauthorized purge, event timeline ambiguous. Đây là test đ
 - [FEAT-AUD-001 — Tamper-evident privileged action audit trail](features/immutable-audit.md)
 
 ## Implementation mapping
-
-FEAT-AUD-001 owns the approved T02 append/lookup foundation. Source and test evidence follow in the T02 implementation commit; the wider query/export module remains proposed.
+FEAT-AUD-001 maps the T02 append/lookup foundation to actual AUD, DbMigrator and PostgreSQL test paths; its 34 isolated tests and full deterministic gates pass locally. The original native T02 checkpoint remains failed without an execution receipt; a separate T02 evidence-recovery successor now records the inspected completion without replay, as detailed in the owner feature. The broader module and query/export capabilities remain proposed.
 
 ## Definition of done
 Tuân thủ [DoD](../../engineering/definition-of-done.md), [module boundaries](../../engineering/module-boundaries.md), [architecture](../../architecture/bounded-contexts.md).

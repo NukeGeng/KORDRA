@@ -73,7 +73,6 @@ I1 acceptance: Given a supported lowercase OCI digest, parsing preserves its ide
 - Open decisions: ADR-0008 is explicitly accepted for the scoped bootstrap. `[NEEDS-DECISION]`: product module owner; ADR-0001–0007 and registration dependencies remain proposed.
 
 
+## Shared Foundation composition — T01/T02 review
 
-## Shared Foundation composition — T01 review
-
-T01 adds IAM persistence, its isolated tests and explicit migrator to the root solution. Shared CI uses a disposable loopback PostgreSQL fixture. Artifact behavior and health-only/inventory-denied API behavior are unchanged; architecture tests enforce the exact T01 graph and approved package pins.
+T01 adds only IAM persistence and its separate migrator/test projects to the root solution. T02 adds AUD Contracts/persistence/tests and the AUD migrator command. Shared product CI uses a disposable loopback PostgreSQL fixture; the Artifact implementation and health-only/inventory-denied API behavior are preserved. The existing architecture tests constrain the exact owner-approved graph and pinned packages at each commit.

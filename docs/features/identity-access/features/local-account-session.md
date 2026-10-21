@@ -92,3 +92,5 @@ ADR-0012 is the concrete first implementation decision. No additional provider/l
 ## Review commit boundaries — T01 and T02
 
 T01 adds only IAM principal/session persistence, the explicit IAM migration command and its 17 tests. Product CI provisions a disposable PostgreSQL 15 fixture with separate synthetic roles/databases; trust authentication is restricted to that ephemeral runner service, bound to loopback, and requires no committed password or developer credential. Local tests retain the private locator and exact-target guards. Hosted CI execution remains pending until the commits are pushed.
+
+T02 adds the independent AUD migration command and project reference to the shared migrator while preserving IAM command/model ownership. The API remains without an IAM/AUD runtime dependency. Source commits are separated by their independently validated project graphs; broader authentication behavior starts at T03.

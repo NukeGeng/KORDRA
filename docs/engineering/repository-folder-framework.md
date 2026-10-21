@@ -11,18 +11,19 @@ The maintainer requested the folder framework **after** completing the accepted 
 
 ## Actual project graph
 
-Root `Kordra.slnx` contains nine projects after T01: six product projects and three test projects. IAM principal/session persistence, the explicit DbMigrator and 17 IAM tests are the narrow ADR-0012 T01 addition. Existing 48 Artifact and 85 Inventory Bootstrap tests remain. No AUD or login implementation is part of this commit.
+Root `Kordra.slnx` contains twelve projects after T02: eight product projects (Artifact Domain, Inventory Contracts/runtime, Kordra.Api, IAM persistence, AUD Contracts/persistence, and DbMigrator) and four test projects. IAM T01 and AUD T02 are scoped ADR-0012 additions. Local product evidence is 48 Artifact, 85 Inventory Bootstrap, 17 IAM and 34 AUD tests; hosted CI remains pending push. This does not adopt ADR-0009 or implement login/authorization ingress.
 
 - `src/Modules/ArtifactManagement/Domain/`: immutable digest domain; [FEAT-ART-001](../features/artifact-management/features/immutable-artifact.md).
 - `src/Modules/InfrastructureInventory/Contracts/` and its parent runtime: immutable in-process read seam and unavailable reader; [FEAT-INV-001/I1](../features/infrastructure-inventory/features/register-target.md).
 - `src/Host/Kordra.Api/`: IPv4 loopback API, constant liveness, uniform inventory denial; no IAM or provider.
 - `src/Modules/IdentityAccess/`: IAM-owned principal/session persistence for the accepted T01 slice; no login endpoints or authorization runtime.
-- `src/Host/Kordra.DbMigrator/`: explicitly invoked, loopback/role-checked IAM migration host; no API startup migration.
-- Root `tests/ArtifactManagement.Domain.Tests/`, `tests/InfrastructureInventory.Bootstrap.Tests/` and `tests/IdentityAccess.Tests/`: 48 + 85 + 17 locally passing tests. Coverage includes project/PE boundaries, compiled negative fixtures, loopback behavior, isolated IAM migration round trip and read-only runtime-role permission probe. This is not remote CI evidence.
+- `src/Host/Kordra.DbMigrator/`: explicitly invoked, loopback/role-checked IAM/AUD migration host; no API startup migration.
+- `src/Modules/AuditCompliance/Contracts/` and its parent runtime: AUD append/exact lookup and owner persistence, with isolated `tests/AuditCompliance.Tests/`; no history HTTP endpoint.
+- Root `tests/ArtifactManagement.Domain.Tests/`, `tests/InfrastructureInventory.Bootstrap.Tests/` and `tests/IdentityAccess.Tests/`: 48 + 85 + 17 + 34 locally passing tests. Coverage includes project/PE boundaries, compiled negative fixtures, loopback behavior, isolated IAM migration round trip and read-only runtime-role permission probe. This is not remote CI evidence.
 
 ## Reserved folders
 
-The original reservation created the paths below with proposed READMEs. `src/Modules/IdentityAccess` and `src/Host/Kordra.DbMigrator` were subsequently adopted for the exact FEAT-IAM-002 T01 slice under ADR-0012 and are documented as implemented paths above. Remaining locations below are still reservations only: their presence does not mean a feature, module registration, driver, UI, deployment or Enterprise product exists. Module names follow the [proposed mapping](project-conventions.md); module specs retain their current status and ownership.
+The original reservation created the paths below with proposed READMEs. `src/Modules/IdentityAccess`, `src/Modules/AuditCompliance` and `src/Host/Kordra.DbMigrator` were subsequently adopted for the exact FEAT-IAM-002 T01 slice under ADR-0012 and are documented as implemented paths above. Remaining locations below are still reservations only: their presence does not mean a feature, module registration, driver, UI, deployment or Enterprise product exists. Module names follow the [proposed mapping](project-conventions.md); module specs retain their current status and ownership.
 
 | Reserved path | Canonical owner / adoption prerequisite |
 |---|---|

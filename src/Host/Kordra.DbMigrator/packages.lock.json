@@ -388,6 +388,16 @@
           "System.Composition.Runtime": "9.0.0"
         }
       },
+      "kordra.modules.auditcompliance": {
+        "type": "Project",
+        "dependencies": {
+          "Kordra.Modules.AuditCompliance.Contracts": "[1.0.0, )",
+          "Npgsql.EntityFrameworkCore.PostgreSQL": "[10.0.3, )"
+        }
+      },
+      "kordra.modules.auditcompliance.contracts": {
+        "type": "Project"
+      },
       "kordra.modules.identityaccess": {
         "type": "Project",
         "dependencies": {
