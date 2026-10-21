@@ -2,7 +2,7 @@
 id: FEAT-ART-001
 status: proposed
 owner: unassigned
-last_reviewed: 2026-10-18
+last_reviewed: 2026-10-20
 module_id: MOD-ART
 feature_id: FEAT-ART-001
 phase: MVP
@@ -11,6 +11,13 @@ test_paths: ["tests/ArtifactManagement.Domain.Tests/"]
 ---
 
 # FEAT-ART-001 — Discover and pin immutable deployable artifacts
+
+## Registration implementation slice — proposed 2026-10-20
+
+Luna T10 preserves I1 digest semantics and adds tenant/project-owned registry-backed registration after trusted catalog/credential boundaries. Actor User with `artifact.register` project; manual registration may precede signed CI intake. ART accepts exact digest/repository/platform and provenance; resolve tags only into a newly pinned immutable record, never rewrite an existing record. Registry endpoints/destinations, redirects, bounded downloads, TLS and credential scope need an explicit SSRF/provider policy before network integration.
+
+Use [release-execution v1](../../../contracts/release-execution-v1.md) for immutable binding/idempotency; persistence/package/registration DTO adoption precedes source. Acceptance ART-R1: registry existence/content/platform/provenance checks and real stored identity agree. ART-R2: tag mutation, wrong digest/content, foreign project/credential or unapproved registry/redirect rejects. ART-R3: duplicate/concurrent same-project/repository/platform/digest yields one auditable record; failed/unknown commit is reconciled. ART-R4: outage or unsupported registry behavior cannot create a verified artifact. CI authenticity belongs to CI owner; no circular runtime reference or signed-webhook claim from manual registration. Existing 48 I1 tests remain; new targeted integration tests are required.
+
 
 ## User story / outcome
 **Actor:** Developer / CI Provider. **Goal:** Discover and pin immutable deployable artifacts. **Primary owner:** `MOD-ART`. **Phase:** MVP.

@@ -2,7 +2,7 @@
 id: GOV-SOURCE
 status: proposed
 owner: unassigned
-last_reviewed: 2026-10-19
+last_reviewed: 2026-10-20
 ---
 
 # Nguồn chân lý và chống tài liệu lạc hậu
@@ -18,6 +18,10 @@ last_reviewed: 2026-10-19
 - `docs/operations/`: runbooks thực thi/khôi phục; [local PostgreSQL setup](../operations/local-postgresql-setup.md) records this machine’s local-only database and Keychain references, not product persistence.
 - `docs/engineering/technical-debt.md`: debt register, không ghi TODO rải rác làm nguồn duy nhất.
 - `docs/engineering/project-conventions.md` and `architecture-test-rules.md`: proposed code conventions and architecture-test design; actual source/CI behavior remains established by implementation and test evidence.
+
+## Cross-feature delivery and implementation handoff
+
+[Control Plane delivery design](../architecture/control-plane-delivery-design.md) owns milestone composition and cross-feature outcomes. [Luna handoff](../engineering/luna-implementation-handoff.md) owns dependency/readiness guidance; [roadmap](../product/roadmap.md) remains the single progress register and owner feature/contract files retain business truth. Do not copy owner rules into a new task system or infer implementation/ADR acceptance from strategic approval.
 
 ## Metadata bắt buộc
 YAML frontmatter: `id`, `status`, `owner`, `last_reviewed`; module còn có `module_id`; feature có `feature_id`, `module_id`, `phase`, `source_paths`, `test_paths` (đường dẫn chưa có có thể là `[]`).

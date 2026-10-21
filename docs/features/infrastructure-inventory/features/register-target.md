@@ -1,8 +1,8 @@
 ---
 id: FEAT-INV-001
 status: proposed
-owner: unassigned
-last_reviewed: 2026-10-19
+owner: NukeGeng
+last_reviewed: 2026-10-20
 module_id: MOD-INV
 feature_id: FEAT-INV-001
 phase: MVP
@@ -11,6 +11,15 @@ test_paths: ["tests/InfrastructureInventory.Bootstrap.Tests/InfrastructureInvent
 ---
 
 # FEAT-INV-001 — Register infrastructure target and discover capability
+
+## Product delivery slices — T05/T07 approved; T09 remains proposed (2026-10-20)
+
+The implementation handoff separates T05 registration, T07 enforced fake read and T09 real OP-P0 reads. Accepted ADR-0012 and authority/admission v1 adopt the T05/T07 metadata/read contracts. T05 creates stable Active/Disabled/Deleted target identity, exact tenant/project/environment and revision under target.manage; no credential/provider call. IDs are never reused. T07 requires trusted target.read, U/D audit and actual output-count race assertions; fakes never become production authority. These slices are approved for implementation, not yet implemented.
+
+T09 consumes reviewed SEC binding and independently verified cluster/context identity. Approve exact Kubernetes/Helm resources/verbs/fields, supported SDK/CLI versions, TLS and secret-bearing metadata exclusions before provider integration. target.read implies no Secrets/exec/values/manifests/write permission. Proposed read envelope: schemaVersion=1, exact target/selection/binding, capturedAtUtc, coverage/freshness and bounded sanitized resources. Missing/partial/stale coverage is explicit; network/auth failure is not observed unhealthy. No namespace/context fallback.
+
+Acceptance INV-F1: idempotent registration with foreign ownership/conflicting binding/stale ETag denial. INV-F2: actual HTTP enforcer with delayed provider, scope switch/revoke, oversize/audit failure releases no unauthorized output. INV-P0: zero mutation calls, exact target identity/allowlist, finite timeouts/freshness and secret-free errors, plus separately authorized live evidence for actual OP-P0. Preserve old denied paths/BCL consumers until explicit migration; versioned positive API examples and consumer tests are required. Live target access is not authorized by this design.
+
 
 ## User story / outcome
 **Actor:** Operator / Tenant Admin. **Goal:** Register infrastructure target and discover capability. **Primary owner:** `MOD-INV`. **Phase:** MVP.
@@ -36,7 +45,7 @@ Unreachable target becomes Pending/Unknown; stale discovery cannot support a suc
 
 For the bounded candidate in [FEAT-IAM-001/I2](../../identity-access/features/authorize-resource.md#i2--runtime-authority-contract-increment-proposed), MOD-INV remains the source of target identity, lifecycle eligibility, target revision and tenant/project/environment associations. Those metadata facts do not prove provider identity, credential validity or observed inventory; those remain separate owner decisions. Resolve the target side of each association against MOD-PRJ's authoritative result. Missing, disabled, ambiguous, stale or unavailable target evidence denies access and must not reveal cross-tenant existence.
 
-MOD-INV is the logical owner; the human feature custodian and exact lifecycle states eligible for read remain unassigned decisions. The existing local API inventory denial remains unchanged. This proposal adds no provider call, contract, source/test mapping or runtime behavior.
+At the original I2.7 proposal, formal ownership and exact lifecycle states eligible for read were unresolved. Accepted ADR-0012 assigns NukeGeng accountability for the approved Foundation slice and MOD-INV ownership of target identity/lifecycle facts. T09 provider access remains separately proposed; the existing local API inventory denial remains unchanged until T06/T07 implementation evidence passes.
 
 ## Negative & recovery scenarios
 Bind agent from different org; namespace outside permission; insecure certificate bypass.

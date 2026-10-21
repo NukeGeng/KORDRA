@@ -2,7 +2,7 @@
 id: FEAT-APR-001
 status: proposed
 owner: unassigned
-last_reviewed: 2026-10-15
+last_reviewed: 2026-10-20
 module_id: MOD-APR
 feature_id: FEAT-APR-001
 phase: MVP
@@ -11,6 +11,13 @@ test_paths: []
 ---
 
 # FEAT-APR-001 — Approve production deployment with separation of duties
+
+## Approval queue implementation slice — proposed 2026-10-20
+
+Luna T11 APR task follows frozen release. Actor approver with `deployment.approve` exact environment and current policy; no platform or role-name bypass. [Release-execution v1](../../../contracts/release-execution-v1.md) proposes Pending/Granted/Rejected/Revoked/Expired transitions and immutable binding. Approve/reject/revoke includes expected revision and reason, is audited/idempotent and cannot rewrite an old decision. Requester self-approval is rejected whenever the environment's reviewed SoD policy requires independence; a solo sandbox needs an explicit policy choice, never a silent production exemption.
+
+Before source, accept ADR-0005/owner policy, approval TTL and freeze-window semantics, eligible approver definition and safe override exclusions. Those are one milestone decision, not another GOAL-wide review. Acceptance APR-F1: grant binds exact artifact/spec/target/action/policy/requester/approver and expiry. APR-F2: self-approval, foreign environment, changed hash/definition, expired/revoked grant or stale ETag rejects. APR-F3: concurrent approve/reject/revoke has one durable ordered result; ACK-loss/duplicate does not grant twice. APR-F4: queue projection shows persisted status and worker rechecks current approval at dispatch. Human company/production authority remains separate.
+
 
 ## User story / outcome
 **Actor:** Release Approver. **Goal:** Approve production deployment with separation of duties. **Primary owner:** `MOD-APR`. **Phase:** MVP.

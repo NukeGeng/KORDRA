@@ -2,7 +2,7 @@
 id: DOC-README
 status: proposed
 owner: unassigned
-last_reviewed: 2026-10-18
+last_reviewed: 2026-10-20
 ---
 
 # Tổng mục lục tài liệu
@@ -62,3 +62,7 @@ Nhiều tài liệu vẫn là `proposed`; đọc trạng thái từng file. ADR-
 ### Narrow authorization baseline
 
 [ADR-0003](decisions/0003-tenant-authorization.md) is human-accepted for the bounded permission/trusted-resource-scope policy baseline. This does not accept IAM runtime, authentication/session/storage, the whole permission catalog or positive inventory access. See [current roadmap](product/roadmap.md) for remaining contract prerequisites.
+
+### Comprehensive feature design and Luna handoff — 2026-10-20
+
+Read the [delivery design](architecture/control-plane-delivery-design.md), [Luna tasks](engineering/luna-implementation-handoff.md), [local authentication feature](features/identity-access/features/local-account-session.md) and [accepted scoped ADR-0012](decisions/0012-operator-pilot-runtime-foundation.md). Foundation T01–T07 and their narrow runtime contracts are accepted; later provider/distributed-workflow choices remain proposed. Product implementation and test evidence are tracked by their owner features.

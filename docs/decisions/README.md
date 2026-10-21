@@ -2,7 +2,7 @@
 id: ADR-INDEX
 status: proposed
 owner: unassigned
-last_reviewed: 2026-10-19
+last_reviewed: 2026-10-20
 ---
 
 # Architecture Decision Records (ADRs)
@@ -24,3 +24,4 @@ ADR tracks **why** a design was chosen; status initially `proposed`, so not a fi
 
 | [0010](0010-local-readonly-bootstrap.md) | Accepted scoped Mac-local host/inventory bootstrap; synthetic tests only, denied ingress until identity/provider decisions |
 | [0011](0011-local-postgresql-roles.md) | Accepted local-only PostgreSQL database/role layout; does not adopt product persistence or messaging technology |
+| [0012](0012-operator-pilot-runtime-foundation.md) | Accepted exact Foundation T01–T07 scope: Identity, EF/Npgsql, owner-specific identity/authority/audit persistence, local sessions and single-process protected admission; no provider, distributed worker or production access |

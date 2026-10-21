@@ -1,14 +1,14 @@
 ---
 id: MOD-TEN
 status: proposed
-owner: unassigned
+owner: NukeGeng
 last_reviewed: 2026-10-15
 module_id: MOD-TEN
 ---
 
 # Tenant & Membership — module definition
 
-**Module ID:** `MOD-TEN` · **Phase:** MVP · **Owner:** unassigned (assign before acceptance).
+**Module ID:** `MOD-TEN` · **Phase:** MVP · **Owner:** NukeGeng (accountable for ADR-0012 Foundation T01–T07; wider module scope remains proposed).
 
 ## Responsibility and boundary
 Tenant & Membership owns: **Organization, Membership, Invitation, TenantStatus**. Không nhận ownership business của module khác. Giao tiếp bằng commands/events hoặc read contracts, không query trực tiếp internal storage của context khác.

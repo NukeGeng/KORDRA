@@ -1,8 +1,8 @@
 ---
 id: FEAT-PRJ-001
 status: proposed
-owner: unassigned
-last_reviewed: 2026-10-18
+owner: NukeGeng
+last_reviewed: 2026-10-20
 module_id: MOD-PRJ
 feature_id: FEAT-PRJ-001
 phase: MVP
@@ -11,6 +11,15 @@ test_paths: []
 ---
 
 # FEAT-PRJ-001 — Create and govern deployment environments
+
+## Foundation implementation slice — approved for implementation 2026-10-20
+
+Luna T05 PRJ task follows TEN/audit under accepted ADR-0012 and authority/admission v1. Actor authenticated User; project.manage for catalog mutation, project.read for adopted scoped reads. Persist exact Project/Application/Environment ownership, Active/Suspended/Deleted lifecycle and revisions, explicit Development/Test/Staging/Production classification and policy association. ConnectionProfile stays SEC-owned. This approved slice is not implementation evidence.
+
+The contract owns command DTOs and transactional two-owner target binding. Project-only target requires resolved environment absence; unknown lookup never supplies it. First slice rejects tenant/project moves rather than relabeling IDs. Creation grants no implicit target/deployment rights. INV association updates enlist PRJ/INV owner handlers and AUD in one transaction under the writer gate, never cross-owner table access.
+
+Acceptance PRJ-F1: create catalog objects once per idempotency key with audit and stable owner references. PRJ-F2: foreign tenant/project/target, stale revision, invalid policy/classification and name-based downgrade reject. PRJ-F3: crash between association updates rolls back both; no reader sees a half-binding. PRJ-F4: suspended/deleted/unknown/conflicting owner facts deny U/D, including change-and-change-back. Planned roots: existing PRJ reservation and tests/ProjectEnvironment.Tests/; no speculative frontmatter mappings.
+
 
 ## User story / outcome
 **Actor:** Tenant Admin / Project Owner. **Goal:** Create and govern deployment environments. **Primary owner:** `MOD-PRJ`. **Phase:** MVP.
@@ -36,7 +45,7 @@ Rename environment không đổi security classification; policy change requires
 
 For the bounded candidate in [FEAT-IAM-001/I2](../../identity-access/features/authorize-resource.md#i2--runtime-authority-contract-increment-proposed), MOD-PRJ remains the source of project-to-tenant and environment-to-project/tenant ownership, classification, target binding and applicable policy association. Future owner evidence must bind the exact lookup and current owner revision. A project-only target requires an authoritative, resolved absence of an environment; failed or unavailable environment lookup is not absence. Names, labels and read-model projections cannot establish ownership. Missing, stale, conflicting or unavailable ownership/policy evidence denies access.
 
-MOD-PRJ is the logical owner; the human feature custodian and policy-assembly responsibility remain unassigned. This proposal adds no contract, source/test mapping, API, policy key or runtime behavior.
+At the original I2.7 proposal, formal ownership and concrete policy assembly were unresolved. Accepted ADR-0012 assigns NukeGeng accountability for the approved Foundation slice and MOD-PRJ ownership of its project/environment facts; the broader module remains proposed. The prior I2.7 approval alone adopted no source mapping or runtime behavior.
 
 ## Negative & recovery scenarios
 Attach target của org B; downgrade production classification without approval; duplicate resource id.

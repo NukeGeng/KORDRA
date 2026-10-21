@@ -1,14 +1,14 @@
 ---
 id: MOD-PRJ
 status: proposed
-owner: unassigned
+owner: NukeGeng
 last_reviewed: 2026-10-15
 module_id: MOD-PRJ
 ---
 
 # Project, Application & Environment — module definition
 
-**Module ID:** `MOD-PRJ` · **Phase:** MVP · **Owner:** unassigned (assign before acceptance).
+**Module ID:** `MOD-PRJ` · **Phase:** MVP · **Owner:** NukeGeng (accountable for ADR-0012 Foundation T01–T07; wider module scope remains proposed).
 
 ## Responsibility and boundary
 Project, Application & Environment owns: **Project, Application, Environment, EnvironmentClassification**. Không nhận ownership business của module khác. Giao tiếp bằng commands/events hoặc read contracts, không query trực tiếp internal storage của context khác.

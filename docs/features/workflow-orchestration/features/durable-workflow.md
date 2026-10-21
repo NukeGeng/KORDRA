@@ -2,7 +2,7 @@
 id: FEAT-WFL-001
 status: proposed
 owner: unassigned
-last_reviewed: 2026-10-15
+last_reviewed: 2026-10-20
 module_id: MOD-WFL
 feature_id: FEAT-WFL-001
 phase: MVP
@@ -11,6 +11,15 @@ test_paths: []
 ---
 
 # FEAT-WFL-001 — Durable deployment workflow through failures
+
+## Versioned durable workflow slice — proposed 2026-10-20
+
+Luna T12 WFL task follows durable transport, frozen approval and the cross-process worker authority decision. WFL owns instance/step/timer/target lease and recovery, DEP owns deployment outcome. First workflow is an immutable reviewed template version with typed allowed steps, not arbitrary shell or a visual editor. Bind each instance to exact template/spec/operation/tenant/target. Independent ControlWorker hosting must keep execution progressing when the Mac client/API is closed where the approved topology permits; a worker on the same sleeping Mac cannot pass this criterion.
+
+Adopt [release-execution v1](../../../contracts/release-execution-v1.md), the concrete persisted transition/lease protocol, worker identity/current authorization and retry/timeout limits before implementation. Persist dispatch before delivery; delayed authorization/approval is revalidated. Expired lease with possibly active provider work becomes Unknown, not permission for a competing worker. Recovery reconciles journal/target evidence and never replays an irreversible step from a UI retry.
+
+Acceptance WFL-D1: restart at every transition/inbox/outbox boundary produces one logical operation and consistent history. WFL-D2: duplicate/stale epoch/result, expired/revoked approval, wrong tenant/target and unsupported workflow version reject. WFL-D3: unknown execution remains Unknown until verified evidence; writer handoff cannot overlap unfenced provider work. WFL-D4: real independent-host restart/Mac-close evidence, finite deadlines, crash-safe timer and cancellation behavior are recorded. No process/container is launched by this proposed task description.
+
 
 ## User story / outcome
 **Actor:** System / Operator Recovery. **Goal:** Durable deployment workflow through failures. **Primary owner:** `MOD-WFL`. **Phase:** MVP.
