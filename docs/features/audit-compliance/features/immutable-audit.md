@@ -95,3 +95,7 @@ PR9-AUD-CLEANUP-001 carries the original deadline/caller token through rollback,
 ## PR #9 hosted-CI correction — receipt timestamp precision
 
 The first conflict-free hosted run exposed a receipt mismatch on Linux: .NET recorded-at values can contain 100 ns ticks, while PostgreSQL persists microseconds. AUD now normalizes its server-generated recorded-at timestamp to UTC microseconds before persistence and receipt creation, preserving exact receipt equality on lookup/replay. A BCL TimeProvider seam injects sub-microsecond timestamps in two deterministic PostgreSQL regressions; existing receipt-equality assertions stay strict. No schema, hash fields, authentication/admission policy, dependency or migration changes are required. The failed run remains recorded as run 39563238897 on f50ae68; replacement CI must validate the corrected head.
+
+## T03 local-authentication consumer boundary — 2026-10-21
+
+The accepted IAM T03 slice composes AUD through the host adapter in `FEAT-IAM-002`; IAM does not read or write AUD tables. Successful login and account/session mutations stage required AUD records in the same PostgreSQL transaction as IAM state, and uncertain audit/commit outcomes fail closed. AUD’s HTTP history/query surface remains disabled. The health-only API profile does not register AUD persistence; AUD is available only to the explicit local-pilot composition. The exact cross-module project/assembly graph remains covered by `tests/InfrastructureInventory.Bootstrap.Tests/ArchitectureTests.cs`.

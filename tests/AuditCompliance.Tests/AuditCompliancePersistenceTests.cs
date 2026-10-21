@@ -5,6 +5,7 @@ using Kordra.DbMigrator;
 using Kordra.Modules.AuditCompliance.Contracts;
 using Kordra.Modules.AuditCompliance.Infrastructure;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.EntityFrameworkCore.Metadata;
 using Npgsql;
 using System.Diagnostics;
@@ -93,17 +94,19 @@ public sealed class AuditCompliancePersistenceTests
     }
 
     [Fact]
-    public void API_remains_without_AUD_persistence_or_migrator_dependency()
+    public async Task Default_API_profile_keeps_AUD_persistence_inactive_and_offline_migrator_separate()
     {
         var references = typeof(Program).Assembly.GetReferencedAssemblies()
             .Select(reference => reference.Name)
             .ToHashSet(StringComparer.Ordinal);
 
-        Assert.DoesNotContain("Kordra.Modules.AuditCompliance", references);
-        Assert.DoesNotContain("Kordra.Modules.AuditCompliance.Contracts", references);
+        Assert.Contains("Kordra.Modules.AuditCompliance", references);
+        Assert.Contains("Kordra.Modules.AuditCompliance.Contracts", references);
         Assert.DoesNotContain("Kordra.DbMigrator", references);
-        Assert.DoesNotContain("Microsoft.EntityFrameworkCore", references);
-        Assert.DoesNotContain("Npgsql", references);
+
+        await using var app = LocalApiHost.Create(port: 0);
+        Assert.Null(app.Services.GetService<IAuditAppendPort>());
+        Assert.Null(app.Services.GetService<IDbContextFactory<AuditDbContext>>());
     }
 
     [Fact]

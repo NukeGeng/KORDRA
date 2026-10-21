@@ -140,9 +140,15 @@
       "kordra.api": {
         "type": "Project",
         "dependencies": {
+          "Kordra.Modules.AuditCompliance": "[1.0.0, )",
+          "Kordra.Modules.AuditCompliance.Contracts": "[1.0.0, )",
+          "Kordra.Modules.IdentityAccess": "[1.0.0, )",
           "Kordra.Modules.InfrastructureInventory": "[1.0.0, )",
           "Kordra.Modules.InfrastructureInventory.Contracts": "[1.0.0, )"
         }
+      },
+      "kordra.buildingblocks.security": {
+        "type": "Project"
       },
       "kordra.dbmigrator": {
         "type": "Project",
@@ -164,6 +170,8 @@
       "kordra.modules.identityaccess": {
         "type": "Project",
         "dependencies": {
+          "Kordra.BuildingBlocks.Security": "[1.0.0, )",
+          "Kordra.Modules.AuditCompliance.Contracts": "[1.0.0, )",
           "Microsoft.AspNetCore.Identity.EntityFrameworkCore": "[10.0.11, )",
           "Npgsql.EntityFrameworkCore.PostgreSQL": "[10.0.3, )"
         }

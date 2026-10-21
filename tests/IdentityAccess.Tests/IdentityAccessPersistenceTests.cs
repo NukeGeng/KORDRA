@@ -1,6 +1,7 @@
 using System.Security.Cryptography;
 using Kordra.Api;
 using Kordra.DbMigrator;
+using Kordra.Modules.IdentityAccess.Authentication;
 using Kordra.Modules.IdentityAccess.Infrastructure;
 using Kordra.Modules.IdentityAccess.Infrastructure.Migrations;
 using Microsoft.EntityFrameworkCore;
@@ -8,11 +9,13 @@ using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
 using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage;
+using Microsoft.Extensions.DependencyInjection;
 using Npgsql;
 using Xunit;
 
 namespace Kordra.Modules.IdentityAccess.Tests;
 
+[Collection("IdentityAccess PostgreSQL and local HTTPS")]
 public sealed class IdentityAccessPersistenceTests
 {
     [Fact]
@@ -69,16 +72,17 @@ public sealed class IdentityAccessPersistenceTests
     }
 
     [Fact]
-    public void Api_bootstrap_has_no_IAM_persistence_or_migration_dependency()
+    public async Task Default_api_bootstrap_keeps_IAM_persistence_and_migration_inactive()
     {
         var references = typeof(Program).Assembly.GetReferencedAssemblies()
             .Select(reference => reference.Name)
             .ToHashSet(StringComparer.Ordinal);
 
-        Assert.DoesNotContain("Kordra.Modules.IdentityAccess", references);
         Assert.DoesNotContain("Kordra.DbMigrator", references);
-        Assert.DoesNotContain("Microsoft.EntityFrameworkCore", references);
-        Assert.DoesNotContain("Npgsql", references);
+
+        await using var app = LocalApiHost.Create(port: 0);
+        Assert.Null(app.Services.GetService<LocalAuthenticationService>());
+        Assert.Null(app.Services.GetService<IDbContextFactory<KordraIdentityDbContext>>());
     }
 
     [Fact]
@@ -102,8 +106,14 @@ public sealed class IdentityAccessPersistenceTests
 
         var entityTypes = dbContext.Model.GetEntityTypes().ToArray();
         Assert.Equal(
-            [typeof(KordraIdentityUser), typeof(KordraSession)],
+            [typeof(KordraAuthenticationCommand), typeof(KordraIdentityUser), typeof(KordraSession)],
             entityTypes.Select(entity => entity.ClrType).OrderBy(type => type.FullName, StringComparer.Ordinal));
+
+        var command = Assert.Single(entityTypes, entity => entity.ClrType == typeof(KordraAuthenticationCommand));
+        Assert.Equal("iam_authentication_commands", command.GetTableName());
+        Assert.Equal(
+            ["command_id", "command_kind", "created_at_utc", "idempotency_key_hash", "principal_id"],
+            GetColumnNames(command));
 
         var principal = Assert.Single(entityTypes, entity => entity.ClrType == typeof(KordraIdentityUser));
         Assert.Equal("iam_principals", principal.GetTableName());
@@ -177,7 +187,7 @@ public sealed class IdentityAccessPersistenceTests
 
         var entityTypes = dbContext.Model.GetEntityTypes().ToArray();
         Assert.Equal(
-            ["iam_principals", "iam_sessions"],
+            ["iam_authentication_commands", "iam_principals", "iam_sessions"],
             entityTypes.Select(entity => entity.GetTableName()).Order(StringComparer.Ordinal));
         Assert.All(entityTypes, entity => Assert.Equal("app", entity.GetSchema()));
         Assert.DoesNotContain(
@@ -210,9 +220,18 @@ public sealed class IdentityAccessPersistenceTests
                 LastActivityAtUtc = now,
                 AbsoluteExpiresAtUtc = now.AddHours(8)
             };
+            var command = new KordraAuthenticationCommand
+            {
+                CommandId = Guid.NewGuid(),
+                IdempotencyKeyHash = RandomNumberGenerator.GetBytes(32),
+                PrincipalId = principal.Id,
+                CommandKind = "logout-all",
+                CreatedAtUtc = now
+            };
 
             dbContext.Principals.Add(principal);
             dbContext.Sessions.Add(session);
+            dbContext.AuthenticationCommands.Add(command);
             await dbContext.SaveChangesAsync();
             dbContext.ChangeTracker.Clear();
 
@@ -220,6 +239,8 @@ public sealed class IdentityAccessPersistenceTests
                 .SingleAsync(value => value.Id == principal.Id);
             var storedSession = await dbContext.Sessions.AsNoTracking()
                 .SingleAsync(value => value.SessionId == session.SessionId);
+            var storedCommand = await dbContext.AuthenticationCommands.AsNoTracking()
+                .SingleAsync(value => value.CommandId == command.CommandId);
 
             Assert.Equal(principal.NormalizedUserName, storedPrincipal.NormalizedUserName);
             Assert.Equal(principal.AccountStatus, storedPrincipal.AccountStatus);
@@ -227,6 +248,9 @@ public sealed class IdentityAccessPersistenceTests
             Assert.Equal(32, storedSession.SessionReferenceHash.Length);
             Assert.Equal(principal.Id, storedSession.PrincipalId);
             Assert.Null(storedPrincipal.Email);
+            Assert.Equal(command.CommandKind, storedCommand.CommandKind);
+            Assert.Equal(command.IdempotencyKeyHash, storedCommand.IdempotencyKeyHash);
+            Assert.Equal(principal.Id, storedCommand.PrincipalId);
         }
         finally
         {

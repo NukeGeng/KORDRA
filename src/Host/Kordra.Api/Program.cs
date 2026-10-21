@@ -2,10 +2,41 @@ namespace Kordra.Api;
 
 public static class Program
 {
-    // Command-line arguments intentionally confer no configuration or binding authority.
-    public static async Task Main()
+    public static async Task<int> Main(string[] args)
     {
-        await using var app = LocalApiHost.Create();
-        await app.RunAsync();
+        if (args.Length == 0)
+        {
+            await using var healthOnlyApp = LocalApiHost.Create();
+            await healthOnlyApp.RunAsync();
+            return 0;
+        }
+
+        try
+        {
+            if (args is ["--profile", "local-pilot"])
+            {
+                using var options = LocalPilotHostOptions.LoadInstalled();
+                await using var app = LocalApiHost.CreateLocalPilot(options);
+                await app.Services.GetRequiredService<Modules.IdentityAccess.Authentication.LocalAuthenticationService>()
+                    .InitializeBootAsync();
+                await app.RunAsync();
+                return 0;
+            }
+
+            if (args.Length == 2 && args[0] == "identity")
+            {
+                using var options = LocalPilotHostOptions.LoadInstalled();
+                return await LocalIdentityAdminCommand.RunAsync(args[1], options);
+            }
+
+            Console.Error.WriteLine("Usage: Kordra.Api [--profile local-pilot | identity enroll-user|recover-user|disable-user]");
+            return 2;
+        }
+        catch
+        {
+            // Connection locators, certificate paths and provider exceptions are private.
+            Console.Error.WriteLine("Kordra local operation failed; no private configuration was displayed.");
+            return 1;
+        }
     }
 }

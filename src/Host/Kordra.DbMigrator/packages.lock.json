@@ -388,6 +388,9 @@
           "System.Composition.Runtime": "9.0.0"
         }
       },
+      "kordra.buildingblocks.security": {
+        "type": "Project"
+      },
       "kordra.modules.auditcompliance": {
         "type": "Project",
         "dependencies": {
@@ -401,6 +404,8 @@
       "kordra.modules.identityaccess": {
         "type": "Project",
         "dependencies": {
+          "Kordra.BuildingBlocks.Security": "[1.0.0, )",
+          "Kordra.Modules.AuditCompliance.Contracts": "[1.0.0, )",
           "Microsoft.AspNetCore.Identity.EntityFrameworkCore": "[10.0.11, )",
           "Npgsql.EntityFrameworkCore.PostgreSQL": "[10.0.3, )"
         }

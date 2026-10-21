@@ -1,4 +1,5 @@
 using System.Net;
+using Kordra.Modules.IdentityAccess.Authentication;
 using Kordra.Modules.InfrastructureInventory;
 using Kordra.Modules.InfrastructureInventory.Contracts;
 using Microsoft.AspNetCore.Server.Kestrel.Core;
@@ -62,6 +63,75 @@ public static class LocalApiHost
             context.Response.ContentType = "text/plain; charset=utf-8";
             return context.Response.WriteAsync("alive\n", context.RequestAborted);
         }));
+        app.MapFallback((RequestDelegate)(context =>
+        {
+            context.Response.StatusCode = StatusCodes.Status404NotFound;
+            return Task.CompletedTask;
+        }));
+        return app;
+    }
+
+    /// <summary>
+    /// Creates the explicitly selected HTTPS-only local-pilot profile. The installed
+    /// options already hold the canonical installation lock before this host is built.
+    /// </summary>
+    public static WebApplication CreateLocalPilot(LocalPilotHostOptions options)
+    {
+        ArgumentNullException.ThrowIfNull(options);
+        if (!options.Certificate.HasPrivateKey)
+        {
+            throw new InvalidOperationException("The local-pilot TLS certificate must include its private key.");
+        }
+
+        var builder = WebApplication.CreateEmptyBuilder(new WebApplicationOptions
+        {
+            Args = [],
+            ApplicationName = typeof(LocalApiHost).Assembly.GetName().Name,
+            EnvironmentName = Environments.Production,
+            ContentRootPath = AppContext.BaseDirectory
+        });
+        builder.Logging.ClearProviders();
+        builder.Host.UseConsoleLifetime(hostOptions => hostOptions.SuppressStatusMessages = true);
+        builder.WebHost.UseKestrelCore().ConfigureKestrel(server =>
+        {
+            server.AddServerHeader = false;
+            server.Listen(IPAddress.Loopback, 5128, listen =>
+            {
+                listen.Protocols = HttpProtocols.Http1;
+                listen.UseHttps(options.Certificate);
+            });
+        });
+
+        builder.Services.AddMetrics();
+        builder.Services.AddRoutingCore();
+        builder.Services.AddSingleton<IInventoryReader, UnavailableInventoryReader>();
+        builder.Services.AddSingleton<IIdentityAuditTransactionFactory, IdentityAccessAuditTransactionAdapter>();
+        builder.Services.AddLocalAuthenticationServices(
+            options.RuntimeConnectionString,
+            options.Authentication,
+            options.PasswordPolicy);
+        LocalAuthenticationEndpoints.AddServices(builder.Services);
+
+        var app = builder.Build();
+        app.Use(LocalAuthenticationEndpoints.RequestGuard("localhost:5128"));
+        app.Use(async (context, next) =>
+        {
+            if (context.Request.Path.StartsWithSegments("/inventory", StringComparison.OrdinalIgnoreCase) ||
+                context.Request.Path.StartsWithSegments("/api/inventory", StringComparison.OrdinalIgnoreCase))
+            {
+                context.Response.StatusCode = StatusCodes.Status403Forbidden;
+                return;
+            }
+
+            await next(context);
+        });
+        app.UseAuthentication();
+        app.MapGet("/health/live", (RequestDelegate)(context =>
+        {
+            context.Response.ContentType = "text/plain; charset=utf-8";
+            return context.Response.WriteAsync("alive\n", context.RequestAborted);
+        }));
+        LocalAuthenticationEndpoints.Map(app);
         app.MapFallback((RequestDelegate)(context =>
         {
             context.Response.StatusCode = StatusCodes.Status404NotFound;

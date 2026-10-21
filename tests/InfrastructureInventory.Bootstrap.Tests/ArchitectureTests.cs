@@ -4,6 +4,10 @@ using System.Reflection.PortableExecutable;
 using System.Text.Json;
 using System.Xml.Linq;
 using Kordra.Api;
+using Kordra.BuildingBlocks.Security;
+using Kordra.Modules.AuditCompliance.Contracts;
+using Kordra.Modules.AuditCompliance.Infrastructure;
+using Kordra.Modules.IdentityAccess.Authentication;
 using Kordra.Modules.InfrastructureInventory;
 using Kordra.Modules.InfrastructureInventory.Contracts;
 using Microsoft.AspNetCore.Builder;
@@ -20,6 +24,7 @@ public sealed class ArchitectureTests
     private const string IdentityAccess = "src/Modules/IdentityAccess/Kordra.Modules.IdentityAccess.csproj";
     private const string AuditContracts = "src/Modules/AuditCompliance/Contracts/Kordra.Modules.AuditCompliance.Contracts.csproj";
     private const string AuditCompliance = "src/Modules/AuditCompliance/Kordra.Modules.AuditCompliance.csproj";
+    private const string Security = "src/BuildingBlocks/Security/Kordra.BuildingBlocks.Security.csproj";
     private const string DbMigrator = "src/Host/Kordra.DbMigrator/Kordra.DbMigrator.csproj";
     private const string BootstrapTests = "tests/InfrastructureInventory.Bootstrap.Tests/InfrastructureInventory.Bootstrap.Tests.csproj";
     private const string ArtifactTests = "tests/ArtifactManagement.Domain.Tests/ArtifactManagement.Domain.Tests.csproj";
@@ -50,6 +55,30 @@ public sealed class ArchitectureTests
             Absolute(root, BootstrapTests), Absolute(root, ArtifactTests), Absolute(root, IdentityTests),
             Absolute(root, AuditTests)
         ]).Order(), solutionProjects);
+        var solutionList = new ProcessStartInfo("dotnet")
+        {
+            WorkingDirectory = root,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            UseShellExecute = false
+        };
+        solutionList.ArgumentList.Add("sln");
+        solutionList.ArgumentList.Add(Path.Combine(root, "Kordra.slnx"));
+        solutionList.ArgumentList.Add("list");
+        using (var process = Process.Start(solutionList) ?? throw new InvalidOperationException("dotnet sln could not start."))
+        {
+            var exited = process.WaitForExit(15_000);
+            Assert.True(exited, "dotnet sln list did not finish within its bound.");
+            var output = process.StandardOutput.ReadToEnd();
+            var error = process.StandardError.ReadToEnd();
+            Assert.True(process.ExitCode == 0, $"dotnet sln list failed: {error}");
+            var listedProjects = output.Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries)
+                .Select(line => line.Trim())
+                .Where(line => line.EndsWith(".csproj", StringComparison.OrdinalIgnoreCase))
+                .Select(path => Absolute(root, path))
+                .Order().ToArray();
+            Assert.Equal(solutionProjects, listedProjects);
+        }
         var actualProductProjects = Directory.EnumerateFiles(Path.Combine(root, "src"), "*.csproj", SearchOption.AllDirectories)
             .Where(path => !IsBuildOutput(path)).Order().ToArray();
         Assert.Equal(graph.Keys.Order(), actualProductProjects);
@@ -81,7 +110,7 @@ public sealed class ArchitectureTests
         Assert.All(tests.Descendants("PackageReference"), element => Assert.Equal("all", (string?)element.Attribute("PrivateAssets")));
         Assert.Equal(new[] { Absolute(root, Host), Absolute(root, Inventory), Absolute(root, Contracts) }.Order(),
             ReadProjectEdges(Absolute(root, BootstrapTests)).Order());
-        Assert.Equal(new[] { Absolute(root, Host), Absolute(root, DbMigrator), Absolute(root, IdentityAccess) }.Order(),
+        Assert.Equal(new[] { Absolute(root, Host), Absolute(root, DbMigrator), Absolute(root, IdentityAccess), Absolute(root, Security) }.Order(),
             ReadProjectEdges(Absolute(root, IdentityTests)).Order());
         var auditTests = XDocument.Load(Absolute(root, AuditTests));
         var auditPackages = auditTests.Descendants("PackageReference").ToDictionary(
@@ -102,20 +131,45 @@ public sealed class ArchitectureTests
         var contracts = ReadAssembly(typeof(IInventoryReader).Assembly.Location);
         var inventory = ReadAssembly(typeof(UnavailableInventoryReader).Assembly.Location);
         var host = ReadAssembly(typeof(LocalApiHost).Assembly.Location);
+        var identity = ReadAssembly(typeof(LocalAuthenticationService).Assembly.Location);
+        var auditContracts = ReadAssembly(typeof(IAuditAppendPort).Assembly.Location);
+        var audit = ReadAssembly(typeof(AuditAppendStore).Assembly.Location);
+        var security = ReadAssembly(typeof(FairAsyncReaderWriterAdmissionGate).Assembly.Location);
         var artifact = ReadAssembly(ArtifactOutput());
+        var persistencePackages = new[]
+        {
+            "Microsoft.AspNetCore.Identity.EntityFrameworkCore",
+            "Microsoft.EntityFrameworkCore",
+            "Microsoft.EntityFrameworkCore.Relational",
+            "Npgsql.EntityFrameworkCore.PostgreSQL",
+            "Npgsql"
+        };
 
         Assert.Empty(AssemblyViolations(contracts, core));
         Assert.Empty(AssemblyViolations(inventory, core.Append(contracts.Name)));
-        Assert.Empty(AssemblyViolations(host, core.Concat(web).Concat([contracts.Name, inventory.Name])));
+        Assert.Empty(AssemblyViolations(host, core.Concat(web).Concat(persistencePackages).Concat(
+            [contracts.Name, inventory.Name, identity.Name, auditContracts.Name, audit.Name])));
+        Assert.Empty(AssemblyViolations(security, core));
+        Assert.Empty(AssemblyViolations(auditContracts, core));
         Assert.Empty(AssemblyViolations(artifact, core));
         Assert.Contains(contracts.Name, inventory.References);
         Assert.Contains(inventory.Name, host.References);
         Assert.Contains(contracts.Name, host.References);
+        var hostProductReferences = host.References.Where(reference => new[]
+            { contracts.Name, inventory.Name, identity.Name, auditContracts.Name, audit.Name }
+            .Contains(reference, StringComparer.Ordinal)).Order(StringComparer.Ordinal);
+        Assert.Equal(new[] { contracts.Name, inventory.Name, identity.Name, auditContracts.Name, audit.Name }
+            .Order(StringComparer.Ordinal), hostProductReferences);
+        Assert.Equal(new[] { auditContracts.Name, security.Name }.Order(StringComparer.Ordinal),
+            identity.References.Where(reference => reference == auditContracts.Name || reference == security.Name)
+                .Order(StringComparer.Ordinal));
+        Assert.Equal(new[] { auditContracts.Name },
+            audit.References.Where(reference => reference == auditContracts.Name));
         Assert.Contains("Kordra.Modules.InfrastructureInventory.Contracts.IInventoryReader", contracts.Types);
         Assert.DoesNotContain(inventory.Types, name => name.StartsWith(
             "Kordra.Modules.InfrastructureInventory.Contracts.", StringComparison.Ordinal));
         Assert.DoesNotContain(inventory.Types.Intersect(contracts.Types), name => name != ".<Module>");
-        var productAssemblies = new[] { contracts, inventory, host, artifact };
+        var productAssemblies = new[] { contracts, inventory, host, identity, auditContracts, audit, security, artifact };
         var productNames = productAssemblies.Select(assembly => assembly.Name).ToHashSet(StringComparer.Ordinal);
         Assert.False(HasCycle(productAssemblies.ToDictionary(assembly => assembly.Name,
             assembly => assembly.References.Where(productNames.Contains).ToArray(), StringComparer.Ordinal)));
@@ -191,11 +245,13 @@ public sealed class ArchitectureTests
     {
         [Absolute(root, Contracts)] = [],
         [Absolute(root, Inventory)] = [Absolute(root, Contracts)],
-        [Absolute(root, Host)] = [Absolute(root, Inventory), Absolute(root, Contracts)],
+        [Absolute(root, Host)] = [Absolute(root, Inventory), Absolute(root, Contracts), Absolute(root, IdentityAccess),
+            Absolute(root, AuditCompliance), Absolute(root, AuditContracts)],
         [Absolute(root, Artifact)] = [],
-        [Absolute(root, IdentityAccess)] = [],
+        [Absolute(root, IdentityAccess)] = [Absolute(root, AuditContracts), Absolute(root, Security)],
         [Absolute(root, AuditContracts)] = [],
         [Absolute(root, AuditCompliance)] = [Absolute(root, AuditContracts)],
+        [Absolute(root, Security)] = [],
         [Absolute(root, DbMigrator)] = [Absolute(root, IdentityAccess), Absolute(root, AuditCompliance)]
     };
 
