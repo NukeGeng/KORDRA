@@ -17,8 +17,14 @@ public sealed class ArchitectureTests
     private const string Inventory = "src/Modules/InfrastructureInventory/Kordra.Modules.InfrastructureInventory.csproj";
     private const string Host = "src/Host/Kordra.Api/Kordra.Api.csproj";
     private const string Artifact = "src/Modules/ArtifactManagement/Domain/Kordra.ArtifactManagement.Domain.csproj";
+    private const string IdentityAccess = "src/Modules/IdentityAccess/Kordra.Modules.IdentityAccess.csproj";
+    private const string AuditContracts = "src/Modules/AuditCompliance/Contracts/Kordra.Modules.AuditCompliance.Contracts.csproj";
+    private const string AuditCompliance = "src/Modules/AuditCompliance/Kordra.Modules.AuditCompliance.csproj";
+    private const string DbMigrator = "src/Host/Kordra.DbMigrator/Kordra.DbMigrator.csproj";
     private const string BootstrapTests = "tests/InfrastructureInventory.Bootstrap.Tests/InfrastructureInventory.Bootstrap.Tests.csproj";
     private const string ArtifactTests = "tests/ArtifactManagement.Domain.Tests/ArtifactManagement.Domain.Tests.csproj";
+    private const string IdentityTests = "tests/IdentityAccess.Tests/IdentityAccess.Tests.csproj";
+    private const string AuditTests = "tests/AuditCompliance.Tests/AuditCompliance.Tests.csproj";
 
     [Fact]
     public void ProductProjects_EnforceActualXmlGraphAndRestoredDependencies()
@@ -27,7 +33,7 @@ public sealed class ArchitectureTests
         var graph = ApprovedGraph(root);
         foreach (var (project, references) in graph)
         {
-            Assert.Empty(ProjectViolations(project, references));
+            Assert.Empty(ProjectViolations(project, references, ApprovedPackages(root, project)));
             AssertRestoredGraph(project, references);
         }
         Assert.False(HasCycle(graph.Keys.ToDictionary(project => project, ReadProjectEdges, StringComparer.Ordinal)));
@@ -40,7 +46,10 @@ public sealed class ArchitectureTests
         var solution = XDocument.Load(Path.Combine(root, "Kordra.slnx"));
         var solutionProjects = solution.Descendants("Project")
             .Select(element => Absolute(root, RequiredAttribute(element, "Path"))).Order().ToArray();
-        Assert.Equal(graph.Keys.Concat([Absolute(root, BootstrapTests), Absolute(root, ArtifactTests)]).Order(), solutionProjects);
+        Assert.Equal(graph.Keys.Concat([
+            Absolute(root, BootstrapTests), Absolute(root, ArtifactTests), Absolute(root, IdentityTests),
+            Absolute(root, AuditTests)
+        ]).Order(), solutionProjects);
         var actualProductProjects = Directory.EnumerateFiles(Path.Combine(root, "src"), "*.csproj", SearchOption.AllDirectories)
             .Where(path => !IsBuildOutput(path)).Order().ToArray();
         Assert.Equal(graph.Keys.Order(), actualProductProjects);
@@ -72,6 +81,17 @@ public sealed class ArchitectureTests
         Assert.All(tests.Descendants("PackageReference"), element => Assert.Equal("all", (string?)element.Attribute("PrivateAssets")));
         Assert.Equal(new[] { Absolute(root, Host), Absolute(root, Inventory), Absolute(root, Contracts) }.Order(),
             ReadProjectEdges(Absolute(root, BootstrapTests)).Order());
+        Assert.Equal(new[] { Absolute(root, Host), Absolute(root, DbMigrator), Absolute(root, IdentityAccess) }.Order(),
+            ReadProjectEdges(Absolute(root, IdentityTests)).Order());
+        var auditTests = XDocument.Load(Absolute(root, AuditTests));
+        var auditPackages = auditTests.Descendants("PackageReference").ToDictionary(
+            element => RequiredAttribute(element, "Include"), element => RequiredAttribute(element, "Version"));
+        Assert.Equal(pinned.OrderBy(pair => pair.Key), auditPackages.OrderBy(pair => pair.Key));
+        Assert.All(auditTests.Descendants("PackageReference"), element => Assert.Equal("all", (string?)element.Attribute("PrivateAssets")));
+        Assert.Equal(new[]
+        {
+            Absolute(root, Host), Absolute(root, DbMigrator), Absolute(root, AuditCompliance), Absolute(root, AuditContracts)
+        }.Order(), ReadProjectEdges(Absolute(root, AuditTests)).Order());
     }
 
     [Fact]
@@ -172,20 +192,64 @@ public sealed class ArchitectureTests
         [Absolute(root, Contracts)] = [],
         [Absolute(root, Inventory)] = [Absolute(root, Contracts)],
         [Absolute(root, Host)] = [Absolute(root, Inventory), Absolute(root, Contracts)],
-        [Absolute(root, Artifact)] = []
+        [Absolute(root, Artifact)] = [],
+        [Absolute(root, IdentityAccess)] = [],
+        [Absolute(root, AuditContracts)] = [],
+        [Absolute(root, AuditCompliance)] = [Absolute(root, AuditContracts)],
+        [Absolute(root, DbMigrator)] = [Absolute(root, IdentityAccess), Absolute(root, AuditCompliance)]
     };
 
-    private static List<string> ProjectViolations(string project, IEnumerable<string> allowedReferences)
+    private static IReadOnlyDictionary<string, string> ApprovedPackages(string root, string project)
+    {
+        var identity = Absolute(root, IdentityAccess);
+        var audit = Absolute(root, AuditCompliance);
+        var migrator = Absolute(root, DbMigrator);
+        if (project == audit)
+        {
+            return new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["Microsoft.EntityFrameworkCore.Design"] = "10.0.11",
+                ["Npgsql.EntityFrameworkCore.PostgreSQL"] = "10.0.3"
+            };
+        }
+        if (project == identity)
+        {
+            return new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["Microsoft.AspNetCore.Identity.EntityFrameworkCore"] = "10.0.11",
+                ["Microsoft.EntityFrameworkCore.Design"] = "10.0.11",
+                ["Npgsql.EntityFrameworkCore.PostgreSQL"] = "10.0.3"
+            };
+        }
+
+        if (project == migrator)
+        {
+            return new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["Microsoft.EntityFrameworkCore.Design"] = "10.0.11"
+            };
+        }
+
+        return new Dictionary<string, string>(StringComparer.Ordinal);
+    }
+
+    private static List<string> ProjectViolations(
+        string project,
+        IEnumerable<string> allowedReferences,
+        IReadOnlyDictionary<string, string>? allowedPackages = null)
     {
         var document = XDocument.Load(project);
         var violations = new List<string>();
         var allowed = allowedReferences.ToHashSet(StringComparer.Ordinal);
         var references = new HashSet<string>(StringComparer.Ordinal);
+        allowedPackages ??= new Dictionary<string, string>(StringComparer.Ordinal);
+        var packages = new HashSet<string>(StringComparer.Ordinal);
         var properties = new Dictionary<string, string>(StringComparer.Ordinal)
         {
             ["TargetFramework"] = "net10.0", ["ImplicitUsings"] = "enable", ["Nullable"] = "enable",
             ["TreatWarningsAsErrors"] = "true", ["RestorePackagesWithLockFile"] = "true"
         };
+        if (project == Absolute(RepositoryRoot(), DbMigrator)) properties["OutputType"] = "Exe";
         var root = document.Root!;
         if (root.Name != "Project" || root.Attributes().Any(attribute => attribute.Name != "Sdk"))
             violations.Add("Unapproved project root/attributes");
@@ -201,6 +265,8 @@ public sealed class ArchitectureTests
                 if (element.Parent != root || element.HasAttributes) violations.Add($"Nested/modified group: {name}");
                 continue;
             }
+            if ((name is "PrivateAssets" or "IncludeAssets") && element.Parent?.Name == "PackageReference")
+                continue; // The package node validates the exact metadata and values.
             if (element.Parent?.Name == "PropertyGroup" && properties.TryGetValue(name, out var value))
             {
                 if (element.HasAttributes || element.HasElements || element.Value != value || root.Descendants(name).Count() != 1)
@@ -220,11 +286,43 @@ public sealed class ArchitectureTests
                 if (!allowed.Contains(target)) violations.Add($"Forbidden project edge: {target}");
                 continue;
             }
+            if (name == "PackageReference" && element.Parent?.Name == "ItemGroup")
+            {
+                var include = (string?)element.Attribute("Include");
+                var version = (string?)element.Attribute("Version");
+                if (include is null || version is null || element.Attributes().Count() != 2 ||
+                    !packages.Add(include) || !allowedPackages.TryGetValue(include, out var expectedVersion) ||
+                    version != expectedVersion)
+                {
+                    violations.Add($"Unapproved package reference: {include ?? "<missing>"}");
+                    continue;
+                }
+
+                var expectedMetadata = include == "Microsoft.EntityFrameworkCore.Design"
+                    ? new Dictionary<string, string>(StringComparer.Ordinal)
+                    {
+                        ["PrivateAssets"] = "all",
+                        ["IncludeAssets"] = "runtime; build; native; contentfiles; analyzers; buildtransitive"
+                    }
+                    : new Dictionary<string, string>(StringComparer.Ordinal);
+                var actualMetadata = element.Elements().ToDictionary(
+                    child => child.Name.LocalName, child => child.Value, StringComparer.Ordinal);
+                if (actualMetadata.Count != expectedMetadata.Count ||
+                    expectedMetadata.Any(pair => actualMetadata.GetValueOrDefault(pair.Key) != pair.Value) ||
+                    element.Elements().Any(child => child.HasAttributes || child.HasElements))
+                {
+                    violations.Add($"Unapproved package metadata: {include}");
+                }
+
+                continue;
+            }
             if (name == "Compile" && (string?)element.Attribute("Remove") == "Contracts/**/*.cs" &&
                 element.Attributes().Count() == 1 && !element.HasElements) continue;
             violations.Add($"Unapproved XML element: {name}");
         }
         foreach (var target in allowed.Except(references)) violations.Add($"Missing declared project edge: {target}");
+        foreach (var package in allowedPackages.Keys.Except(packages, StringComparer.Ordinal))
+            violations.Add($"Missing declared package reference: {package}");
         foreach (var property in properties.Keys)
             if (root.Descendants(property).Count() != 1) violations.Add($"Missing/duplicate required property: {property}");
         return violations;
@@ -238,7 +336,10 @@ public sealed class ArchitectureTests
         var assetsPath = Path.Combine(Path.GetDirectoryName(project)!, "obj", "project.assets.json");
         using var assets = JsonDocument.Parse(File.ReadAllText(assetsPath));
         Assert.All(assets.RootElement.GetProperty("libraries").EnumerateObject(), library =>
-            Assert.Equal("project", library.Value.GetProperty("type").GetString()));
+        {
+            var type = library.Value.GetProperty("type").GetString();
+            Assert.True(type is "project" or "package", $"Unexpected restored library type: {type}");
+        });
         var restored = assets.RootElement.GetProperty("project").GetProperty("restore")
             .GetProperty("frameworks").GetProperty("net10.0").GetProperty("projectReferences")
             .EnumerateObject().Select(reference => Path.GetFullPath(reference.Name)).Order().ToArray();

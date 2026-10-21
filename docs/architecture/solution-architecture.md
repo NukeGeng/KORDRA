@@ -10,6 +10,9 @@ last_reviewed: 2026-10-16
 > **Status: proposed.** Đây là target architecture, không chứng minh các project/file đã tồn tại. Chỉ trở thành baseline sau khi ADR-0009 được phê duyệt; source thực tế, test và Git commit phải được đối chiếu trước khi đánh dấu implemented/verified.
 
 ## 1. Architectural style
+
+2026-10-20 proposal reconciliation: [ADR-0012](../decisions/0012-operator-pilot-runtime-foundation.md) accepts EF Core/Npgsql only for the first local identity/authorization/catalog/audit foundation, with explicit alternatives to custom Identity stores. The broader Marten/Wolverine direction below remains proposed; neither stack is adopted by importing this document. The scoped acceptance does not adopt the broader persistence proposal; never combine persistence engines without a justified decision.
+
 - **Modular Monolith + Vertical Features + DDD where domain complexity warrants it + CQRS where justified**.
 - Modular Monolith nói về *ownership/dependency*; API, ControlWorker và Agent được phép là executable processes khác nhau.
 - ADR-0009 **proposes** Marten + PostgreSQL for owned documents/events/projections and Wolverine for message handling/durable workflows when justified; these packages and their runtime configuration are not adopted in the current bootstrap. RabbitMQ is only a candidate external transport when required.

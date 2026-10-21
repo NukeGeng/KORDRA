@@ -116,7 +116,7 @@ KORDRA/
 
 [Khung thư mục hiện tại](docs/engineering/repository-folder-framework.md) phân biệt source thật và 45 vị trí chỉ dành trước. Root solution, root tests và AMR giữ nguyên; [ADR-0009](docs/decisions/0009-source-architecture.md) vẫn proposed.
 
-`clients/` là Git submodule của [KORDRA-Clients](https://github.com/NukeGeng/KORDRA-Clients), giữ đúng vị trí web/desktop/packages trong cây root. Khi cần frontend, clone bằng `git clone --recurse-submodules https://github.com/NukeGeng/KORDRA.git`. Phiên backend mở root KORDRA; phiên frontend mở riêng `KORDRA/clients`. Xem [hướng dẫn phát triển độc lập](docs/engineering/clients-development.md) và [ADR-0012](docs/decisions/0012-clients-git-submodule.md). Đây là scaffold được tách repo; chưa có UI runtime.
+`clients/` là Git submodule của [KORDRA-Clients](https://github.com/NukeGeng/KORDRA-Clients), giữ đúng vị trí web/desktop/packages trong cây root. Khi cần frontend, clone bằng `git clone --recurse-submodules https://github.com/NukeGeng/KORDRA.git`. Phiên backend mở root KORDRA; phiên frontend mở riêng `KORDRA/clients`. Xem [hướng dẫn phát triển độc lập](docs/engineering/clients-development.md) và [ADR-0013](docs/decisions/0013-clients-git-submodule.md). Đây là scaffold được tách repo; chưa có UI runtime.
 
 ## Tài liệu và đóng góp
 

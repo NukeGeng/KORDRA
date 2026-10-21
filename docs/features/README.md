@@ -2,7 +2,7 @@
 id: FEATURE-INDEX
 status: proposed
 owner: unassigned
-last_reviewed: 2026-10-18
+last_reviewed: 2026-10-20
 ---
 
 # Module and Feature Registry
@@ -34,6 +34,10 @@ Each module has exactly one `module.md` and feature specs under `features/`. The
 | `MOD-SCH` | [Scheduler & Change Windows](scheduler/module.md) | [FEAT-SCH-001](scheduler/features/scheduled-deployment.md) | Phase 2 |
 
 **Phase interpretation:** existing `MVP` metadata means design-horizon planning, **not** that every one of the 20 documented modules must ship for first OSS Beta. Beta priorities are [scope](../product/scope.md), [release criteria](../product/oss-beta-acceptance.md) and [A–F technology landscape](../product/technology-landscape.md).
+
+## Product implementation design — 2026-10-20
+
+The [delivery design](../architecture/control-plane-delivery-design.md) composes existing owner features into product milestones. [FEAT-IAM-002](identity-access/features/local-account-session.md) adds the separate local authentication feature. The [Luna handoff](../engineering/luna-implementation-handoff.md) specifies dependency order and exact runtime adoption gates; design is not implementation evidence.
 
 ## New feature procedure
 Copy [`templates/feature.md`](../templates/feature.md) into `features/<module>/features/<slug>.md`, add it to module registry and `docs/engineering/traceability.md`, then run `python3 docs/tooling/doccheck.py`. New module only after boundary review/ADR.

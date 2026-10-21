@@ -7,7 +7,7 @@ last_reviewed: 2026-10-20
 
 # Product and Clients independent development
 
-[ADR-0012](../decisions/0012-clients-git-submodule.md) accepts only the repository split. [FEAT-CLIENTS-001](ai-orchestration/features/clients-repository.md) owns implementation and tests. Product GOAL remains paused during setup; no frontend runtime or broader source architecture is approved by folder creation.
+[ADR-0013](../decisions/0013-clients-git-submodule.md) accepts only the repository split. [FEAT-CLIENTS-001](ai-orchestration/features/clients-repository.md) owns implementation and tests. Product GOAL remains paused during setup; no frontend runtime or broader source architecture is approved by folder creation.
 
 ## Workspaces and ownership
 

@@ -2,10 +2,18 @@
 id: PROD-ROADMAP
 status: proposed
 owner: unassigned
-last_reviewed: 2026-10-19
+last_reviewed: 2026-10-20
 ---
 
 # Delivery roadmap & architecture maturity
+
+## Active delivery direction and design handoff — 2026-10-20
+
+The maintainer approved the comprehensive product direction: management foundation → useful OP-P0 → frozen release/approval → independently hosted sandbox deployment/verification/rollback → release qualification. The [Control Plane delivery design](../architecture/control-plane-delivery-design.md) maps that direction to this existing roadmap, and the [Luna implementation handoff](../engineering/luna-implementation-handoff.md) supplies tasks T00–T14 with dependencies, feature acceptance and exact adoption gates. This is not a replacement GOAL/checkpoint system.
+
+[FEAT-IAM-002](../features/identity-access/features/local-account-session.md) specifies local authentication separately from authorization. The maintainer accepted ADR-0012, local-authentication-v1, authority-admission-v1 and the Foundation slices T01–T07 on 2026-10-20. T01 persistence source and tests are implemented and locally verified; the original failed native checkpoint remains unchanged, and a separate T01 evidence-recovery successor is completed from verified gates and artifact hashes. T02 AUD source, isolated PostgreSQL tests and deterministic AMR gates are implemented/passed locally; its original native checkpoint remains failed after timeout without an execution receipt, while the separate `KORDRA-OP-P0-FOUNDATION-T02-RECOVERED-20261021` evidence-recovery successor records T02 completion without replay. T03–T07 still need their own source/test evidence and deterministic gates. Client API handoff, release/execution-v1 and later provider/distributed-worker choices remain proposed or separately gated. No completed login service, protected inventory ingress or production operation is claimed.
+
+Existing implementation inventory and historical receipts below remain unchanged. All I2.7 completed evidence is preserved. Design and separate T01/T02 source commits are prepared for review; hosted CI/review and merge remain pending. Product clients/Website are independently owned; the backend contract handoff does not change their repository/submodule or claim UI acceptance.
 
 | Stage | Deliverable | Exit criteria |
 |---|---|---|
@@ -35,11 +43,11 @@ Current milestone: **Stage 0 Foundation**. **FEAT-ART-001/I1** is a merged, narr
 ## Source & solution architecture v1.2 assessment
 The ten supplied documents are now organized under `docs/architecture/`, `docs/decisions/` and `docs/engineering/`. They remain `proposed`. The bundle's ADR-0008 number conflicted with the existing accepted bootstrap ADR-0008, so the source architecture proposal is tracked as ADR-0009; no decision was accepted by importing the files. The verified current source inventory and impact matrix are in [source architecture adoption](../engineering/source-architecture-adoption.md).
 
-The independent native GPT-6.1 Sol High review of ADR-0009 and its six specs completed on a stable read-only snapshot. Its impact findings and dispositions are recorded in [the adoption assessment](../engineering/source-architecture-adoption.md). Next: architecture-owner, security-reviewer and maintainer review of ADR-0009's remaining evidence and open decisions. Until an explicit decision, preserve root `Kordra.slnx`, existing source/test paths and `docs/tooling/amr.py`; do not create future hosts, add Marten/Wolverine/Aspire dependencies, relocate AMR or claim the broader proposed architecture checks are active. The existing narrow Domain assembly test remains active in product CI. The narrow permission/trusted-scope baseline in ADR-0003 is accepted; runtime identity, session and audit contracts remain open.
+The independent native GPT-6.1 Sol High review of ADR-0009 and its six specs completed on a stable read-only snapshot. Its impact findings and dispositions are recorded in the adoption assessment. ADR-0009 remains proposed; preserve the existing root solution and source/test paths. The narrow permission/trusted-scope baseline in ADR-0003 remains accepted. ADR-0012 later adopted only the local identity/session/audit Foundation slice; the broader source architecture, messaging and provider decisions remain open.
 
 | Module | Feature | Actual product implementation |
 |---|---|---|
-| MOD-IAM | FEAT-IAM-001 | Synthetic I1 policy proof only; product login/session/storage and runtime authorization remain unimplemented |
+| MOD-IAM | FEAT-IAM-001 | Synthetic I1 policy proof; FEAT-IAM-002 T01 persistence is locally implemented/verified; login/session behavior and runtime authorization remain unimplemented |
 | MOD-TEN | FEAT-TEN-001 | Not implemented; depends on identity/authorization/audit |
 | MOD-PAD | FEAT-PAD-001 | Not implemented; scoped support/elevation policy open |
 | MOD-PRJ | FEAT-PRJ-001 | Not implemented; trusted tenant ownership prerequisite |
@@ -55,7 +63,7 @@ The independent native GPT-6.1 Sol High review of ADR-0009 and its six specs com
 | MOD-DRV | FEAT-DRV-001 | Not implemented; approved-operation/capability contract validation pending |
 | MOD-OBS | FEAT-OBS-001 | Not implemented; observation trust/freshness contracts pending |
 | MOD-REC | FEAT-REC-001 | Not implemented; inventory/observations/single-writer mode required |
-| MOD-AUD | FEAT-AUD-001 | Not implemented; append-only storage/retention decision open |
+| MOD-AUD | FEAT-AUD-001 | T02 append/lookup source, isolated PostgreSQL tests and deterministic gates passed; native checkpoint lacks a receipt and remains failed; audit query/export remains unimplemented |
 | MOD-CI | FEAT-CI-001 | Not implemented; provider identity/signature/dedup contracts pending |
 | MOD-NOT | FEAT-NOT-001 | Not implemented; authorized event-driven notification prerequisites unmet |
 | MOD-SCH | FEAT-SCH-001 | Not implemented; durable timer/timezone/change-window policy pending |
@@ -118,7 +126,7 @@ Per explicit owner request, local Homebrew PostgreSQL 15.18 now has `kordra` and
 
 ### Synthetic IAM policy proof — 2026-10-18
 
-The owner-authorized FEAT-IAM-001/I1 pure-policy PoC is locally completed and accepted through `KORDRA-OP-P0-IAM-POLICY-CONT-002`: 66 passing synthetic policy cases, 133 product/141 tooling tests, formatting, exact native High execution/design/post-review and contributor triage. [Canonical evidence](../features/identity-access/features/authorize-resource.md#coordinator-acceptance--2026-10-18). Earlier I0 empty test mappings are historical; only the test mapping is now populated. Product IAM and protected inventory access remain unimplemented.
+The owner-authorized FEAT-IAM-001/I1 pure-policy PoC is locally completed and accepted through `KORDRA-OP-P0-IAM-POLICY-CONT-002`: 66 passing synthetic policy cases, 133 product/141 tooling tests, formatting, exact native High execution/design/post-review and contributor triage. [Canonical evidence](../features/identity-access/features/authorize-resource.md#coordinator-acceptance--2026-10-18). Earlier I0 empty test mappings are historical; only the test mapping is populated for FEAT-IAM-001. FEAT-IAM-002 T01 persistence is separately implemented and locally verified; authentication, authorization enforcement and protected inventory access remain incomplete.
 
 The live exercise also repaired parent-lock re-entry in the existing AMR runner, with regression coverage and stable independent High review. Earlier incomplete attempts remain historical; no automatic replay or fabricated completion occurred. Native terminal-failure diagnostics have a residual limitation recorded as DEBT-AMR-004.
 
@@ -126,6 +134,6 @@ At this proof checkpoint the narrow ADR-0003 decision was pending; the human acc
 
 ### Narrow ADR-0003 accepted by maintainer — 2026-10-18
 
-The human explicitly approved the reviewed [ADR-0003 baseline](../decisions/0003-tenant-authorization.md): permission/trusted resource scope, deny-by-default, expiry/revocation and platform/tenant separation only. The earlier waiting-for-ADR-0003 boundary is resolved. The 66-case synthetic proof remains test-only; IAM module/feature and ADR-0009 remain proposed. Login/session/storage, runtime IAM and positive inventory access remain unapproved.
+The human explicitly approved the reviewed [ADR-0003 baseline](../decisions/0003-tenant-authorization.md): permission/trusted resource scope, deny-by-default, expiry/revocation and platform/tenant separation only. The earlier waiting-for-ADR-0003 boundary is resolved. The 66-case synthetic proof remains test-only; broader IAM module scope and ADR-0009 remain proposed. ADR-0012 later accepts the specific local identity/session and authority Foundation design for implementation; positive inventory/provider access remains separately gated.
 
-The proposal-only owner reconciliation draft in [FEAT-IAM-001/I2.7](../features/identity-access/features/authorize-resource.md#i27--owner-reconciliation-and-decision-register-proposed) maps logical authority facts across TEN, PRJ, INV and AUD and records a candidate consistency/disclosure posture. The increment is incomplete: human custodians remain unassigned, and the proposed contracts await exact-content maintainer review. No runtime code, login, positive inventory access or provider call is authorized. Next: assign the named custodians and review the exact I2.7 decisions; do not infer acceptance from documentation or tests.
+The [FEAT-IAM-001/I2.7 register](../features/identity-access/features/authorize-resource.md#i27--owner-reconciliation-and-decision-register-proposed) records the earlier behavioral and ownership proposal across TEN, PRJ, INV and AUD. The maintainer later accepted [ADR-0012](../decisions/0012-operator-pilot-runtime-foundation.md), local-authentication-v1 and authority/admission-v1 for the exact Foundation T01–T07 implementation scope. Luna may begin those slices in dependency order, with source/test evidence and deterministic gates still required. T08–T14, real provider access, production operations and ADR-0009 adoption remain separately gated; the prior I2.7 approval does not complete F0-C, M1-A, OP-P0 or the full feature.

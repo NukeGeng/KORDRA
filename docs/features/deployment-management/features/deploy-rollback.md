@@ -2,7 +2,7 @@
 id: FEAT-DEP-001
 status: proposed
 owner: unassigned
-last_reviewed: 2026-10-15
+last_reviewed: 2026-10-20
 module_id: MOD-DEP
 feature_id: FEAT-DEP-001
 phase: MVP
@@ -11,6 +11,15 @@ test_paths: []
 ---
 
 # FEAT-DEP-001 — Deploy and rollback with verified outcome
+
+## Sandbox deployment and rollback slice — proposed 2026-10-20
+
+Luna T13 DEP task follows trusted worker execution, driver conformance and observations. Actor scoped worker operation identity or authorized User; `deployment.request`, `deployment.execute` and separately `deployment.rollback` at exact environment scope. [Release-execution v1](../../../contracts/release-execution-v1.md) defines proposed operation bindings/states/Unknown behavior. DEP owns user-visible outcome, never infers Verified from driver exit/broker ACK. Preflight resolves current target writer mode, approval, frozen spec, credentials, capabilities and health policy.
+
+Rollback is a new immutable operation referencing a prior verified release, with fresh permission/policy/approval as required and current target-state conflict checks. No automatic rollback after unknown effects, no unsupported capability fallback and no database/schema restore. Shared company production remains outside sandbox authorization. Actual dispatch needs accepted ADR-0004/0006 and the precise lease/provider/worker protocol plus target identity, approved case/spec/rollback and human operation approval.
+
+Acceptance DEP-E1: approve→dispatch→observed digest/health→Verified produces correlated timeline. DEP-E2: wrong tenant, swapped hash/target, expiry/revoke, competing writer, bad image, timeout or late duplicate never yields false success. DEP-E3: disconnect/unknown is reconciled before new effect; rollback conflict and unsupported rollback safely stop. DEP-E4: isolated real-target deployment and rollback each have independent observation, crash/retry evidence and sanitized audit. Fake success alone cannot complete OP-P1/Beta.
+
 
 ## User story / outcome
 **Actor:** Operator / Workflow service. **Goal:** Deploy and rollback with verified outcome. **Primary owner:** `MOD-DEP`. **Phase:** MVP.

@@ -2,7 +2,7 @@
 id: ENG-FOLDER-FRAMEWORK
 status: proposed
 owner: engineering-maintainers
-last_reviewed: 2026-10-19
+last_reviewed: 2026-10-20
 ---
 
 # Repository folder framework — actual and reserved paths
@@ -11,22 +11,24 @@ The maintainer requested the folder framework **after** completing the accepted 
 
 ## Actual project graph
 
-Root `Kordra.slnx` contains exactly six projects: ArtifactManagement Domain and its existing tests (ADR-0008), InfrastructureInventory Contracts and runtime, Kordra.Api and InfrastructureInventory bootstrap tests (ADR-0010). There are four product projects and two test projects. No new runtime PackageReference was added. Current local verification passes 48 Artifact tests and 85 bootstrap tests, including the separately authorized synthetic IAM policy proof.
+Root `Kordra.slnx` contains twelve projects after T02: eight product projects (Artifact Domain, Inventory Contracts/runtime, Kordra.Api, IAM persistence, AUD Contracts/persistence, and DbMigrator) and four test projects. IAM T01 and AUD T02 are scoped ADR-0012 additions. Local product evidence is 48 Artifact, 85 Inventory Bootstrap, 17 IAM and 34 AUD tests; hosted CI remains pending push. This does not adopt ADR-0009 or implement login/authorization ingress.
 
 - `src/Modules/ArtifactManagement/Domain/`: immutable digest domain; [FEAT-ART-001](../features/artifact-management/features/immutable-artifact.md).
 - `src/Modules/InfrastructureInventory/Contracts/` and its parent runtime: immutable in-process read seam and unavailable reader; [FEAT-INV-001/I1](../features/infrastructure-inventory/features/register-target.md).
 - `src/Host/Kordra.Api/`: IPv4 loopback API, constant liveness, uniform inventory denial; no IAM or provider.
-- Root `tests/ArtifactManagement.Domain.Tests/` and `tests/InfrastructureInventory.Bootstrap.Tests/`: 48 + 19 locally passing tests, including actual project/PE boundaries, compiled negative fixtures and real loopback behavior. This is not remote CI evidence.
+- `src/Modules/IdentityAccess/`: IAM-owned principal/session persistence for the accepted T01 slice; no login endpoints or authorization runtime.
+- `src/Host/Kordra.DbMigrator/`: explicitly invoked, loopback/role-checked IAM/AUD migration host; no API startup migration.
+- `src/Modules/AuditCompliance/Contracts/` and its parent runtime: AUD append/exact lookup and owner persistence, with isolated `tests/AuditCompliance.Tests/`; no history HTTP endpoint.
+- Root `tests/ArtifactManagement.Domain.Tests/`, `tests/InfrastructureInventory.Bootstrap.Tests/` and `tests/IdentityAccess.Tests/`: 48 + 85 + 17 + 34 locally passing tests. Coverage includes project/PE boundaries, compiled negative fixtures, loopback behavior, isolated IAM migration round trip and read-only runtime-role permission probe. This is not remote CI evidence.
 
 ## Reserved folders
 
-**Clients Git ownership update — 2026-10-19:** accepted [ADR-0012](../decisions/0012-clients-git-submodule.md) moves the four existing Clients reservations into the independent KORDRA-Clients repository, mounted at the same `clients/` path. Product now tracks one gitlink rather than those four README blobs. The original framework's 45 reserved locations remain logical paths: 41 Product-owned reservations and four Clients-owned reservations. None becomes an implemented UI. See [the operating guide](clients-development.md).
+**Clients Git ownership update — 2026-10-19:** accepted [ADR-0013](../decisions/0013-clients-git-submodule.md) moves the four existing Clients reservations into the independent KORDRA-Clients repository, mounted at the same `clients/` path. Product now tracks one gitlink rather than those four README blobs. The original framework's 45 reserved locations remain logical paths: 41 Product-owned reservations and four Clients-owned reservations. None becomes an implemented UI. See [the operating guide](clients-development.md).
 
-Every location below contains only a proposed README. Parent directories are created as needed. Folder presence does not mean a feature, module registration, driver, UI, deployment or Enterprise product exists. Module names follow the [proposed mapping](project-conventions.md); module specs retain their current status and ownership.
+The original reservation created the paths below with proposed READMEs. `src/Modules/IdentityAccess`, `src/Modules/AuditCompliance` and `src/Host/Kordra.DbMigrator` were subsequently adopted for the exact FEAT-IAM-002 T01 and FEAT-AUD-001 T02 slices under ADR-0012 and are documented as implemented paths above. Remaining locations below are still reservations only: their presence does not mean a feature, module registration, driver, UI, deployment or Enterprise product exists. Module names follow the [proposed mapping](project-conventions.md); module specs retain their current status and ownership.
 
 | Reserved path | Canonical owner / adoption prerequisite |
 |---|---|
-| `src/Modules/IdentityAccess` | [module](../features/identity-access/module.md) |
 | `src/Modules/TenantManagement` | [module](../features/tenant-management/module.md) |
 | `src/Modules/PlatformAdministration` | [module](../features/platform-admin/module.md) |
 | `src/Modules/ProjectEnvironment` | [module](../features/project-environment/module.md) |
@@ -39,7 +41,6 @@ Every location below contains only a proposed README. Parent directories are cre
 | `src/Modules/AgentManagement` | [module](../features/execution-agents/module.md) |
 | `src/Modules/Reconciliation` | [module](../features/reconciliation/module.md) |
 | `src/Modules/Observability` | [module](../features/observability/module.md) |
-| `src/Modules/AuditCompliance` | [module](../features/audit-compliance/module.md) |
 | `src/Modules/CIIntegrations` | [module](../features/ci-integrations/module.md) |
 | `src/Modules/Notifications` | [module](../features/notifications/module.md) |
 | `src/Modules/Scheduling` | [module](../features/scheduler/module.md) |
@@ -57,7 +58,6 @@ Every location below contains only a proposed README. Parent directories are cre
 | `src/Execution/Drivers/Ssh` | Feature/contract decision required |
 | `src/Host/Kordra.ControlWorker` | Feature/contract decision required |
 | `src/Host/Kordra.Agent` | Feature/contract decision required |
-| `src/Host/Kordra.DbMigrator` | Feature/contract decision required |
 | `src/Host/Kordra.AppHost` | Feature/contract decision required |
 | `clients/web` | Feature/contract decision required |
 | `clients/desktop` | Feature/contract decision required |
@@ -76,6 +76,6 @@ Every location below contains only a proposed README. Parent directories are cre
 
 Keep root `Kordra.slnx`, root `tests/` and `docs/tooling/` as the working baseline. Do not add `src/Kordra.slnx`, duplicate `src/Tests`, `tools/amr`, empty future projects, shared build/package imports or dependencies to fill the tree. No current source is moved. Agent/worker/driver paths have no runnable implementation; any future Agent must remain isolated from Control Plane persistence/domain.
 
-The proposed [repository](../architecture/repository-structure.md), [solution](../architecture/solution-architecture.md), [module structure](../architecture/module-internal-structure.md), [dependency rules](../architecture/dependency-rules.md), [host composition](../architecture/host-composition.md) and [ADR-0009](../decisions/0009-source-architecture.md) guide review. Only [ADR-0008](../decisions/0008-domain-bootstrap-validation.md) and [ADR-0010](../decisions/0010-local-readonly-bootstrap.md) authorize the current scoped source. Before adding source: approved feature and technology/boundary decision → exact ownership mapping → implementation/tests → gates/review → evidence. A reserved README is not a source mapping.
+The proposed [repository](../architecture/repository-structure.md), [solution](../architecture/solution-architecture.md), [module structure](../architecture/module-internal-structure.md), [dependency rules](../architecture/dependency-rules.md), [host composition](../architecture/host-composition.md) and [ADR-0009](../decisions/0009-source-architecture.md) guide review. [ADR-0008](../decisions/0008-domain-bootstrap-validation.md), [ADR-0010](../decisions/0010-local-readonly-bootstrap.md) and the exact IAM T01 slice of [ADR-0012](../decisions/0012-operator-pilot-runtime-foundation.md) authorize the current scoped source. Before adding more source: approved feature and technology/boundary decision → exact ownership mapping → implementation/tests → gates/review → evidence. A reserved README is not a source mapping.
 
-The later FEAT-IAM-001 design and synthetic policy proof are recorded in the [owning feature](../features/identity-access/features/authorize-resource.md); the maintainer accepted ADR-0003 for the narrow permission/trusted-scope baseline. Product login/session/storage and runtime authorization remain unimplemented, and inventory stays denied. Reserved READMEs do not map or authorize those capabilities.
+The FEAT-IAM-001 design and synthetic policy proof are recorded in the [owning feature](../features/identity-access/features/authorize-resource.md); the maintainer accepted ADR-0003 for the narrow permission/trusted-scope baseline. FEAT-IAM-002 T01 persistence is mapped and locally verified. Login/session behavior, runtime authorization and inventory ingress remain unimplemented/denied. The remaining reserved READMEs do not map or authorize those capabilities.

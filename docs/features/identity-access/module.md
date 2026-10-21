@@ -1,14 +1,14 @@
 ---
 id: MOD-IAM
 status: proposed
-owner: unassigned
-last_reviewed: 2026-10-18
+owner: NukeGeng
+last_reviewed: 2026-10-20
 module_id: MOD-IAM
 ---
 
 # Identity & Access — module definition
 
-**Module ID:** `MOD-IAM` · **Phase:** MVP · **Owner:** unassigned (assign before acceptance).
+**Module ID:** `MOD-IAM` · **Phase:** MVP · **Owner:** NukeGeng (accountable for ADR-0012 Foundation T01–T07; wider module scope remains proposed).
 
 ## Responsibility and boundary
 Identity & Access owns: **Principal, IdentityLink, Session, RoleDefinition, PolicyDecision**. Không nhận ownership business của module khác. Giao tiếp bằng commands/events hoặc read contracts, không query trực tiếp internal storage của context khác.
@@ -33,9 +33,10 @@ Token hết hạn, cache permission stale, permission escalation. Đây là test
 
 ## Feature registry
 - [FEAT-IAM-001 — Authorize scoped resource access](features/authorize-resource.md)
+- [FEAT-IAM-002 — Local accounts and revocable browser sessions](features/local-account-session.md)
 
 ## Implementation mapping
-`source_paths: []` và `test_paths: []` có nghĩa **chưa đối chiếu repository thật**. Sau khi có code, bổ sung path, commit/test evidence ở mỗi feature, không điền đường dẫn dự đoán.
+FEAT-IAM-002 maps the implemented T01 persistence slice and tests in its [feature record](features/local-account-session.md). FEAT-IAM-001 remains a synthetic test-only policy proof with no product evaluator mapping. These are feature-level mappings; they do not mean the whole IAM module or authentication behavior is complete.
 
 ## Definition of done
 Tuân thủ [DoD](../../engineering/definition-of-done.md), [module boundaries](../../engineering/module-boundaries.md), [architecture](../../architecture/bounded-contexts.md).
@@ -45,12 +46,12 @@ LAB-01 covers **cross-tenant test cases**; see [coverage matrix](../../reference
 
 ## Local-account design preference — 2026-10-18
 
-The owner chose Kordra-managed local accounts. [FEAT-IAM-001/I0](features/authorize-resource.md) records proposal-only principal/session and scoped-authorization readiness, alternatives and unresolved contracts. The documentation task passed native High execution/review and existing gates; there is no IAM source/test implementation. Authentication enrollment/login/recovery requires its own approved feature contract. The preference does not accept ADR-0003, credential/session storage or implicit platform-to-tenant access.
+On 2026-10-18 the owner selected Kordra-managed local accounts as a design preference. The separate local-account feature and authentication contract were later accepted for Foundation T01–T07 under ADR-0012 on 2026-10-20. T01 IAM persistence and its isolated migration tests are now implemented and locally verified. No login/session endpoint or runtime authentication behavior is implemented yet, and login grants no implicit platform-to-tenant access.
 
 ## Current synthetic policy evidence — 2026-10-18
 
-[FEAT-IAM-001/I1](features/authorize-resource.md#i1--synthetic-policy-proof-authorized-test-only-candidate) now maps one test-only file in the existing bootstrap test assembly: 66 candidate permit/deny cases passed locally, with native Sol 6.1 High execution/design/post-review and contributor triage. The earlier empty mappings/no-tests statements describe I0 history. There is still no IAM product project, authentication/session provider or production authorizer; module status and owner remain proposed/unassigned. Real login/enrollment/recovery and trusted runtime authority contracts require their own approved scope.
+[FEAT-IAM-001/I1](features/authorize-resource.md#i1--synthetic-policy-proof-authorized-test-only-candidate) maps one test-only file in the existing bootstrap test assembly: 66 candidate permit/deny cases passed locally, with historical native Sol 6.1 High execution/design/post-review and contributor triage. The earlier empty mappings/no-tests statements describe I0 history. The IAM product persistence project now exists for T01, but no authentication/session provider or production authorizer exists; the broader module remains proposed. NukeGeng is accountable for the Foundation T01–T07 scope accepted by ADR-0012. Real login/enrollment/recovery and trusted runtime authority remain unimplemented pending their task evidence.
 
-## Narrow policy decision accepted — 2026-10-18
+## Scoped decisions — ADR-0003 (2026-10-18) and ADR-0012 (2026-10-20)
 
-The maintainer has accepted [ADR-0003](../../decisions/0003-tenant-authorization.md)'s permission/trusted-resource-scope baseline. Earlier proposal-only statements are dated history. This does not accept this module, assign its runtime owner, approve authentication/storage or adopt the fixture as product authorization. FEAT-IAM-001 next prepares concrete owner-contract proposals; source and test mappings are unchanged.
+The maintainer accepted ADR-0003 for its conceptual permission/trusted-resource-scope baseline, then accepted ADR-0012 for the exact Foundation T01–T07 implementation scope. NukeGeng is accountable for that Foundation slice; broader module scope remains proposed. The synthetic policy fixture remains test-only. T01 persistence is locally implemented and verified; login/session, authorization enforcement, audit admission and protected inventory behavior remain unimplemented.

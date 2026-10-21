@@ -1,11 +1,11 @@
 ---
-id: ADR-0012
+id: ADR-0013
 status: accepted
 owner: engineering-maintainers
 last_reviewed: 2026-10-19
 ---
 
-# ADR-0012 — Independent Clients repository at the existing clients path
+# ADR-0013 — Independent Clients repository at the existing clients path
 
 ## Decision and human authorization
 
@@ -33,3 +33,7 @@ No Vue/Tauri/package manager, runtime service, authentication mechanism, API exp
 Acceptance requires clients-only history inspection, standalone Clients validation, a remote recursive clone at the recorded pin, negative boundary/pin/dirty-checkout tests, unchanged Product routing tests and applicable Product gates. Repository branch protections must require PRs and the repository's real CI checks; human merge approval remains explicit.
 
 To reverse, use a reviewed Product PR that replaces the gitlink with the approved Clients tree at a recorded commit and removes `.gitmodules`. Preserve the Clients remote/history and existing dirty work; do not force-deinitialize an active frontend checkout. See the [setup and operating guide](../engineering/clients-development.md) and [FEAT-CLIENTS-001](../engineering/ai-orchestration/features/clients-repository.md).
+
+## Identifier reconciliation — 2026-10-21
+
+This decision was originally merged as ADR-0012 in PR #8 while the independently approved Foundation decision used the same number. PR #9 assigns the Clients decision ADR-0013 to remove that identifier collision. The accepted repository split and original approval are unchanged; Foundation remains ADR-0012. Git history preserves the original document.

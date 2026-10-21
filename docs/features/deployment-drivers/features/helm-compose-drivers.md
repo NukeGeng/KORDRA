@@ -2,7 +2,7 @@
 id: FEAT-DRV-001
 status: proposed
 owner: unassigned
-last_reviewed: 2026-10-15
+last_reviewed: 2026-10-20
 module_id: MOD-DRV
 feature_id: FEAT-DRV-001
 phase: MVP
@@ -11,6 +11,15 @@ test_paths: []
 ---
 
 # FEAT-DRV-001 — Execute Helm and Docker Compose via capability-based drivers
+
+## First driver conformance slice — proposed 2026-10-20
+
+Luna T13 DRV task implements Helm first on explicitly approved isolated Kubernetes, after exact ADR-0006/provider-version/operation/resource/hook/shell policy adoption. Compose is a later parity increment, not an implicit dependency. Inputs are typed immutable operation/spec/target/epoch/deadline/capability references, never arbitrary CLI strings or raw browser credentials. Plan/Execute/Observe and supported Rollback remain separate capability outcomes. Credentials resolve through SEC only for the exact authorized operation.
+
+[Release-execution v1](../../../contracts/release-execution-v1.md) owns cross-owner dispatch/Unknown rules. A DB epoch or Helm command exit does not fence a partitioned old provider call; block replacement writer until observed isolation/reconciliation if the provider cannot enforce stale-operation rejection. Respect existing GitOps/controller ownership. Approve hook/template/resource allowlists before rendering/execution; no hidden Secret/exec/broker operation follows from target.read.
+
+Acceptance DRV-C1: plan/execute/observe and supported rollback bind exact immutable target/spec and sanitized receipts. DRV-C2: unsupported version/capability, changed artifact, wrong scope/credential, stale epoch/deadline and arbitrary command reject before effects. DRV-C3: provider partition/timeouts and ACK loss return explicit Unknown and no automatic duplicate Execute. DRV-C4: real isolated conformance proves observed rollout and safe cleanup; unsupported rollback is surfaced. Agent is added only with separately accepted enrollment/protocol, not as a fake prerequisite for worker-direct access.
+
 
 ## User story / outcome
 **Actor:** Deployment Worker / Agent. **Goal:** Execute Helm and Docker Compose via capability-based drivers. **Primary owner:** `MOD-DRV`. **Phase:** MVP.

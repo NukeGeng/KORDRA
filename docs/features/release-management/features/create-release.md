@@ -2,7 +2,7 @@
 id: FEAT-REL-001
 status: proposed
 owner: unassigned
-last_reviewed: 2026-10-15
+last_reviewed: 2026-10-20
 module_id: MOD-REL
 feature_id: FEAT-REL-001
 phase: MVP
@@ -11,6 +11,13 @@ test_paths: []
 ---
 
 # FEAT-REL-001 — Create immutable release intent
+
+## Frozen release implementation slice — proposed 2026-10-20
+
+Luna T11 REL task follows ART registration and current scoped catalog authority. Actor User with `release.create` project. Adopt [release-execution v1](../../../contracts/release-execution-v1.md) and the exact ADR-0005 scope before implementing new state. REL owns canonical bytes/hash, immutable revision and references; APR owns approval decisions. Composition uses Contracts rather than REL/APR runtime cycles. Preserve artifact provenance, target binding, health/policy/config/driver revisions and no plaintext secret.
+
+Acceptance REL-F1: deterministic golden vectors produce the same server hash across property-order changes and different hashes for meaningful changes. REL-F2: foreign artifact/target, tag-only artifact, malformed/oversized/duplicate-key spec and unknown version reject. REL-F3: Draft→Frozen fixes bytes; attempted mutation rejects and a changed intent creates a new revision. REL-F4: duplicate request/commit ACK loss returns/reconciles one revision with audit; no dispatch is implied. API/schema/error examples and migration fixtures accompany actual owner source/test mapping.
+
 
 ## User story / outcome
 **Actor:** Developer / Release Manager. **Goal:** Create immutable release intent. **Primary owner:** `MOD-REL`. **Phase:** MVP.

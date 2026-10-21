@@ -2,7 +2,7 @@
 id: FEAT-ART-001
 status: proposed
 owner: unassigned
-last_reviewed: 2026-10-18
+last_reviewed: 2026-10-20
 module_id: MOD-ART
 feature_id: FEAT-ART-001
 phase: MVP
@@ -11,6 +11,13 @@ test_paths: ["tests/ArtifactManagement.Domain.Tests/"]
 ---
 
 # FEAT-ART-001 — Discover and pin immutable deployable artifacts
+
+## Registration implementation slice — proposed 2026-10-20
+
+Luna T10 preserves I1 digest semantics and adds tenant/project-owned registry-backed registration after trusted catalog/credential boundaries. Actor User with `artifact.register` project; manual registration may precede signed CI intake. ART accepts exact digest/repository/platform and provenance; resolve tags only into a newly pinned immutable record, never rewrite an existing record. Registry endpoints/destinations, redirects, bounded downloads, TLS and credential scope need an explicit SSRF/provider policy before network integration.
+
+Use [release-execution v1](../../../contracts/release-execution-v1.md) for immutable binding/idempotency; persistence/package/registration DTO adoption precedes source. Acceptance ART-R1: registry existence/content/platform/provenance checks and real stored identity agree. ART-R2: tag mutation, wrong digest/content, foreign project/credential or unapproved registry/redirect rejects. ART-R3: duplicate/concurrent same-project/repository/platform/digest yields one auditable record; failed/unknown commit is reconciled. ART-R4: outage or unsupported registry behavior cannot create a verified artifact. CI authenticity belongs to CI owner; no circular runtime reference or signed-webhook claim from manual registration. Existing 48 I1 tests remain; new targeted integration tests are required.
+
 
 ## User story / outcome
 **Actor:** Developer / CI Provider. **Goal:** Discover and pin immutable deployable artifacts. **Primary owner:** `MOD-ART`. **Phase:** MVP.
@@ -64,3 +71,8 @@ I1 acceptance: Given a supported lowercase OCI digest, parsing preserves its ide
 - Independent native review: `codex exec ... review --uncommitted` completed with exit 0 and a terminal `turn.completed` event, reporting no actionable defects. Full write-producing Python/.NET checks were blocked in the reviewer's read-only sandbox; the separate AMR gate run executed them. Raw receipts remain private under `.amr-local/artifact-native-review*`; no provider automatic review is inferred.
 - I1 implementation and regression tests originated in [b20090b186c5c5a7b76622df5bb6b877675e32eb](https://github.com/NukeGeng/KORDRA/commit/b20090b186c5c5a7b76622df5bb6b877675e32eb) and were merged through [PR #1](https://github.com/NukeGeng/KORDRA/pull/1) at `2aa156f4e6e3afe3cc648186ac6a3242781dc71b`. Rechecked on 2026-10-18: [docs CI](https://github.com/NukeGeng/KORDRA/actions/runs/39000192554) and [product CI](https://github.com/NukeGeng/KORDRA/actions/runs/39000192528) both succeeded on that exact merge SHA. This is a dated checkpoint, not a live CI claim. No registry, tenant-policy, durable messaging or driver integration is delivered.
 - Open decisions: ADR-0008 is explicitly accepted for the scoped bootstrap. `[NEEDS-DECISION]`: product module owner; ADR-0001–0007 and registration dependencies remain proposed.
+
+
+## Shared Foundation composition — T01/T02 review
+
+T01 adds only IAM persistence and its separate migrator/test projects to the root solution. T02 adds AUD Contracts/persistence/tests and the AUD migrator command. Shared product CI uses a disposable loopback PostgreSQL fixture; the Artifact implementation and health-only/inventory-denied API behavior are preserved. The existing architecture tests constrain the exact owner-approved graph and pinned packages at each commit.

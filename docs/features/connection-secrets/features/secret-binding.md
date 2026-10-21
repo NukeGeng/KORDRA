@@ -2,7 +2,7 @@
 id: FEAT-SEC-001
 status: proposed
 owner: unassigned
-last_reviewed: 2026-10-18
+last_reviewed: 2026-10-20
 module_id: MOD-SEC
 feature_id: FEAT-SEC-001
 phase: MVP
@@ -11,6 +11,15 @@ test_paths: []
 ---
 
 # FEAT-SEC-001 — Bind credentials safely to deployment targets
+
+## OP-P0 implementation slice — proposed 2026-10-20
+
+Luna T08 follows current IAM/resource enforcement. Actor authorized User or scoped trusted adapter; `credential.bind` target and `target.manage` where the catalog requires it. Preserve ConnectionProfile/SecretReference/CredentialBinding ownership in SEC. Bind profile/target/tenant/consumer/allowed operation to an opaque secret locator and monotonic rotation revision. Lifecycle Active/Revoked/Expired; same label cannot switch provider/target. Never return resolved secret material to browser, messages, logs or audit.
+
+Provider/key-custody, TLS/bootstrap identity, exact resource RBAC and supported package/CLI pins remain an explicit T08 adoption gate; examples such as Keychain are not interchangeable selected providers. Separate in-process authorized resolution from runtime observation. Resolve only for the exact operation and dispose transient material after bounded use; provider-specific rotation/revocation and reconnect semantics need evidence. A local secret reference does not automatically become accessible to a future remote worker.
+
+Acceptance SEC-P0: wrong tenant/target/consumer, unsupported operation/provider/reference, revoked/expired/rotated binding and TLS identity mismatch deny before a provider read. Lost authorization while resolve/read waits withholds disclosure; no broader credential/context fallback. Duplicate bind uses exact key/body and stale ETag rejects. Synthetic secret markers are absent in API/log/audit/exception paths and transient material is not persisted. Fake provider proves policy only; actual provider test requires separately authorized local fixture/target. Follow [handoff](../../../engineering/luna-implementation-handoff.md); no dependency/secret access adopted by writing this design.
+
 
 ## User story / outcome
 **Actor:** Operator / Security Admin. **Goal:** Bind credentials safely to deployment targets. **Primary owner:** `MOD-SEC`. **Phase:** MVP.

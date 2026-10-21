@@ -11,7 +11,7 @@ Discovery bỏ qua ba thư mục workspace dành riêng `.git`, `.temp`, `.amr-l
 
 ### Detect changed source without matching docs
 
-The only accepted independent repository boundary is `clients/` declared by `.gitmodules` under [ADR-0012](../decisions/0012-clients-git-submodule.md). Product Markdown discovery prunes that root after validating the exact path/portable URL; arbitrary nested repositories or ignore rules cannot exempt Product documents. The Clients gitlink and `.gitmodules` have FEAT-CLIENTS-001 ownership mappings. Product context identity hashes the indexed pin and ignores the independent frontend worktree; staged pins, Product source, index and HEAD remain tracked. A pre-split snapshot must be refreshed explicitly before reuse; completed execution receipts are preserved.
+The only accepted independent repository boundary is `clients/` declared by `.gitmodules` under [ADR-0013](../decisions/0013-clients-git-submodule.md). Product Markdown discovery prunes that root after validating the exact path/portable URL; arbitrary nested repositories or ignore rules cannot exempt Product documents. The Clients gitlink and `.gitmodules` have FEAT-CLIENTS-001 ownership mappings. Product context identity hashes the indexed pin and ignores the independent frontend worktree; staged pins, Product source, index and HEAD remain tracked. A pre-split snapshot must be refreshed explicitly before reuse; completed execution receipts are preserved.
 
 ```sh
 python3 docs/tooling/submodulecheck.py                    # declaration + indexed pin; no frontend scan

@@ -1,8 +1,8 @@
 ---
 id: FEAT-TEN-001
 status: proposed
-owner: unassigned
-last_reviewed: 2026-10-15
+owner: NukeGeng
+last_reviewed: 2026-10-20
 module_id: MOD-TEN
 feature_id: FEAT-TEN-001
 phase: MVP
@@ -11,6 +11,15 @@ test_paths: []
 ---
 
 # FEAT-TEN-001 — Organization membership lifecycle
+
+## Foundation implementation slice — approved for implementation 2026-10-20
+
+Luna T04 in the implementation handoff follows authentication/audit. Actor local User; catalog org.manage and membership.assign-role at verified organization scope. Accepted ADR-0012 assigns TEN scoped-assignment ownership and IAM definition interpretation; accepted authority/admission v1 supplies exact command DTOs, lifecycle, ordering and bounds. This approved scope authorizes the slice for implementation; it is not implementation evidence.
+
+Deliver durable Active/Suspended tenant, Active/Revoked membership and Active/Revoked/Expired exact-scope assignment, monotonic authority revisions, self membership query, assignment/revoke and tenant suspension. Offline explicit workspace initialization supplies founding authority; account enrollment creates no membership. Pre-enrolled local principals avoid email/invitation delivery in this first slice; the broader invitation lifecycle remains incomplete. Role names never control authorization; no platform-to-tenant inheritance or parent-scope conversion.
+
+Acceptance TEN-F1: one principal belongs to A and B without merged scope. TEN-F2: same manifest/key replay returns one result; conflicting hash, wrong tenant/member, stale ETag or grant above grantor ceiling rejects safely. TEN-F3: suspension/revoke races protected reads through the common writer gate; no new old-authority admission after commit. TEN-F4: state/audit crash or ACK loss reconciles without unrecorded success or revived grant. Include expiry equality, retired definition and ambiguous effective assignment. Planned roots: TEN module and tests/TenantManagement.Tests/, mapped only after creation.
+
 
 ## User story / outcome
 **Actor:** Tenant Admin. **Goal:** Organization membership lifecycle. **Primary owner:** `MOD-TEN`. **Phase:** MVP.
@@ -36,7 +45,7 @@ Invitation expired/revoked; org suspended; user already belongs org; role templa
 
 For the bounded candidate in [FEAT-IAM-001/I2](../../identity-access/features/authorize-resource.md#i2--runtime-authority-contract-increment-proposed), MOD-TEN remains the source of organization status and membership lifecycle facts. Any future owner result must bind the exact subject and tenant lookup to authoritative status, revision, validity and revocation evidence; caller-supplied tenant/principal IDs or fixture flags are not authority. Membership in multiple tenants never merges scope. Missing, stale, suspended, revoked, conflicting or unavailable evidence remains unresolved and denies protected access without disclosing tenant existence.
 
-Ownership of role-assignment persistence/resolution is still open between the relevant owners and MOD-IAM's `RoleDefinition` interpretation. MOD-TEN is the logical fact owner; the human feature custodian is unassigned. This proposal adds no contract, source/test mapping, API or runtime behavior.
+At the original I2.7 proposal, role-assignment persistence/resolution and formal ownership were open. Accepted ADR-0012 resolves ownership for this Foundation slice: MOD-TEN owns scoped assignment facts, IAM interprets RoleDefinition, and NukeGeng is accountable for the approved slice. Broader invitation/lifecycle scope and runtime evidence remain incomplete; the earlier I2.7 approval alone adopted no contract or API.
 
 ## Negative & recovery scenarios
 TenantAdmin A mời người vào B; tự cấp platform.*; replay invitation; suspend bypass.

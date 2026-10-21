@@ -14,7 +14,7 @@ test_paths: ["docs/tooling/tests/test_submodule_boundary.py"]
 
 ## User story / outcome
 
-The maintainer wants two independent development sessions with backend in KORDRA and frontend in the same root's `clients/`, backed by separate Git repositories. Engineering maintainers own this development topology, not a new product bounded context. [ADR-0012](../../../decisions/0012-clients-git-submodule.md) records the owner's explicit narrow approval.
+The maintainer wants two independent development sessions with backend in KORDRA and frontend in the same root's `clients/`, backed by separate Git repositories. Engineering maintainers own this development topology, not a new product bounded context. [ADR-0013](../../../decisions/0013-clients-git-submodule.md) records the owner's explicit narrow approval.
 
 ## Pre-conditions
 
