@@ -22,6 +22,32 @@ public sealed class IdentityAccessAuthenticationServiceTests : IAsyncLifetime
 {
     private LocalAuthenticationTestHost _host = null!;
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Denial_audit_setup_failure_does_not_close_existing_or_future_admissions(bool cancellation)
+    {
+        var factory = new FaultAuditFactory();
+        await _host.DisposeAsync();
+        _host = await LocalAuthenticationTestHost.StartAsync(factory);
+        var name = _host.NewUserName();
+        await _host.EnrollAsync(name);
+        using var authenticated = _host.CreateClient();
+        using var login = await _host.LoginAsync(authenticated, name, LocalAuthenticationTestHost.ValidPassword);
+        Assert.Equal(HttpStatusCode.OK, login.StatusCode);
+        var previousCommits = factory.ProtocolCalls;
+        factory.FailNextSetup = cancellation ? "cancel" : "exception";
+        using var anonymous = _host.CreateClient();
+        using var denied = await _host.LoginAsync(anonymous, _host.NewUserName(), LocalAuthenticationTestHost.ValidPassword);
+        Assert.Equal(HttpStatusCode.Unauthorized, denied.StatusCode);
+        Assert.Equal("AUTHENTICATION_FAILED", await ReadErrorCodeAsync(denied));
+        Assert.Equal(previousCommits, factory.ProtocolCalls);
+        using var me = await authenticated.GetAsync("/api/v1/auth/me");
+        Assert.Equal(HttpStatusCode.OK, me.StatusCode);
+        using var nextLogin = await _host.LoginAsync(anonymous, name, LocalAuthenticationTestHost.ValidPassword);
+        Assert.Equal(HttpStatusCode.OK, nextLogin.StatusCode);
+    }
+
     [Fact]
     public async Task Concurrent_session_refresh_cannot_replace_newer_activity_with_an_older_timestamp()
     {
@@ -54,6 +80,7 @@ public sealed class IdentityAccessAuthenticationServiceTests : IAsyncLifetime
     [InlineData("password-change")]
     [InlineData("logout")]
     [InlineData("offline-disable")]
+    [InlineData("throw-after-commit")]
     public async Task Committed_mutation_with_lost_ack_closes_all_new_authority_until_restart(string kind)
     {
         var factory = new FaultAuditFactory();
@@ -64,6 +91,7 @@ public sealed class IdentityAccessAuthenticationServiceTests : IAsyncLifetime
         var login = await _host.Authentication.LoginAsync(name, LocalAuthenticationTestHost.ValidPassword);
         Assert.Equal(LocalAuthenticationStatus.Success, login.Status);
         factory.LoseNextMutationAck = true;
+        factory.ThrowAfterCommit = kind == "throw-after-commit";
         var principal = login.PrincipalId!.Value;
         var boot = login.BootGeneration!.Value;
         var result = kind switch
@@ -500,16 +528,27 @@ public sealed class IdentityAccessAuthenticationServiceTests : IAsyncLifetime
     {
         private readonly IdentityAccessAuditTransactionAdapter _inner = new();
         public bool LoseNextMutationAck { get; set; }
+        public bool ThrowAfterCommit { get; set; }
+        public string? FailNextSetup { get; set; }
+        public int ProtocolCalls { get; set; }
         public bool SlowDenial { get; init; }
         public TimeSpan DenialWait { get; set; }
         public async ValueTask<IIdentityAuditTransaction> EnlistAsync(DbConnection connection, DbTransaction transaction,
-            CancellationToken cancellationToken = default) => new FaultTransaction(this, await _inner.EnlistAsync(connection, transaction, cancellationToken));
+            CancellationToken cancellationToken = default)
+        {
+            var failure = FailNextSetup;
+            FailNextSetup = null;
+            if (failure == "cancel") await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
+            if (failure is not null) throw new InvalidOperationException("Synthetic audit setup failure.");
+            return new FaultTransaction(this, await _inner.EnlistAsync(connection, transaction, cancellationToken));
+        }
 
         private sealed class FaultTransaction(FaultAuditFactory factory, IIdentityAuditTransaction inner) : IIdentityAuditTransaction
         {
             public async Task<AuditAppendOutcome> CommitWithOwnerMutationAsync(AuditIntent intent,
                 Func<CancellationToken, Task> saveOwnerMutationAsync, CancellationToken cancellationToken = default)
             {
+                factory.ProtocolCalls++;
                 if (factory.SlowDenial && intent.SafeReason == "login-denied")
                 {
                     var watch = Stopwatch.StartNew();
@@ -522,6 +561,7 @@ public sealed class IdentityAccessAuthenticationServiceTests : IAsyncLifetime
                 if (factory.LoseNextMutationAck && intent.Stage == AuditIntentStage.Mutation && outcome.Status == AuditAppendStatus.Durable)
                 {
                     factory.LoseNextMutationAck = false;
+                    if (factory.ThrowAfterCommit) throw new IOException("Synthetic lost commit acknowledgement.");
                     return AuditAppendOutcome.Unknown();
                 }
                 return outcome;

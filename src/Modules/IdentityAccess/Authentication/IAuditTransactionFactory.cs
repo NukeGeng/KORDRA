@@ -6,6 +6,7 @@ namespace Kordra.Modules.IdentityAccess.Authentication;
 /// <summary>Host-composed bridge to AUD's transaction-enlisted append; IAM never addresses AUD storage.</summary>
 public interface IIdentityAuditTransactionFactory
 {
+    /// <summary>Prepares enlistment only; must not run owner mutations or attempt commit.</summary>
     ValueTask<IIdentityAuditTransaction> EnlistAsync(
         DbConnection connection,
         DbTransaction transaction,
