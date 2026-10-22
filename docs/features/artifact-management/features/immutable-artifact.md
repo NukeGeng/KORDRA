@@ -78,3 +78,7 @@ I1 acceptance: Given a supported lowercase OCI digest, parsing preserves its ide
 T01 adds only IAM persistence and its separate migrator/test projects to the root solution. T02 adds AUD Contracts/persistence/tests and the AUD migrator command. Shared product CI uses a disposable loopback PostgreSQL fixture; the Artifact implementation and health-only/inventory-denied API behavior are preserved. The existing architecture tests constrain the exact owner-approved graph and pinned packages at each commit.
 
 T03 adds `Kordra.BuildingBlocks.Security` to the co-owned `Kordra.slnx` for the technical authentication/admission gate accepted by ADR-0012. This solution membership change adds no Artifact dependency or artifact-registration behavior. The maintainer authorized this shared-owner traceability reconciliation on 2026-10-21; Artifact's existing 48 domain tests remain part of the Product gates.
+
+## T04 solution co-ownership — 2026-10-22
+
+The shared solution adds IAM Contracts, TEN Contracts/runtime and TEN tests under accepted ADR-0012. Artifact Domain source, dependencies and identity contract are unchanged. Existing 48 Artifact tests and actual assembly isolation checks remain part of Product validation; no Artifact feature expansion is claimed.

@@ -13,7 +13,7 @@ using Microsoft.Extensions.Options;
 namespace Kordra.Modules.IdentityAccess.Authentication;
 
 /// <summary>IAM-owned local authentication and self-session behavior for the operator pilot.</summary>
-public sealed class LocalAuthenticationService
+public sealed class LocalAuthenticationService : Kordra.Modules.IdentityAccess.Contracts.IAuthorityClock
 {
     private static readonly TimeSpan RequestDeadline = TimeSpan.FromSeconds(5);
     private static readonly TimeSpan LockoutDuration = TimeSpan.FromMinutes(15);
@@ -958,7 +958,7 @@ public sealed class LocalAuthenticationService
             ActionOutcome: actionOutcome);
     }
 
-    private DateTimeOffset GetTrustedUtcNow() => _clock.GetUtcNow();
+    public DateTimeOffset GetTrustedUtcNow() => _clock.GetUtcNow();
 
     private static CancellationTokenSource CreateRequestDeadline(CancellationToken cancellationToken)
     {

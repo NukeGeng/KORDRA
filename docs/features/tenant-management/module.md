@@ -35,7 +35,7 @@ Invite replay, role escalation, tenant status race. Đây là test đầu vào b
 - [FEAT-TEN-001 — Organization membership lifecycle](features/membership-lifecycle.md)
 
 ## Implementation mapping
-`source_paths: []` và `test_paths: []` có nghĩa **chưa đối chiếu repository thật**. Sau khi có code, bổ sung path, commit/test evidence ở mỗi feature, không điền đường dẫn dự đoán.
+FEAT-TEN-001 maps the local T04 owner context, Contracts, membership/exact-scope assignment handlers and isolated tests in its feature record. No TEN HTTP route, invitation/email lifecycle or real provisioning is enabled; T05/T06 composition remains pending.
 
 ## Definition of done
 Tuân thủ [DoD](../../engineering/definition-of-done.md), [module boundaries](../../engineering/module-boundaries.md), [architecture](../../architecture/bounded-contexts.md).

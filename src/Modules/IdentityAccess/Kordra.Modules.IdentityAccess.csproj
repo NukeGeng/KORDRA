@@ -7,6 +7,8 @@
     <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
   </PropertyGroup>
   <ItemGroup>
+    <Compile Remove="Contracts/**/*.cs" />
+    <ProjectReference Include="Contracts/Kordra.Modules.IdentityAccess.Contracts.csproj" />
     <ProjectReference Include="../../BuildingBlocks/Security/Kordra.BuildingBlocks.Security.csproj" />
     <ProjectReference Include="../AuditCompliance/Contracts/Kordra.Modules.AuditCompliance.Contracts.csproj" />
     <PackageReference Include="Microsoft.AspNetCore.Identity.EntityFrameworkCore" Version="10.0.11" />

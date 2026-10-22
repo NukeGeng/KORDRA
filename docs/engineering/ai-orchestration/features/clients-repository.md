@@ -51,3 +51,7 @@ Clients bootstrap commit: `387c56edc75df8332775e267e8cac50462b781dd`; its [repos
 ### Executed setup evidence — 2026-10-20
 
 Full local Product gates passed: 168 tooling tests, 48 Artifact and 85 Inventory Bootstrap tests, scope 39/39, locked restore/zero-warning Release build, docs and nine-path ownership checks. Fresh recursive/standalone/uninitialized public HTTPS clone scenarios passed; the standalone client clone ran its six scaffold tests. The [operating guide](../../clients-development.md#setup-evidence) records exact pins and limitations. Native Clients Auto Review configuration is observed (enabled, PR-open trigger, exhaustive off); no test-only frontend review was triggered, so provider execution awaits a real Clients feature PR. Product integration and human merge remain separate.
+
+## T04 co-owned gate entry point — 2026-10-22
+
+The Product-only solution test command in amr.py now uses MSBuild -m:1 to serialize PostgreSQL test projects whose AUD saturation fixtures intentionally lock a shared table. Clients gitlink/pin handling, metadata-only checks, exclusion rules and independent frontend working tree are unchanged. No Clients source/test/dependency or Website process was accessed. This shared-entrypoint acknowledgment does not resume frontend work or change orchestration/model routing.

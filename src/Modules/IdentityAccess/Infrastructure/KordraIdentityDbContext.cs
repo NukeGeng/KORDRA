@@ -12,6 +12,8 @@ public sealed class KordraIdentityDbContext(DbContextOptions<KordraIdentityDbCon
     public DbSet<KordraSession> Sessions => Set<KordraSession>();
     public DbSet<KordraAuthenticationCommand> AuthenticationCommands => Set<KordraAuthenticationCommand>();
 
+    public DbSet<KordraRoleDefinition> RoleDefinitions => Set<KordraRoleDefinition>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);
@@ -112,5 +114,17 @@ public sealed class KordraIdentityDbContext(DbContextOptions<KordraIdentityDbCon
             .HasForeignKey(command => command.PrincipalId)
             .OnDelete(DeleteBehavior.Restrict)
             .HasConstraintName("fk_iam_authentication_commands_iam_principals_principal_id");
+        var definitions = modelBuilder.Entity<KordraRoleDefinition>();
+        definitions.ToTable("iam_role_definitions", table => table.HasCheckConstraint("ck_iam_role_definition_revision", "revision > 0"));
+        definitions.HasKey(x => new { x.DefinitionId, x.Revision });
+        definitions.Property(x => x.DefinitionId).HasColumnName("definition_id").ValueGeneratedNever();
+        definitions.Property(x => x.Revision).HasColumnName("revision").ValueGeneratedNever();
+        definitions.Property(x => x.ManifestId).HasColumnName("manifest_id");
+        definitions.Property(x => x.ContentHash).HasColumnName("content_hash").HasMaxLength(64).IsRequired();
+        definitions.Property(x => x.Name).HasColumnName("name").HasMaxLength(128).IsRequired();
+        definitions.Property(x => x.RulesJson).HasColumnName("rules_json").HasColumnType("jsonb").IsRequired();
+        definitions.Property(x => x.IsRetired).HasColumnName("is_retired");
+        definitions.HasIndex(x => x.ManifestId).IsUnique();
+
     }
 }

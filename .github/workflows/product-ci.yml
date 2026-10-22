@@ -50,4 +50,4 @@ jobs:
       - name: Build product solution and tests
         run: dotnet build Kordra.slnx --configuration Release --no-restore
       - name: Test product foundation and denied inventory boundaries
-        run: dotnet test Kordra.slnx --configuration Release --no-build --no-restore --logger trx
+        run: dotnet test Kordra.slnx -m:1 --configuration Release --no-build --no-restore --logger trx

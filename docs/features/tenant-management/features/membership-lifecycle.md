@@ -2,12 +2,14 @@
 id: FEAT-TEN-001
 status: proposed
 owner: NukeGeng
-last_reviewed: 2026-10-20
+last_reviewed: 2026-10-22
 module_id: MOD-TEN
 feature_id: FEAT-TEN-001
 phase: MVP
-source_paths: []
-test_paths: []
+source_paths: ["Kordra.slnx", "src/Host/Kordra.Api/TenantAuditTransactionAdapter.cs", "src/Host/Kordra.DbMigrator/TenantManagementMigrationCommand.cs", "src/Modules/TenantManagement/Contracts/Kordra.Modules.TenantManagement.Contracts.csproj", "src/Modules/TenantManagement/Contracts/TenantAuthority.cs", "src/Modules/TenantManagement/Contracts/packages.lock.json", "src/Modules/TenantManagement/Infrastructure/Migrations/20261022041945_InitialTenantPersistence.Designer.cs", "src/Modules/TenantManagement/Infrastructure/Migrations/20261022041945_InitialTenantPersistence.cs", "src/Modules/TenantManagement/Infrastructure/Migrations/TenantDbContextModelSnapshot.cs", "src/Modules/TenantManagement/Infrastructure/TenantDbContext.cs", "src/Modules/TenantManagement/Infrastructure/TenantDbContextFactory.cs", "src/Modules/TenantManagement/Kordra.Modules.TenantManagement.csproj", "src/Modules/TenantManagement/TenantMembershipService.cs", "src/Modules/TenantManagement/packages.lock.json"]
+test_paths: ["tests/InfrastructureInventory.Bootstrap.Tests/ArchitectureTests.cs", "tests/TenantManagement.Tests/TenantManagement.Tests.csproj", "tests/TenantManagement.Tests/TenantMembershipTests.cs", "tests/TenantManagement.Tests/packages.lock.json"]
+planned_source_paths: ["src/Modules/TenantManagement/Kordra.Modules.TenantManagement.csproj", "src/Modules/TenantManagement/Contracts/Kordra.Modules.TenantManagement.Contracts.csproj", "src/Modules/TenantManagement/Contracts/TenantAuthority.cs", "src/Modules/TenantManagement/Infrastructure/TenantDbContext.cs", "src/Modules/TenantManagement/Infrastructure/TenantDbContextFactory.cs", "src/Modules/TenantManagement/TenantMembershipService.cs"]
+planned_test_paths: ["tests/TenantManagement.Tests/TenantManagement.Tests.csproj", "tests/TenantManagement.Tests/TenantMembershipTests.cs"]
 ---
 
 # FEAT-TEN-001 — Organization membership lifecycle
@@ -66,3 +68,19 @@ Một user thuộc A+B nhưng dữ liệu vẫn tách; grant không vượt quy�
 - Test files: **unmapped** (`test_paths: []`).
 - Evidence: `PENDING` — link PR / commit / test report when implemented.
 - Open decisions: `NEEDS-DECISION` for any policy-specific variant not covered by accepted ADR.
+
+## T04 bounded implementation — 2026-10-22
+
+Accepted ADR-0012 and authority/admission-v1 govern this owner slice. Implementation remains unpublished. T04 adds exact versioned IAM definition ports first, then TEN-owned tenant/membership/scoped-assignment persistence and handlers. Actor identity comes from trusted composition, never command-body subject claims. Public HTTP routes, invitations/email and positive inventory remain disabled until T06. Role definitions describe permission/scope rules; only TEN assignments create tenant authority. Required negative tests include stale/retired definitions, deny rules, unknown catalog/scope, foreign tenant/member, grant beyond grantor ceiling, revision conflict, expiry equality, ambiguous assignments, duplicate/conflicting commands, audit rollback/unknown outcome and cancellation. No production migration or real account/tenant provisioning is performed. The owner explicitly authorizes Sol Medium for this T04 only; global AMR routing is unchanged.
+
+## T04 TEN owner slice — local implementation 2026-10-22
+
+FEAT-TEN-001 / MOD-TEN owns ten_organizations, ten_memberships, ten_assignments and hashed command receipts in its own context/history. IAM is consumed only through BCL Contracts; TEN does not reference IAM/AUD runtime assemblies. Host composition alone enlists AUD in the TEN transaction. Additive offline migrations reject Down; the guarded migrator target is local kordra/kordra_admin, while all executed mutation tests use only kordra_test/kordra_test.
+
+Actor and use case: offline LocalMaintainer explicitly creates founding tenant/member/grants with installation lease and stopped API; ordinary authenticated subject selection is supplied by a trusted session adapter. Online owner commands require current org.manage or membership.assign-role plus the grantor's exact current action/scope ceiling. No body principal or role label grants authority. All state changes use the injected common writer gate and current revision; queries hold read admission or require their trusted caller to hold it. Tenant suspension, membership/assignment revocation, expiry equality, retired/current-definition mismatch, ancestor invalidation, explicit deny and ambiguous grants fail closed.
+
+Scope association comes from a required trusted PRJ/INV owner port; there is no positive default implementation. Founding grants are explicit, exact scoped and audited. Delegation records exact source assignment/revision provenance and cannot outlive any authorizing source. Composite tenant/member foreign keys prevent cross-tenant assignment. Minimal self-membership results include only references/revisions, never names or merged permissions. Defensive overflow limits (32 rules/candidates/provenance depth, 50 selector references) deny rather than truncate authorization facts.
+
+TenantMembershipTests exercises isolated real PostgreSQL migrations, same-principal multi-tenancy, grantor ceiling, foreign membership/FK rejection, replay/conflict, stale revisions, deny/ambiguity, retirement, expiry, revocation/suspension, admission cancellation, authority loss during AUD staging, and lost commit ACK recovery without duplicate effects. Pre-commit enlistment failure never poisons admission. Owner state, receipt and audit commit together; unknown commit closes admission until reconciliation/restart under the existing boot protocol.
+
+T04 provides owner handlers and test composition only. HTTP routes remain unregistered until T06. Full offline workspace manifest composition with explicit PRJ/INV resources depends on T05/T06; no real account/tenant provisioning, runtime migration, cluster connection or invitation/email flow was performed. The wider feature remains proposed outside this approved Foundation slice.

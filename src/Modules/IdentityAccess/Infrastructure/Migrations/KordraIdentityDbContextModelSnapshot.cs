@@ -141,6 +141,52 @@ namespace Kordra.Modules.IdentityAccess.Infrastructure.Migrations
                         });
                 });
 
+            modelBuilder.Entity("Kordra.Modules.IdentityAccess.Infrastructure.KordraRoleDefinition", b =>
+                {
+                    b.Property<Guid>("DefinitionId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("definition_id");
+
+                    b.Property<long>("Revision")
+                        .HasColumnType("bigint")
+                        .HasColumnName("revision");
+
+                    b.Property<string>("ContentHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("content_hash");
+
+                    b.Property<bool>("IsRetired")
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_retired");
+
+                    b.Property<Guid>("ManifestId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("manifest_id");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)")
+                        .HasColumnName("name");
+
+                    b.Property<string>("RulesJson")
+                        .IsRequired()
+                        .HasColumnType("jsonb")
+                        .HasColumnName("rules_json");
+
+                    b.HasKey("DefinitionId", "Revision");
+
+                    b.HasIndex("ManifestId")
+                        .IsUnique();
+
+                    b.ToTable("iam_role_definitions", "app", t =>
+                        {
+                            t.HasCheckConstraint("ck_iam_role_definition_revision", "revision > 0");
+                        });
+                });
+
             modelBuilder.Entity("Kordra.Modules.IdentityAccess.Infrastructure.KordraSession", b =>
                 {
                     b.Property<Guid>("SessionId")

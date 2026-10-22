@@ -406,9 +406,26 @@
         "dependencies": {
           "Kordra.BuildingBlocks.Security": "[1.0.0, )",
           "Kordra.Modules.AuditCompliance.Contracts": "[1.0.0, )",
+          "Kordra.Modules.IdentityAccess.Contracts": "[1.0.0, )",
           "Microsoft.AspNetCore.Identity.EntityFrameworkCore": "[10.0.11, )",
           "Npgsql.EntityFrameworkCore.PostgreSQL": "[10.0.3, )"
         }
+      },
+      "kordra.modules.identityaccess.contracts": {
+        "type": "Project"
+      },
+      "kordra.modules.tenantmanagement": {
+        "type": "Project",
+        "dependencies": {
+          "Kordra.BuildingBlocks.Security": "[1.0.0, )",
+          "Kordra.Modules.AuditCompliance.Contracts": "[1.0.0, )",
+          "Kordra.Modules.IdentityAccess.Contracts": "[1.0.0, )",
+          "Kordra.Modules.TenantManagement.Contracts": "[1.0.0, )",
+          "Npgsql.EntityFrameworkCore.PostgreSQL": "[10.0.3, )"
+        }
+      },
+      "kordra.modules.tenantmanagement.contracts": {
+        "type": "Project"
       }
     }
   }

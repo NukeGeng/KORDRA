@@ -36,7 +36,7 @@ Token hết hạn, cache permission stale, permission escalation. Đây là test
 - [FEAT-IAM-002 — Local accounts and revocable browser sessions](features/local-account-session.md)
 
 ## Implementation mapping
-FEAT-IAM-002 maps the implemented T01 persistence slice and tests in its [feature record](features/local-account-session.md). FEAT-IAM-001 remains a synthetic test-only policy proof with no product evaluator mapping. These are feature-level mappings; they do not mean the whole IAM module or authentication behavior is complete.
+FEAT-IAM-002 maps the implemented T01 persistence slice and tests in its [feature record](features/local-account-session.md). FEAT-IAM-001 now maps the T04 role-definition owner implementation and exact revision/interpretation tests; T06 protected admission remains pending. These are feature-level mappings; they do not mean the whole IAM module or authentication behavior is complete.
 
 ## Definition of done
 Tuân thủ [DoD](../../engineering/definition-of-done.md), [module boundaries](../../engineering/module-boundaries.md), [architecture](../../architecture/bounded-contexts.md).
