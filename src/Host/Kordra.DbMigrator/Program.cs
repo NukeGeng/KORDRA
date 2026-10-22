@@ -15,5 +15,8 @@ if (args is ["tenant-management"])
     return await TenantManagementMigrationCommand.RunAsync(args);
 }
 
-Console.Error.WriteLine("Usage: Kordra.DbMigrator identity-access|audit-compliance|tenant-management");
+if (args is ["project-environment"]) return await ProjectEnvironmentMigrationCommand.RunAsync(args);
+if (args is ["infrastructure-inventory"]) return await InfrastructureInventoryMigrationCommand.RunAsync(args);
+
+Console.Error.WriteLine("Usage: Kordra.DbMigrator identity-access|audit-compliance|tenant-management|project-environment|infrastructure-inventory");
 return 2;

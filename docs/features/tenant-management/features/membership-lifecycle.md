@@ -84,3 +84,7 @@ Scope association comes from a required trusted PRJ/INV owner port; there is no 
 TenantMembershipTests exercises isolated real PostgreSQL migrations, same-principal multi-tenancy, grantor ceiling, foreign membership/FK rejection, replay/conflict, stale revisions, deny/ambiguity, retirement, expiry, revocation/suspension, admission cancellation, authority loss during AUD staging, and lost commit ACK recovery without duplicate effects. Pre-commit enlistment failure never poisons admission. Owner state, receipt and audit commit together; unknown commit closes admission until reconciliation/restart under the existing boot protocol.
 
 T04 provides owner handlers and test composition only. HTTP routes remain unregistered until T06. Full offline workspace manifest composition with explicit PRJ/INV resources depends on T05/T06; no real account/tenant provisioning, runtime migration, cluster connection or invitation/email flow was performed. The wider feature remains proposed outside this approved Foundation slice.
+
+## T05 shared-owner integration — 2026-10-22
+
+T05 test composition resolves exact PRJ owner scopes through its own Contracts/store and tests real TEN scoped grants for catalog/target operations. TEN source, persistence and permission rules are unchanged; its test lock graph expands transitively through Host. No cookie authority, positive default or production resource adapter was introduced.

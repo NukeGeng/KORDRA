@@ -22,6 +22,9 @@ public sealed class ArchitectureTests
     private const string Host = "src/Host/Kordra.Api/Kordra.Api.csproj";
     private const string Artifact = "src/Modules/ArtifactManagement/Domain/Kordra.ArtifactManagement.Domain.csproj";
     private const string IdentityAccess = "src/Modules/IdentityAccess/Kordra.Modules.IdentityAccess.csproj";
+    private const string ProjectContracts = "src/Modules/ProjectEnvironment/Contracts/Kordra.Modules.ProjectEnvironment.Contracts.csproj";
+    private const string ProjectEnvironment = "src/Modules/ProjectEnvironment/Kordra.Modules.ProjectEnvironment.csproj";
+    private const string ProjectTests = "tests/ProjectEnvironment.Tests/ProjectEnvironment.Tests.csproj";
     private const string IdentityContracts = "src/Modules/IdentityAccess/Contracts/Kordra.Modules.IdentityAccess.Contracts.csproj";
     private const string TenantContracts = "src/Modules/TenantManagement/Contracts/Kordra.Modules.TenantManagement.Contracts.csproj";
     private const string TenantManagement = "src/Modules/TenantManagement/Kordra.Modules.TenantManagement.csproj";
@@ -57,7 +60,7 @@ public sealed class ArchitectureTests
             .Select(element => Absolute(root, RequiredAttribute(element, "Path"))).Order().ToArray();
         Assert.Equal(graph.Keys.Concat([
             Absolute(root, BootstrapTests), Absolute(root, ArtifactTests), Absolute(root, IdentityTests),
-            Absolute(root, AuditTests), Absolute(root, TenantTests)
+            Absolute(root, AuditTests), Absolute(root, TenantTests), Absolute(root, ProjectTests)
         ]).Order(), solutionProjects);
         var solutionList = new ProcessStartInfo("dotnet")
         {
@@ -118,6 +121,12 @@ public sealed class ArchitectureTests
             ReadProjectEdges(Absolute(root, IdentityTests)).Order());
         Assert.Equal(new[] { Absolute(root, Host), Absolute(root, DbMigrator), Absolute(root, IdentityAccess),
             Absolute(root, TenantManagement), Absolute(root, Security) }.Order(), ReadProjectEdges(Absolute(root, TenantTests)).Order());
+        Assert.Equal(new[] { Absolute(root, Host), Absolute(root, DbMigrator), Absolute(root, IdentityAccess), Absolute(root, Security),
+            Absolute(root, TenantManagement), Absolute(root, ProjectEnvironment), Absolute(root, Inventory) }.Order(), ReadProjectEdges(Absolute(root, ProjectTests)).Order());
+        var projectTests = XDocument.Load(Absolute(root, ProjectTests));
+        Assert.Equal(pinned.OrderBy(pair => pair.Key), projectTests.Descendants("PackageReference").ToDictionary(
+            element => RequiredAttribute(element, "Include"), element => RequiredAttribute(element, "Version")).OrderBy(pair => pair.Key));
+        Assert.All(projectTests.Descendants("PackageReference"), element => Assert.Equal("all", (string?)element.Attribute("PrivateAssets")));
         var tenantTests = XDocument.Load(Absolute(root, TenantTests));
         Assert.Equal(pinned.OrderBy(pair => pair.Key), tenantTests.Descendants("PackageReference").ToDictionary(
             element => RequiredAttribute(element, "Include"), element => RequiredAttribute(element, "Version")).OrderBy(pair => pair.Key));
@@ -148,6 +157,8 @@ public sealed class ArchitectureTests
         var identityContracts = ReadAssembly(typeof(Kordra.Modules.IdentityAccess.Contracts.IRoleDefinitionReader).Assembly.Location);
         var tenantContracts = ReadAssembly(typeof(Kordra.Modules.TenantManagement.Contracts.ITenantSubjectReader).Assembly.Location);
         var tenant = ReadAssembly(typeof(Kordra.Modules.TenantManagement.TenantMembershipService).Assembly.Location);
+        var projectContracts = ReadAssembly(typeof(Kordra.Modules.ProjectEnvironment.Contracts.IProjectOwnershipReader).Assembly.Location);
+        var project = ReadAssembly(typeof(Kordra.Modules.ProjectEnvironment.ProjectCatalogStore).Assembly.Location);
         var artifact = ReadAssembly(ArtifactOutput());
         var persistencePackages = new[]
         {
@@ -160,9 +171,14 @@ public sealed class ArchitectureTests
         };
 
         Assert.Empty(AssemblyViolations(contracts, core));
-        Assert.Empty(AssemblyViolations(inventory, core.Append(contracts.Name)));
+        Assert.Empty(AssemblyViolations(inventory, core.Concat(persistencePackages).Concat([contracts.Name, projectContracts.Name])));
         Assert.Empty(AssemblyViolations(host, core.Concat(web).Concat(persistencePackages).Concat(
-            [contracts.Name, inventory.Name, identity.Name, identityContracts.Name, tenant.Name, auditContracts.Name, audit.Name])));
+            [contracts.Name, inventory.Name, identity.Name, identityContracts.Name, tenant.Name, auditContracts.Name, audit.Name, project.Name, projectContracts.Name, security.Name])));
+        Assert.Empty(AssemblyViolations(projectContracts, core));
+        Assert.Empty(AssemblyViolations(project, core.Concat(persistencePackages).Append(projectContracts.Name)));
+        Assert.Equal(new[] { projectContracts.Name }, project.References.Where(x => x.StartsWith("Kordra.", StringComparison.Ordinal)));
+        Assert.Equal(new[] { contracts.Name, projectContracts.Name }.Order(), inventory.References.Where(x => x.StartsWith("Kordra.", StringComparison.Ordinal)).Order());
+        Assert.DoesNotContain(project.Types, x => x.StartsWith("Kordra.Modules.ProjectEnvironment.Contracts.", StringComparison.Ordinal));
         Assert.Empty(AssemblyViolations(identityContracts, core));
         Assert.Empty(AssemblyViolations(tenantContracts, core));
         Assert.Empty(AssemblyViolations(identity, core.Concat(web).Concat(persistencePackages).Concat([identityContracts.Name, auditContracts.Name, security.Name])));
@@ -178,9 +194,9 @@ public sealed class ArchitectureTests
         Assert.Contains(inventory.Name, host.References);
         Assert.Contains(contracts.Name, host.References);
         var hostProductReferences = host.References.Where(reference => new[]
-            { contracts.Name, inventory.Name, identity.Name, tenant.Name, auditContracts.Name, audit.Name }
+            { contracts.Name, inventory.Name, identity.Name, tenant.Name, auditContracts.Name, audit.Name, project.Name, projectContracts.Name, security.Name, identityContracts.Name }
             .Contains(reference, StringComparer.Ordinal)).Order(StringComparer.Ordinal);
-        Assert.Equal(new[] { contracts.Name, inventory.Name, identity.Name, tenant.Name, auditContracts.Name, audit.Name }
+        Assert.Equal(new[] { contracts.Name, inventory.Name, identity.Name, tenant.Name, auditContracts.Name, audit.Name, project.Name, projectContracts.Name, security.Name, identityContracts.Name }
             .Order(StringComparer.Ordinal), hostProductReferences);
         Assert.Equal(new[] { auditContracts.Name, security.Name }.Order(StringComparer.Ordinal),
             identity.References.Where(reference => reference == auditContracts.Name || reference == security.Name)
@@ -191,7 +207,7 @@ public sealed class ArchitectureTests
         Assert.DoesNotContain(inventory.Types, name => name.StartsWith(
             "Kordra.Modules.InfrastructureInventory.Contracts.", StringComparison.Ordinal));
         Assert.DoesNotContain(inventory.Types.Intersect(contracts.Types), name => name != ".<Module>");
-        var productAssemblies = new[] { contracts, inventory, host, identity, auditContracts, audit, security, artifact, identityContracts, tenantContracts, tenant };
+        var productAssemblies = new[] { contracts, inventory, host, identity, auditContracts, audit, security, artifact, identityContracts, tenantContracts, tenant, projectContracts, project };
         var productNames = productAssemblies.Select(assembly => assembly.Name).ToHashSet(StringComparer.Ordinal);
         Assert.False(HasCycle(productAssemblies.ToDictionary(assembly => assembly.Name,
             assembly => assembly.References.Where(productNames.Contains).ToArray(), StringComparer.Ordinal)));
@@ -266,9 +282,11 @@ public sealed class ArchitectureTests
     private static Dictionary<string, string[]> ApprovedGraph(string root) => new(StringComparer.Ordinal)
     {
         [Absolute(root, Contracts)] = [],
-        [Absolute(root, Inventory)] = [Absolute(root, Contracts)],
+        [Absolute(root, Inventory)] = [Absolute(root, Contracts), Absolute(root, ProjectContracts)],
+        [Absolute(root, ProjectContracts)] = [],
+        [Absolute(root, ProjectEnvironment)] = [Absolute(root, ProjectContracts)],
         [Absolute(root, Host)] = [Absolute(root, Inventory), Absolute(root, Contracts), Absolute(root, IdentityAccess),
-            Absolute(root, AuditCompliance), Absolute(root, AuditContracts), Absolute(root, TenantManagement)],
+            Absolute(root, AuditCompliance), Absolute(root, AuditContracts), Absolute(root, TenantManagement), Absolute(root, ProjectEnvironment)],
         [Absolute(root, Artifact)] = [],
         [Absolute(root, IdentityAccess)] = [Absolute(root, AuditContracts), Absolute(root, Security), Absolute(root, IdentityContracts)],
         [Absolute(root, IdentityContracts)] = [],
@@ -277,7 +295,7 @@ public sealed class ArchitectureTests
         [Absolute(root, AuditContracts)] = [],
         [Absolute(root, AuditCompliance)] = [Absolute(root, AuditContracts)],
         [Absolute(root, Security)] = [],
-        [Absolute(root, DbMigrator)] = [Absolute(root, IdentityAccess), Absolute(root, AuditCompliance), Absolute(root, TenantManagement)]
+        [Absolute(root, DbMigrator)] = [Absolute(root, IdentityAccess), Absolute(root, AuditCompliance), Absolute(root, TenantManagement), Absolute(root, ProjectEnvironment), Absolute(root, Inventory)]
     };
 
     private static IReadOnlyDictionary<string, string> ApprovedPackages(string root, string project)
@@ -285,7 +303,7 @@ public sealed class ArchitectureTests
         var identity = Absolute(root, IdentityAccess);
         var audit = Absolute(root, AuditCompliance);
         var migrator = Absolute(root, DbMigrator);
-        if (project == audit || project == Absolute(root, TenantManagement))
+        if (project == audit || project == Absolute(root, TenantManagement) || project == Absolute(root, ProjectEnvironment) || project == Absolute(root, Inventory))
         {
             return new Dictionary<string, string>(StringComparer.Ordinal)
             {
@@ -451,13 +469,16 @@ public sealed class ArchitectureTests
         using var stream = File.OpenRead(path);
         using var pe = new PEReader(stream);
         var metadata = pe.GetMetadataReader();
+        string TypeName(TypeDefinitionHandle handle)
+        {
+            var type = metadata.GetTypeDefinition(handle);
+            var owner = type.GetDeclaringType();
+            return owner.IsNil ? metadata.GetString(type.Namespace) + "." + metadata.GetString(type.Name)
+                : TypeName(owner) + "+" + metadata.GetString(type.Name);
+        }
         return new(metadata.GetString(metadata.GetAssemblyDefinition().Name),
             metadata.AssemblyReferences.Select(handle => metadata.GetString(metadata.GetAssemblyReference(handle).Name)).ToArray(),
-            metadata.TypeDefinitions.Select(handle =>
-            {
-                var type = metadata.GetTypeDefinition(handle);
-                return metadata.GetString(type.Namespace) + "." + metadata.GetString(type.Name);
-            }).ToArray());
+            metadata.TypeDefinitions.Select(TypeName).ToArray());
     }
 
     private static string[] AssemblyViolations(AssemblyShape assembly, IEnumerable<string> allowed) =>

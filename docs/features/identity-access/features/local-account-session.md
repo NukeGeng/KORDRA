@@ -133,3 +133,7 @@ The existing IAM context/snapshot now includes IAM-owned role-definition revisio
 ## T04 shared PostgreSQL fixture scheduling — 2026-10-22
 
 The canonical Product CI and existing amr.py deterministic gate now pass MSBuild -m:1 to the solution test command, so separate Product test projects run sequentially. AUD saturation tests deliberately acquire ACCESS EXCLUSIVE on the shared isolated aud_intents table; running new TEN fixture provisioning concurrently produced legitimate bounded unavailable results. Project serialization preserves every assertion, timeout, failure fixture and test count, and changes no product runtime or AMR routing/review/checkpoint policy. No Website process, service or test is involved.
+
+## T05 shared-owner integration — 2026-10-22
+
+T05 adds approved PRJ/INV persistence and Host-only transaction composition to shared solution/API/DbMigrator lock graphs. No authentication/session/clock or IAM model changes. Actual T05 fixture authority resolves existing IAM/TEN grants; production authorization adapters/HTTP remain T06.

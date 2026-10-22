@@ -42,3 +42,7 @@ Tuân thủ [DoD](../../engineering/definition-of-done.md), [module boundaries](
 
 ## Reference-environment validation (not product ownership)
 LAB-01 covers **inventory discovery / storage / CNPG / Talos**; see [coverage matrix](../../reference-environments/lab-01/experiments/coverage-matrix.csv) and [safety policy](../../reference-environments/lab-01/experiments/safety-and-change-control.md). Testbed specifics must remain outside generic domain implementation.
+
+## T05 current implementation — 2026-10-22
+
+FEAT-INV-001 now also maps local target metadata persistence/handlers and real PostgreSQL PRJ/INV atomic-association tests. No provider read or positive HTTP ingress is enabled. Current owner facts are a prerequisite for T06/T07 enforcement, not permission to access a cluster.

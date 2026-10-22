@@ -83,3 +83,7 @@ The original feature hash is preserved in the approval receipt and recovery evid
 ## T04 continuation evidence — 2026-10-22
 
 T03 was merged by the human maintainer at main 25bd7e71fbeb5370d19baac1878ab1609c7d72a3. T04 continues in the existing Product worktree/branch as two owner slices: IAM definition Contracts/store/migration/tests, then TEN membership/assignment Contracts/store/handlers/tests with host-only audit enlistment. The user explicitly authorized Sol Medium implementation for T04 only; default AMR responsibilities are unchanged. See the dated traceability entry for validation/publication status. No repeated Architect review or PR side effect was initiated. T05 and T06 remain pending, and T04 HTTP routes remain unregistered.
+
+## T05 owner continuation — 2026-10-22
+
+PRJ catalog and INV metadata/association owner slices are implemented locally with separate persistence/Contracts and one Host-composed owner/AUD transaction. 28 targeted cases and actual XML/PE/negative architecture checks passed; final gate results are in the dated traceability/private T05 evidence. T04 inputs are snapshotted for later commit separation; no historical checkpoint is reset or task replayed. Native model/effort for this resumed turn is unverified. No AI review/PR side effect or HTTP/provider/runtime migration was initiated. T06 still owns trusted adapters/current policy/workspace composition, endpoint authorization and real U/D output proof; these must not be replaced by the fixture adapters.

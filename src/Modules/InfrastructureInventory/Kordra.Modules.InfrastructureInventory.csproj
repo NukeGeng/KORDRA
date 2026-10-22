@@ -9,5 +9,8 @@
   <ItemGroup>
     <Compile Remove="Contracts/**/*.cs" />
     <ProjectReference Include="Contracts/Kordra.Modules.InfrastructureInventory.Contracts.csproj" />
+    <ProjectReference Include="../ProjectEnvironment/Contracts/Kordra.Modules.ProjectEnvironment.Contracts.csproj" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.11"><PrivateAssets>all</PrivateAssets><IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets></PackageReference>
+    <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="10.0.3" />
   </ItemGroup>
 </Project>

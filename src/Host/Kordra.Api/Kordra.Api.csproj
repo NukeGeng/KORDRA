@@ -13,5 +13,6 @@
     <ProjectReference Include="../../Modules/AuditCompliance/Contracts/Kordra.Modules.AuditCompliance.Contracts.csproj" />
     <ProjectReference Include="../../Modules/InfrastructureInventory/Kordra.Modules.InfrastructureInventory.csproj" />
     <ProjectReference Include="../../Modules/InfrastructureInventory/Contracts/Kordra.Modules.InfrastructureInventory.Contracts.csproj" />
-  </ItemGroup>
+  <ProjectReference Include="../../Modules/ProjectEnvironment/Kordra.Modules.ProjectEnvironment.csproj" />
+</ItemGroup>
 </Project>

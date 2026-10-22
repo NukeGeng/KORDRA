@@ -35,7 +35,7 @@ Rename prod thành dev để bypass policy, environment mapping tenant mismatch.
 - [FEAT-PRJ-001 — Create and govern deployment environments](features/environment-catalog.md)
 
 ## Implementation mapping
-`source_paths: []` và `test_paths: []` có nghĩa **chưa đối chiếu repository thật**. Sau khi có code, bổ sung path, commit/test evidence ở mỗi feature, không điền đường dẫn dự đoán.
+FEAT-PRJ-001 maps the local T05 owner catalog, classification/policy associations, target association and PostgreSQL tests. HTTP/U-D/current policy wiring remains T06; no real provisioning or full module completion is claimed.
 
 ## Definition of done
 Tuân thủ [DoD](../../engineering/definition-of-done.md), [module boundaries](../../engineering/module-boundaries.md), [architecture](../../architecture/bounded-contexts.md).

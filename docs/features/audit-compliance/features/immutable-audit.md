@@ -103,3 +103,7 @@ The accepted IAM T03 slice composes AUD through the host adapter in `FEAT-IAM-00
 ## T04 shared-owner integration — 2026-10-22
 
 Shared solution, DbMigrator references/dispatch and API transitive lock files include TEN persistence. TenantAuditTransactionAdapter lives only in Host: setup never commits; staged AUD plus owner mutation/receipt commit atomically, failed pre-commit validation rolls back and unknown commit remains fail-closed. TEN runtime consumes AUD Contracts only. Existing AUD append/schema semantics and immutable records are unchanged. TenantMembershipTests covers rollback, one audit after exact replay and lost-ACK recovery; ArchitectureTests retains graph and compiled forbidden-edge checks. No runtime migration or production operation was executed.
+
+## T05 shared-owner integration — 2026-10-22
+
+T05 Host CatalogMutationCoordinator enlists owner PRJ/INV contexts and AUD in one transaction. AUD storage/append contracts are unchanged. TargetAssociationTests checks one audit on replay, rollback after first owner save, and lost-ACK reconciliation. Shared solution/DbMigrator/API lock graphs add only the approved owner persistence dependencies.

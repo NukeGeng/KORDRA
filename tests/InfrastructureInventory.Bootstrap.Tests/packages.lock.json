@@ -145,6 +145,7 @@
           "Kordra.Modules.IdentityAccess": "[1.0.0, )",
           "Kordra.Modules.InfrastructureInventory": "[1.0.0, )",
           "Kordra.Modules.InfrastructureInventory.Contracts": "[1.0.0, )",
+          "Kordra.Modules.ProjectEnvironment": "[1.0.0, )",
           "Kordra.Modules.TenantManagement": "[1.0.0, )"
         }
       },
@@ -177,10 +178,22 @@
       "kordra.modules.infrastructureinventory": {
         "type": "Project",
         "dependencies": {
-          "Kordra.Modules.InfrastructureInventory.Contracts": "[1.0.0, )"
+          "Kordra.Modules.InfrastructureInventory.Contracts": "[1.0.0, )",
+          "Kordra.Modules.ProjectEnvironment.Contracts": "[1.0.0, )",
+          "Npgsql.EntityFrameworkCore.PostgreSQL": "[10.0.3, )"
         }
       },
       "kordra.modules.infrastructureinventory.contracts": {
+        "type": "Project"
+      },
+      "kordra.modules.projectenvironment": {
+        "type": "Project",
+        "dependencies": {
+          "Kordra.Modules.ProjectEnvironment.Contracts": "[1.0.0, )",
+          "Npgsql.EntityFrameworkCore.PostgreSQL": "[10.0.3, )"
+        }
+      },
+      "kordra.modules.projectenvironment.contracts": {
         "type": "Project"
       },
       "kordra.modules.tenantmanagement": {
