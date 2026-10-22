@@ -48,6 +48,35 @@ def safe_path(root, relative):
     return path
 
 
+def safe_output_path(root, relative):
+    """Validate a precisely declared file target, whether new or already present."""
+    if not isinstance(relative, str) or not relative:
+        raise ValueError('expected nonempty repository-relative output path')
+    normalized = relative.replace('\\', '/')
+    parts = normalized.split('/')
+    if (normalized.startswith('/') or (parts and parts[0].endswith(':'))
+            or '..' in parts or any(part in EXCLUDED_PARTS for part in parts)
+            or normalized.endswith('.pyc')):
+        raise ValueError('unsafe task output path')
+    root = Path(root).resolve()
+    candidate = root / normalized
+    current = root
+    for part in parts:
+        if not part or part == '.':
+            continue
+        current = current / part
+        if current.is_symlink():
+            raise ValueError('task output path traverses a symlink')
+        if current.exists() and current != candidate and not current.is_dir():
+            raise ValueError('task output parent is not a directory')
+    resolved = candidate.resolve()
+    if not resolved.is_relative_to(root):
+        raise ValueError('output path escapes repository')
+    if candidate.exists() and not candidate.is_file():
+        raise ValueError('task output target must be a file')
+    return candidate
+
+
 def validate_task(task, root, *, require_inputs=True, legacy_policy=False):
     for key in REQUIRED_TASK:
         if key not in task:
@@ -60,10 +89,16 @@ def validate_task(task, root, *, require_inputs=True, legacy_policy=False):
             raise ValueError(f'expected array: {key}')
     if not task['paths'] or not task['consulted'] or not task['invariants']:
         raise ValueError('paths, consulted documents and invariants must be explicit')
+    outputs = task.get('output_paths', [])
+    if (not isinstance(outputs, list) or any(not isinstance(p, str) for p in outputs)
+            or len(outputs) != len(set(outputs))):
+        raise ValueError('output_paths must be a unique string array')
     for rel in task['paths'] + task['consulted']:
         path = safe_path(root, rel)
         if require_inputs and not path.is_file():
             raise ValueError(f'missing input file: {rel}')
+    for rel in outputs:
+        safe_output_path(root, rel)
     specs = [(rel, frontmatter(safe_path(root, rel).read_text('utf-8')))
              for rel in task['consulted'] if rel.endswith('.md')
              and safe_path(root, rel).is_file()]
@@ -72,12 +107,28 @@ def validate_task(task, root, *, require_inputs=True, legacy_policy=False):
               and meta.get('module_id') == task['module_id']]
     if len(owners) > 1 or (require_inputs and len(owners) != 1):
         raise ValueError('consult exactly one matching owner feature spec')
+    overlap = set(outputs) & (set(task['paths']) | set(task['consulted']))
     if owners:
         spec_path, meta = owners[0]
+        # A feature often needs to add the mappings for files created by the
+        # same task. Permit only that single owner document to be both consulted
+        # and an output; all other input/output overlap remains invalid.
+        if overlap - {spec_path}:
+            raise ValueError('only the matching owner feature may also be a task output')
         mappings = json.loads(meta.get('source_paths', '[]')) + json.loads(meta.get('test_paths', '[]'))
+        planned = (json.loads(meta.get('planned_source_paths', '[]'))
+                   + json.loads(meta.get('planned_test_paths', '[]'))
+                   + json.loads(meta.get('planned_doc_paths', '[]')))
+        if (any(not isinstance(items, list) for items in (mappings, planned))
+                or any(not isinstance(p, str) or not p for p in mappings + planned)):
+            raise ValueError('feature path mappings must be JSON string arrays')
         if any(p != spec_path and not any(matches(m, p) for m in mappings) for p in task['paths']):
             raise ValueError('task paths not mapped to owner feature')
+        if any(not any(matches(m, p) for m in planned) for p in outputs):
+            raise ValueError('task outputs must be declared in the owner feature planned mappings')
     else:
+        if overlap:
+            raise ValueError('output_paths must be separate from task inputs without an owner feature')
         # Checkpoint reads may outlive an explicitly declared deletion. The
         # immutable plan digest preserves the task metadata validated at init;
         # dispatch still uses the strict default and requires the owner file.
@@ -292,8 +343,80 @@ def save_private(root, name, data):
     return path
 
 
-def gates(root, base=None):
-    before = tree_identity(root)['digest']
+def gate_reuse_inputs(root, files, validation_context):
+    """Conservative inputs: tooling tests consume docs; product checks do not.
+
+    Only hashes are retained; environment values/config credentials stay in memory.
+    A fixture context is an explicit contributor declaration, not an attestation of
+    a database's state. Rotate it after fixture/service changes or unknown effects.
+    """
+    def fingerprint(value):
+        return hashlib.sha256(json.dumps(value, sort_keys=True).encode()).hexdigest()
+    # Native tool-call correlation changes for every shell invocation; it is not
+    # an input to repository tests/builds. Keep every other environment input.
+    environment = fingerprint({k: v for k, v in os.environ.items() if k != 'CODEX_TOOL_CALL_ID'})
+    external = {}
+    for path in (Path.home()/'.nuget/NuGet/NuGet.Config', Path.home()/'.nuget/NuGet.Config'):
+        try:
+            external[str(path)] = hashlib.sha256(path.read_bytes()).hexdigest() if path.exists() else None
+        except OSError:
+            return {}  # Cannot inspect a potentially relevant input: do not reuse.
+    product = {p: value for p, value in files.items()
+               if not (p.endswith('.md') and (p.startswith('docs/') or p.endswith('/README.md') or p == 'README.md'))}
+    common = {'environment': environment, 'python': [sys.executable, sys.version],
+              'validation_context': validation_context}
+    inputs = {'unit': fingerprint(dict(common, files=files))}
+    if (root/'Kordra.slnx').is_file():
+        try:
+            info = subprocess.run(['dotnet', '--info'], cwd=root, capture_output=True,
+                                  text=True, timeout=15)
+            if info.returncode != 0:
+                return inputs
+        except (OSError, subprocess.TimeoutExpired):
+            return inputs
+        product_digest = fingerprint(dict(common, files=product, dotnet=info.stdout,
+                                          external=external))
+        inputs.update({name: product_digest for name in
+                       ('product-restore', 'product-build', 'product-test')})
+    return inputs
+
+
+def reusable_gate(previous, name, command, signature, validation_context):
+    """Reuse only a successful original execution, at most one hour old."""
+    if (not isinstance(previous, dict) or previous.get('schemaVersion') != 1 or previous.get('local_status') != 'passed'
+            or previous.get('source_stable') is not True or not signature):
+        return None
+    # Integration state is external to source: require a caller-managed fixture epoch.
+    if name == 'product-test' and not validation_context:
+        return None
+    checks = previous.get('checks', [])
+    if (not isinstance(checks, list) or any(not isinstance(c, dict) for c in checks)
+            or len([c for c in checks if c.get('name') == name]) != 1):
+        return None
+    old = next(c for c in checks if c.get('name') == name)
+    if old.get('execution') not in {'executed', 'reused'}:
+        return None
+    origin = old.get('reuse', {}) if old.get('execution') == 'reused' else {
+        'executed_at': old.get('executed_at'), 'content': previous.get('content')}
+    if not isinstance(origin, dict):
+        return None
+    try:
+        age = datetime.datetime.now(datetime.timezone.utc) - datetime.datetime.fromisoformat(origin['executed_at'])
+    except (KeyError, TypeError, ValueError):
+        return None
+    if (not datetime.timedelta(0) <= age <= datetime.timedelta(hours=1)
+            or old.get('status') != 'passed' or old.get('exit_code') != 0
+            or old.get('command') != command or old.get('input_digest') != signature):
+        return None
+    return dict(old, execution='reused', reuse=origin)
+
+
+def gates(root, base=None, *, reuse=None, validation_context=None):
+    if validation_context is not None and (not isinstance(validation_context, str) or not validation_context.strip()):
+        raise ValueError('validation context must be a nonempty, nonsecret fixture epoch')
+    before_tree = tree_identity(root)
+    before = before_tree['digest']
+    signatures = gate_reuse_inputs(root, before_tree['files'], validation_context)
     commands = [
         ('docs', [sys.executable, 'docs/tooling/doccheck.py', '--strict-sources']),
         ('scope', [sys.executable, 'docs/tooling/scopecheck.py']),
@@ -316,6 +439,10 @@ def gates(root, base=None):
             results.append({'name': name, 'command': cmd, 'status': 'blocked',
                             'reason': 'prior product stage failed; do not test stale binaries'})
             continue
+        cached = reusable_gate(reuse, name, cmd, signatures.get(name), validation_context)
+        if cached:
+            results.append(cached)
+            continue
         try:
             p = subprocess.run(cmd, cwd=root, text=True, capture_output=True, timeout=90)
             results.append({'name': name, 'command': cmd, 'status': 'passed' if p.returncode == 0
@@ -325,11 +452,13 @@ def gates(root, base=None):
             results.append({'name': name, 'command': cmd, 'status': 'failed', 'reason': 'timeout'})
         except OSError as exc:
             results.append({'name': name, 'command': cmd, 'status': 'failed', 'reason': str(exc)})
+        results[-1].update(execution='executed', executed_at=now(), input_digest=signatures.get(name))
         if name.startswith('product-'):
             product_ready = results[-1]['status'] == 'passed'
     after = tree_identity(root)['digest']
-    stable = before == after
+    stable = before == after and signatures == gate_reuse_inputs(root, tree_identity(root)['files'], validation_context)
     return {'schemaVersion': 1, 'created_at': now(), 'content': before, 'source_stable': stable,
+            'validation_context': validation_context,
             'checks': results, 'local_status': 'passed' if all(
                 x['status'] == 'passed' for x in results) and stable else 'failed',
             'source_mapping': 'executed' if base else 'not_configured',
@@ -618,6 +747,8 @@ def main():
             p.add_argument('--dry-run', action='store_true')
     sub.add_parser('validate-context')
     p = sub.add_parser('gates'); p.add_argument('--base')
+    p.add_argument('--reuse', help='private prior gate receipt; never skip docs/scope/mapping')
+    p.add_argument('--validation-context', help='nonsecret fixture epoch; rotate after DB/service changes')
     p = sub.add_parser('validate-bir', help='validate manual BIR PR ledger; never dispatch reviews')
     p.add_argument('--receipt', required=True, type=Path)
     p.add_argument('--head', required=True)
@@ -659,7 +790,8 @@ def main():
         validate_snapshot(ROOT, json.loads((ROOT/'.amr-local/handoff.json').read_text()))
         result = {'status': 'current'}
     elif args.command == 'gates':
-        result = gates(ROOT, args.base)
+        previous = amr_goal.private_evidence(ROOT, args.reuse)[1] if args.reuse else None
+        result = gates(ROOT, args.base, reuse=previous, validation_context=args.validation_context)
         save_private(ROOT, 'gates.json', result)
         code = 1 if result['local_status'] != 'passed' else 0
     elif args.command == 'probe-models':

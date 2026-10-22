@@ -141,3 +141,7 @@ The [FEAT-IAM-001/I2.7 register](../features/identity-access/features/authorize-
 ### T03 PR #10 corrective work — 2026-10-22
 
 The six findings on reviewed commit `79a6ee72af8f0240c941074e183f0ca1a284309b` have scoped local corrections and regression coverage in FEAT-IAM-002. Initial IAM verification passed 72 cases; final full gates bind the final local source independently. Fixes are not yet published or independently confirmed on a new PR revision. T03 remains pending that boundary and maintainer acceptance; do not advance T04–T07 from a green local test result or the AMR bookkeeping repair alone.
+
+### AMR coordination evidence — 2026-10-22
+
+The stopped T03 checkpoint is reconciled as failed with its prior snapshot and findings preserved; it no longer holds an active coordinator claim. T01/T02 remain merged through PR #9. PR #10 contains the six corrective paths at `fcad37f28c468c02805916252f785eec1d559f92`, with exact-tree 246 Product/168 tooling test evidence. This supersedes the earlier pre-publication note above, but not independent PR follow-up, human merge or future feature gates. Publishing AMR tooling neither replays Product work nor completes T03.

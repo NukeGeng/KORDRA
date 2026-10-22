@@ -2,7 +2,7 @@
 id: ENG-AMR-GUIDE
 status: accepted
 owner: engineering-maintainers
-last_reviewed: 2026-10-19
+last_reviewed: 2026-10-21
 ---
 
 # AMR v4 — Architect / Developer / Reviewer
@@ -36,15 +36,17 @@ python3 docs/tooling/amr.py route --task docs/engineering/ai-orchestration/task.
 python3 docs/tooling/amr.py goal status --id <goal-id>
 python3 docs/tooling/amr.py goal recommend --id <goal-id> \
   --current-model gpt-6-luna --current-effort max
-python3 docs/tooling/amr.py goal step --id <goal-id>
-python3 docs/tooling/amr.py goal validate --id <goal-id> --task-id <task-id>
-python3 docs/tooling/amr.py goal accept --id <goal-id> --task-id <task-id> \
-  --triage .amr-local/triage.json
+python3 docs/tooling/amr.py goal step --id <goal-id> --context .amr-local/context.json
+# Implement the prepared task in this chat, then run applicable deterministic gates.
+python3 docs/tooling/amr.py goal finish --id <goal-id> --task-id <task-id> \
+  --evidence .amr-local/completion.json
 ```
 
 Architect acceptance requires a human approval object bound to the exact task digest, content digest, approver, scope and decision evidence. The CLI records that decision but cannot authenticate the person. `goal step --design-review` is rejected under v4; design approval happens after the Architect output. Proposed ADRs still require their own human decision.
 
 ## Deterministic gates
+
+The current chat is the default executor for approved local Developer tasks. Preparation/completion invokes no AI session; an explicit `--native-runner` retains the serial runner and its `validate`/`accept` flow. For stopped/reconciled failed local Developer work, [inspected continuation](goal-execution.md#approval-boundaries) records current evidence under the existing approved scope without repeat design approval. It creates a labeled successor and retains the original failure. Historical explicit `goal recover` and all design/production/merge approval boundaries remain unchanged.
 
 `gates` runs strict docs, LAB case-registry checks and offline tooling tests. With `Kordra.slnx`, it also runs locked restore, Release build and product tests; failed restore/build blocks dependent stages to avoid stale binaries. On a PR, supply a verified base SHA for source-to-feature mapping. CI remains independent of AI credentials.
 
@@ -53,6 +55,8 @@ python3 docs/tooling/amr.py gates --base <verified-base-SHA>
 python3 docs/tooling/amr.py validate-review --receipt .amr-local/triage-ledger.json --critical
 python3 docs/tooling/amr.py validate-bir --receipt .amr-local/pr-review.json --head <verified-PR-head-SHA>
 ```
+
+Optional `gates --reuse <private-receipt> --validation-context <nonsecret-fixture-epoch>` reuses only successful matching input/environment/toolchain evidence within one hour of its original execution. Product integration-test reuse requires the same declared fixture epoch; rotate after fixture/service changes or unknown effects. Docs/scope/mapping always execute and docs changes also invalidate tooling tests. See the [reuse contract](contract.md#deterministic-evidence-reuse).
 
 Formatting checks remain deterministic; run the repository's applicable formatter and whitespace checks. At two failed Luna repairs of one root cause, escalation requires a defect ID, reproduction evidence and affected paths; a fourth failed repair blocks for maintainer investigation. Critical defects route directly to Sol High only as a bounded debugging task. Blocking findings and failed applicable gates prevent completion.
 

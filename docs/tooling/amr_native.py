@@ -58,12 +58,12 @@ class Native:
         self.process.stdin.flush()
 
     def receive(self, deadline):
-        if time.monotonic() >= deadline:
+        if deadline is not None and time.monotonic() >= deadline:
             methods = sorted({x.get('method', '') for x in self.events})
             raise NativeError('native operation timed out; outcome unknown; observed events: '
                               + ', '.join(methods))
         try:
-            message = self.incoming.get(timeout=max(0.01, deadline-time.monotonic()))
+            message = self.incoming.get(timeout=None if deadline is None else max(0.01, deadline-time.monotonic()))
         except queue.Empty as exc:
             methods = sorted({x.get('method', '') for x in self.events})
             raise NativeError('native operation timed out; outcome unknown; observed events: '
@@ -86,7 +86,7 @@ class Native:
         self.counter += 1
         ident = self.counter
         self.send({'id': ident, 'method': method, 'params': params})
-        deadline = time.monotonic() + self.timeout
+        deadline = time.monotonic() + (self.timeout if self.timeout is not None else 60)
         while ident not in self.pending:
             self.receive(deadline)
         message = self.pending.pop(ident)
@@ -95,7 +95,8 @@ class Native:
         return message['result']
 
     def wait_turn(self, thread_id, turn_id, deadline=None):
-        deadline = deadline or time.monotonic()+self.timeout
+        if deadline is None and self.timeout is not None:
+            deadline = time.monotonic()+self.timeout
         def completed():
             return next((x['params']['turn'] for x in self.events
                          if x.get('method') == 'turn/completed'
@@ -125,10 +126,12 @@ class Native:
             raise NativeError('runtime changed requested approval policy')
         return result
 
-    def turn(self, thread_id, text, model, effort):
+    def turn(self, thread_id, text, model, effort, on_started=None):
         started = self.request('turn/start', {'threadId': thread_id,
                      'model': model, 'effort': effort,
                      'input': [{'type': 'text', 'text': text}]})
+        if on_started is not None:
+            on_started(started['turn']['id'])
         return self.wait_turn(thread_id, started['turn']['id'])
 
     def close(self):
@@ -252,7 +255,8 @@ def parse_task_outcome(messages, task, pre_dispatch):
     return outcome, None
 
 
-def execute_task(root, task, model, effort, *, sandbox='read-only', timeout=600, on_start=None,
+def execute_task(root, task, model, effort, *, sandbox='read-only', timeout=None, on_start=None,
+                 on_turn_started=None,
                  goal_context=None, pre_dispatch=None):
     """Execute one local task in a native session; callers own durable task state."""
     if task.get('scope') != 'local-development' or set(task.get('signals', [])) & {
@@ -263,7 +267,7 @@ def execute_task(root, task, model, effort, *, sandbox='read-only', timeout=600,
     context = {key: task.get(key) for key in (
         'task_id', 'objective', 'feature_id', 'module_id', 'actor', 'permission',
         'scope', 'paths', 'consulted', 'invariants', 'decisions', 'tests', 'next_action',
-        'write_paths', 'depends_on', 'milestone', 'failed_repairs', 'failure_evidence',
+        'write_paths', 'output_paths', 'depends_on', 'milestone', 'failed_repairs', 'failure_evidence',
         'reported_defect')}
     context['execution_role'] = role
     role_instructions = {
@@ -336,7 +340,10 @@ def execute_task(root, task, model, effort, *, sandbox='read-only', timeout=600,
         thread_id = start['thread']['id']
         if on_start is not None:
             on_start(thread_id)
-        turn = native.turn(thread_id, prompt, model, effort)
+        if on_turn_started is None:
+            turn = native.turn(thread_id, prompt, model, effort)
+        else:
+            turn = native.turn(thread_id, prompt, model, effort, on_started=on_turn_started)
         result = summarize(start, turn, native.events, model, effort)
         outcome, outcome_error = parse_task_outcome(result['messages'], task, pre_dispatch)
         result['task_outcome'] = outcome
