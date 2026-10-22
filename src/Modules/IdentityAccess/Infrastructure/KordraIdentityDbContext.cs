@@ -10,6 +10,7 @@ public sealed class KordraIdentityDbContext(DbContextOptions<KordraIdentityDbCon
 
     public DbSet<KordraIdentityUser> Principals => Set<KordraIdentityUser>();
     public DbSet<KordraSession> Sessions => Set<KordraSession>();
+    public DbSet<KordraAuthenticationCommand> AuthenticationCommands => Set<KordraAuthenticationCommand>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -81,5 +82,35 @@ public sealed class KordraIdentityDbContext(DbContextOptions<KordraIdentityDbCon
             .HasForeignKey(session => session.PrincipalId)
             .OnDelete(DeleteBehavior.Restrict)
             .HasConstraintName("fk_iam_sessions_iam_principals_principal_id");
+
+        var commands = modelBuilder.Entity<KordraAuthenticationCommand>();
+        commands.ToTable("iam_authentication_commands", table =>
+        {
+            table.HasCheckConstraint(
+                "ck_iam_authentication_commands_hash_length",
+                "octet_length(idempotency_key_hash) = 32");
+            table.HasCheckConstraint(
+                "ck_iam_authentication_commands_kind",
+                "command_kind IN ('logout-all', 'password-change')");
+        });
+        commands.HasKey(command => command.CommandId).HasName("pk_iam_authentication_commands");
+        commands.Property(command => command.CommandId).HasColumnName("command_id").ValueGeneratedNever();
+        commands.Property(command => command.IdempotencyKeyHash)
+            .HasColumnName("idempotency_key_hash")
+            .HasColumnType("bytea")
+            .HasMaxLength(32)
+            .IsRequired();
+        commands.Property(command => command.PrincipalId).HasColumnName("principal_id").IsRequired();
+        commands.Property(command => command.CommandKind).HasColumnName("command_kind").HasMaxLength(32).IsRequired();
+        commands.Property(command => command.CreatedAtUtc).HasColumnName("created_at_utc").IsRequired();
+        commands.HasIndex(command => command.IdempotencyKeyHash)
+            .IsUnique()
+            .HasDatabaseName("uq_iam_authentication_commands_idempotency_key_hash");
+        commands.HasIndex(command => command.PrincipalId);
+        commands.HasOne<KordraIdentityUser>()
+            .WithMany()
+            .HasForeignKey(command => command.PrincipalId)
+            .OnDelete(DeleteBehavior.Restrict)
+            .HasConstraintName("fk_iam_authentication_commands_iam_principals_principal_id");
     }
 }

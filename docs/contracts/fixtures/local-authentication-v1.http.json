@@ -1,0 +1,102 @@
+{
+  "contractId": "CTR-LOCAL-AUTH-V1",
+  "schemaVersion": 1,
+  "origin": "https://localhost:5128",
+  "secretValues": "omitted",
+  "routes": [
+    {
+      "name": "csrf-token",
+      "method": "GET",
+      "path": "/api/v1/auth/csrf",
+      "requestBodyFields": [],
+      "success": {
+        "status": 200,
+        "bodyFields": ["schemaVersion", "correlationId", "requestToken"],
+        "cacheControl": "no-store",
+        "antiforgeryCookie": {
+          "name": "__Host-kordra.antiforgery",
+          "secure": true,
+          "httpOnly": true,
+          "sameSite": "Strict",
+          "path": "/",
+          "domain": null
+        }
+      }
+    },
+    {
+      "name": "login",
+      "method": "POST",
+      "path": "/api/v1/auth/login",
+      "requiredHeaders": ["Origin", "X-Kordra-CSRF", "Content-Type: application/json"],
+      "requestBodyFields": ["username", "password"],
+      "success": {
+        "status": 200,
+        "bodyFields": ["schemaVersion", "correlationId", "principalId", "sessionExpiresAtUtc"],
+        "sessionCookie": {
+          "name": "__Host-kordra.session",
+          "secure": true,
+          "httpOnly": true,
+          "sameSite": "Strict",
+          "path": "/",
+          "domain": null
+        }
+      },
+      "credentialFailure": {
+        "status": 401,
+        "code": "AUTHENTICATION_FAILED",
+        "bodyFields": ["schemaVersion", "correlationId", "code", "message"]
+      }
+    },
+    {
+      "name": "current-identity",
+      "method": "GET",
+      "path": "/api/v1/auth/me",
+      "success": {
+        "status": 200,
+        "bodyFields": ["schemaVersion", "correlationId", "principalId", "username", "sessionExpiresAtUtc"],
+        "cacheControl": "no-store"
+      },
+      "invalidSession": {
+        "status": 401,
+        "code": "SESSION_INVALID",
+        "bodyFields": ["schemaVersion", "correlationId", "code", "message"]
+      }
+    },
+    {
+      "name": "logout",
+      "method": "POST",
+      "path": "/api/v1/auth/logout",
+      "requiredHeaders": ["Origin", "X-Kordra-CSRF"],
+      "requestBodyFields": [],
+      "successStatus": 204,
+      "authorityUnavailable": {"status": 503, "code": "AUTHORITY_UNAVAILABLE"}
+    },
+    {
+      "name": "logout-all",
+      "method": "POST",
+      "path": "/api/v1/auth/logout-all",
+      "requiredHeaders": ["Origin", "X-Kordra-CSRF", "Idempotency-Key"],
+      "requestBodyFields": [],
+      "successStatus": 204,
+      "authorityUnavailable": {"status": 503, "code": "AUTHORITY_UNAVAILABLE"}
+    },
+    {
+      "name": "change-password",
+      "method": "POST",
+      "path": "/api/v1/auth/password",
+      "requiredHeaders": ["Origin", "X-Kordra-CSRF", "Idempotency-Key", "Content-Type: application/json"],
+      "requestBodyFields": ["currentPassword", "newPassword"],
+      "successStatus": 204,
+      "credentialFailure": {"status": 401, "code": "AUTHENTICATION_FAILED"},
+      "authorityUnavailable": {"status": 503, "code": "AUTHORITY_UNAVAILABLE"}
+    }
+  ],
+  "commonRejections": [
+    {"status": 400, "code": "INVALID_REQUEST"},
+    {"status": 403, "code": "REQUEST_REJECTED"},
+    {"status": 409, "code": "REQUEST_CONFLICT"},
+    {"status": 409, "code": "SESSION_LIMIT_REACHED"},
+    {"status": 429, "code": "RATE_LIMITED"},
+    {"status": 503, "code": "AUTHORITY_UNAVAILABLE"}
+  ]
+}

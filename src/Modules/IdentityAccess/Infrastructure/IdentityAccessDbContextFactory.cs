@@ -37,7 +37,8 @@ public sealed class IdentityAccessDbContextFactory : IDesignTimeDbContextFactory
         options.UseNpgsql(connectionString, postgres =>
             postgres.MigrationsHistoryTable(
                 KordraIdentityDbContext.MigrationHistoryTableName,
-                KordraIdentityDbContext.SchemaName));
+                KordraIdentityDbContext.SchemaName)
+            .CommandTimeout(2));
         return options.Options;
     }
 

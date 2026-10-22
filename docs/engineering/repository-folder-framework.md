@@ -2,7 +2,7 @@
 id: ENG-FOLDER-FRAMEWORK
 status: proposed
 owner: engineering-maintainers
-last_reviewed: 2026-10-20
+last_reviewed: 2026-10-21
 ---
 
 # Repository folder framework — actual and reserved paths
@@ -11,21 +11,22 @@ The maintainer requested the folder framework **after** completing the accepted 
 
 ## Actual project graph
 
-Root `Kordra.slnx` contains twelve projects after T02: eight product projects (Artifact Domain, Inventory Contracts/runtime, Kordra.Api, IAM persistence, AUD Contracts/persistence, and DbMigrator) and four test projects. IAM T01 and AUD T02 are scoped ADR-0012 additions. Local product evidence is 48 Artifact, 85 Inventory Bootstrap, 17 IAM and 34 AUD tests; hosted CI remains pending push. This does not adopt ADR-0009 or implement login/authorization ingress.
+Root `Kordra.slnx` contains thirteen projects after T03: nine product projects (Artifact Domain, Inventory Contracts/runtime, Kordra.Api, IAM, AUD Contracts/persistence, DbMigrator and BuildingBlocks.Security) and four test projects. T01–T03 are scoped ADR-0012 additions. Local product evidence is 48 Artifact, 85 Inventory Bootstrap, 52 IAM and 39 AUD tests. T03 adds explicit local-pilot authentication; resource authorization and ADR-0009 adoption remain separate.
 
 - `src/Modules/ArtifactManagement/Domain/`: immutable digest domain; [FEAT-ART-001](../features/artifact-management/features/immutable-artifact.md).
 - `src/Modules/InfrastructureInventory/Contracts/` and its parent runtime: immutable in-process read seam and unavailable reader; [FEAT-INV-001/I1](../features/infrastructure-inventory/features/register-target.md).
-- `src/Host/Kordra.Api/`: IPv4 loopback API, constant liveness, uniform inventory denial; no IAM or provider.
-- `src/Modules/IdentityAccess/`: IAM-owned principal/session persistence for the accepted T01 slice; no login endpoints or authorization runtime.
+- `src/Host/Kordra.Api/`: health-only default HTTP profile; explicit HTTPS local-pilot authentication profile; both keep inventory denied and have no provider access.
+- `src/Modules/IdentityAccess/`: IAM-owned persistence plus accepted T03 local accounts, authentication and revocable sessions; no resource-authorization ingress.
+- `src/BuildingBlocks/Security/`: BCL-only fair writer-preferring technical gate used by T03; no tenant/business policy.
 - `src/Host/Kordra.DbMigrator/`: explicitly invoked, loopback/role-checked IAM/AUD migration host; no API startup migration.
 - `src/Modules/AuditCompliance/Contracts/` and its parent runtime: AUD append/exact lookup and owner persistence, with isolated `tests/AuditCompliance.Tests/`; no history HTTP endpoint.
-- Root `tests/ArtifactManagement.Domain.Tests/`, `tests/InfrastructureInventory.Bootstrap.Tests/` and `tests/IdentityAccess.Tests/`: 48 + 85 + 17 + 34 locally passing tests. Coverage includes project/PE boundaries, compiled negative fixtures, loopback behavior, isolated IAM migration round trip and read-only runtime-role permission probe. This is not remote CI evidence.
+- Root `tests/ArtifactManagement.Domain.Tests/`, `tests/InfrastructureInventory.Bootstrap.Tests/`, `tests/IdentityAccess.Tests/` and `tests/AuditCompliance.Tests/`: 48 + 85 + 52 + 39 locally passing tests. Coverage includes project/PE boundaries, compiled negative fixtures, loopback behavior, isolated IAM migration round trip and read-only runtime-role permission probe. This is not remote CI evidence.
 
 ## Reserved folders
 
 **Clients Git ownership update — 2026-10-19:** accepted [ADR-0013](../decisions/0013-clients-git-submodule.md) moves the four existing Clients reservations into the independent KORDRA-Clients repository, mounted at the same `clients/` path. Product now tracks one gitlink rather than those four README blobs. The original framework's 45 reserved locations remain logical paths: 41 Product-owned reservations and four Clients-owned reservations. None becomes an implemented UI. See [the operating guide](clients-development.md).
 
-The original reservation created the paths below with proposed READMEs. `src/Modules/IdentityAccess`, `src/Modules/AuditCompliance` and `src/Host/Kordra.DbMigrator` were subsequently adopted for the exact FEAT-IAM-002 T01 and FEAT-AUD-001 T02 slices under ADR-0012 and are documented as implemented paths above. Remaining locations below are still reservations only: their presence does not mean a feature, module registration, driver, UI, deployment or Enterprise product exists. Module names follow the [proposed mapping](project-conventions.md); module specs retain their current status and ownership.
+The original reservation created the paths below with proposed READMEs. `src/Modules/IdentityAccess`, `src/Modules/AuditCompliance`, `src/Host/Kordra.DbMigrator` and `src/BuildingBlocks/Security` were subsequently adopted for the exact T01–T03 slices under ADR-0012 and are documented as implemented paths above. Remaining locations below are still reservations only: their presence does not mean a feature, module registration, driver, UI, deployment or Enterprise product exists. Module names follow the [proposed mapping](project-conventions.md); module specs retain their current status and ownership.
 
 | Reserved path | Canonical owner / adoption prerequisite |
 |---|---|
@@ -48,7 +49,6 @@ The original reservation created the paths below with proposed READMEs. `src/Mod
 | `src/BuildingBlocks/Core` | Feature/contract decision required |
 | `src/BuildingBlocks/Persistence` | Feature/contract decision required |
 | `src/BuildingBlocks/Messaging` | Feature/contract decision required |
-| `src/BuildingBlocks/Security` | Feature/contract decision required |
 | `src/BuildingBlocks/Observability` | Feature/contract decision required |
 | `src/Execution/Abstractions` | Feature/contract decision required |
 | `src/Execution/Protocols` | Feature/contract decision required |

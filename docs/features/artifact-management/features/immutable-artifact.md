@@ -2,7 +2,7 @@
 id: FEAT-ART-001
 status: proposed
 owner: unassigned
-last_reviewed: 2026-10-20
+last_reviewed: 2026-10-21
 module_id: MOD-ART
 feature_id: FEAT-ART-001
 phase: MVP
@@ -76,3 +76,5 @@ I1 acceptance: Given a supported lowercase OCI digest, parsing preserves its ide
 ## Shared Foundation composition — T01/T02 review
 
 T01 adds only IAM persistence and its separate migrator/test projects to the root solution. T02 adds AUD Contracts/persistence/tests and the AUD migrator command. Shared product CI uses a disposable loopback PostgreSQL fixture; the Artifact implementation and health-only/inventory-denied API behavior are preserved. The existing architecture tests constrain the exact owner-approved graph and pinned packages at each commit.
+
+T03 adds `Kordra.BuildingBlocks.Security` to the co-owned `Kordra.slnx` for the technical authentication/admission gate accepted by ADR-0012. This solution membership change adds no Artifact dependency or artifact-registration behavior. The maintainer authorized this shared-owner traceability reconciliation on 2026-10-21; Artifact's existing 48 domain tests remain part of the Product gates.
