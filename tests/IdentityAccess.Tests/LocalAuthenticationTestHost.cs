@@ -15,6 +15,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Server.Kestrel.Core;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
@@ -37,6 +38,7 @@ public sealed class LocalAuthenticationTestHost : IAsyncDisposable
     private readonly bool _initializeBoot;
     private readonly Func<HttpContext, RequestDelegate, Task>? _afterAuthentication;
     private readonly ManualTimeProvider _timeProvider;
+    private DbCommandInterceptor? _commandInterceptor;
     private WebApplication? _app;
     private bool _schemaReady;
     private bool _disposed;
@@ -70,7 +72,8 @@ public sealed class LocalAuthenticationTestHost : IAsyncDisposable
         IIdentityAuditTransactionFactory? auditFactory = null,
         bool initializeBoot = true,
         ManualTimeProvider? timeProvider = null,
-        Func<HttpContext, RequestDelegate, Task>? afterAuthentication = null)
+        Func<HttpContext, RequestDelegate, Task>? afterAuthentication = null,
+        DbCommandInterceptor? commandInterceptor = null)
     {
         var connectionString = TestDatabaseConfiguration.TryGetConnectionString()
             ?? throw new InvalidOperationException(
@@ -95,6 +98,7 @@ public sealed class LocalAuthenticationTestHost : IAsyncDisposable
             timeProvider ?? new ManualTimeProvider(DateTimeOffset.UtcNow),
             initializeBoot,
             afterAuthentication);
+        host._commandInterceptor = commandInterceptor;
         try
         {
             await host.EnsureSchemaAsync();
@@ -333,10 +337,13 @@ public sealed class LocalAuthenticationTestHost : IAsyncDisposable
             });
         });
         builder.Services.AddRoutingCore();
-        builder.Services.AddDbContextFactory<KordraIdentityDbContext>(options => options.UseNpgsql(
-            _connectionString, postgres => postgres
+        builder.Services.AddDbContextFactory<KordraIdentityDbContext>(options =>
+        {
+            options.UseNpgsql(_connectionString, postgres => postgres
                 .MigrationsHistoryTable(KordraIdentityDbContext.MigrationHistoryTableName, KordraIdentityDbContext.SchemaName)
-                .CommandTimeout(2)));
+                .CommandTimeout(2));
+            if (_commandInterceptor is not null) options.AddInterceptors(_commandInterceptor);
+        });
         builder.Services.AddSingleton(configuration);
         builder.Services.AddSingleton(_passwordPolicy);
         builder.Services.AddSingleton<TimeProvider>(_timeProvider);

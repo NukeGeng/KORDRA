@@ -1,4 +1,6 @@
 using System.Data.Common;
+using System.Diagnostics;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 using System.Net;
 using System.Text.Json;
 using Kordra.Api;
@@ -19,6 +21,142 @@ public sealed class IdentityAccessPostgresCollection { }
 public sealed class IdentityAccessAuthenticationServiceTests : IAsyncLifetime
 {
     private LocalAuthenticationTestHost _host = null!;
+
+    [Fact]
+    public async Task Concurrent_session_refresh_cannot_replace_newer_activity_with_an_older_timestamp()
+    {
+        var barrier = new ActivityUpdateBarrier();
+        await _host.DisposeAsync();
+        _host = await LocalAuthenticationTestHost.StartAsync(commandInterceptor: barrier);
+        var name = _host.NewUserName();
+        await _host.EnrollAsync(name);
+        var login = await _host.Authentication.LoginAsync(name, LocalAuthenticationTestHost.ValidPassword);
+        Assert.Equal(LocalAuthenticationStatus.Success, login.Status);
+        barrier.Armed = true;
+        var older = _host.Authentication.ResolveCurrentSessionAsync(login.PrincipalId!.Value, login.SessionReference, login.BootGeneration!.Value);
+        try
+        {
+            await barrier.Entered.Task.WaitAsync(TimeSpan.FromSeconds(3));
+            _host.Clock.Advance(TimeSpan.FromMilliseconds(500));
+            var newer = await _host.Authentication.ResolveCurrentSessionAsync(login.PrincipalId.Value, login.SessionReference, login.BootGeneration.Value);
+            Assert.Equal(LocalAuthenticationStatus.Success, newer.Status);
+            await using var db = await _host.CreateIdentityContextAsync();
+            var activity = await db.Sessions.AsNoTracking().Where(x => x.PrincipalId == login.PrincipalId).Select(x => x.LastActivityAtUtc).SingleAsync();
+            barrier.Release.TrySetResult();
+            Assert.Equal(LocalAuthenticationStatus.Success, (await older).Status);
+            Assert.Equal(activity, await db.Sessions.AsNoTracking().Where(x => x.PrincipalId == login.PrincipalId).Select(x => x.LastActivityAtUtc).SingleAsync());
+        }
+        finally { barrier.Release.TrySetResult(); }
+    }
+
+    [Theory]
+    [InlineData("logout-all")]
+    [InlineData("password-change")]
+    [InlineData("logout")]
+    [InlineData("offline-disable")]
+    public async Task Committed_mutation_with_lost_ack_closes_all_new_authority_until_restart(string kind)
+    {
+        var factory = new FaultAuditFactory();
+        await _host.DisposeAsync();
+        _host = await LocalAuthenticationTestHost.StartAsync(factory);
+        var name = _host.NewUserName();
+        await _host.EnrollAsync(name);
+        var login = await _host.Authentication.LoginAsync(name, LocalAuthenticationTestHost.ValidPassword);
+        Assert.Equal(LocalAuthenticationStatus.Success, login.Status);
+        factory.LoseNextMutationAck = true;
+        var principal = login.PrincipalId!.Value;
+        var boot = login.BootGeneration!.Value;
+        var result = kind switch
+        {
+            "logout-all" => await _host.Authentication.LogoutAllAsync(principal, login.SessionReference, boot, "ack-loss-key-0123456789"),
+            "password-change" => await _host.Authentication.ChangePasswordAsync(principal, login.SessionReference, boot, LocalAuthenticationTestHost.ValidPassword, "Replacement-Ackloss-Passphrase-123!", "ack-loss-key-0123456789"),
+            "logout" => await _host.Authentication.LogoutAsync(principal, login.SessionReference, boot),
+            _ => await _host.Authentication.DisableOfflineAsync(principal)
+        };
+        Assert.Equal(LocalAuthenticationStatus.AuthorityUnavailable, result.Status);
+        await using (var db = await _host.CreateIdentityContextAsync())
+            Assert.False(await db.Sessions.AnyAsync(x => x.PrincipalId == principal && !x.IsRevoked));
+        Assert.Equal(LocalAuthenticationStatus.AuthorityUnavailable,
+            (await _host.Authentication.ResolveCurrentSessionAsync(principal, login.SessionReference, boot)).Status);
+        Assert.Equal(LocalAuthenticationStatus.AuthorityUnavailable, (await _host.Authentication.EnrollOfflineAsync(_host.NewUserName(), LocalAuthenticationTestHost.ValidPassword)).Status);
+        await _host.RestartAsync();
+        Assert.Equal(LocalAuthenticationStatus.Success, (await _host.EnrollAsync(_host.NewUserName())).Status);
+    }
+
+    [Fact]
+    public async Task Denial_audit_timeout_is_best_effort_and_does_not_hold_the_writer_for_the_request_deadline()
+    {
+        var factory = new FaultAuditFactory { SlowDenial = true };
+        await _host.DisposeAsync();
+        _host = await LocalAuthenticationTestHost.StartAsync(factory);
+        var result = await _host.Authentication.LoginAsync(_host.NewUserName(), LocalAuthenticationTestHost.ValidPassword);
+        Assert.Equal(LocalAuthenticationStatus.InvalidCredentials, result.Status);
+        Assert.InRange(factory.DenialWait.TotalMilliseconds, 50, 500);
+        var name = _host.NewUserName();
+        Assert.Equal(LocalAuthenticationStatus.Success, (await _host.EnrollAsync(name)).Status);
+        Assert.Equal(LocalAuthenticationStatus.Success, (await _host.Authentication.LoginAsync(name, LocalAuthenticationTestHost.ValidPassword)).Status);
+    }
+
+    [Fact]
+    public async Task Command_key_cannot_be_rebound_to_another_subject_or_action()
+    {
+        const string key = "same-key-conflict-0123456789";
+        var firstName = _host.NewUserName();
+        var otherName = _host.NewUserName();
+        await _host.EnrollAsync(firstName);
+        await _host.EnrollAsync(otherName);
+        using var first = _host.CreateClient();
+        using var other = _host.CreateClient();
+        using var login = await _host.LoginAsync(first, firstName, LocalAuthenticationTestHost.ValidPassword);
+        using var command = await _host.PostEmptyCsrfAsync(first, "/api/v1/auth/logout-all", key);
+        Assert.Equal(HttpStatusCode.NoContent, command.StatusCode);
+        using var otherLogin = await _host.LoginAsync(other, otherName, LocalAuthenticationTestHost.ValidPassword);
+        using var foreignReplay = await _host.PostEmptyCsrfAsync(other, "/api/v1/auth/logout-all", key);
+        Assert.Equal(HttpStatusCode.Conflict, foreignReplay.StatusCode);
+        using var relogin = await _host.LoginAsync(first, firstName, LocalAuthenticationTestHost.ValidPassword);
+        using var actionReplay = await _host.ChangePasswordAsync(first, LocalAuthenticationTestHost.ValidPassword, "Different-Action-Passphrase-123!", key);
+        Assert.Equal(HttpStatusCode.Conflict, actionReplay.StatusCode);
+        using var stillValid = await first.GetAsync("/api/v1/auth/me");
+        Assert.Equal(HttpStatusCode.OK, stillValid.StatusCode);
+    }
+
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(true, false)]
+    [InlineData(false, true)]
+    [InlineData(true, true)]
+    public async Task Successful_command_replay_after_reauthentication_does_not_mutate_again(bool passwordChange, bool restart)
+    {
+        var name = _host.NewUserName();
+        var enrolled = await _host.EnrollAsync(name);
+        using var client = _host.CreateClient();
+        using var login = await _host.LoginAsync(client, name, LocalAuthenticationTestHost.ValidPassword);
+        const string key = "replay-command-0123456789";
+        const string replacement = "Synthetic-Replacement-Passphrase-123!";
+        using var first = passwordChange
+            ? await _host.ChangePasswordAsync(client, LocalAuthenticationTestHost.ValidPassword, replacement, key)
+            : await _host.PostEmptyCsrfAsync(client, "/api/v1/auth/logout-all", key);
+        Assert.Equal(HttpStatusCode.NoContent, first.StatusCode);
+        using var unauthenticatedReplay = passwordChange
+            ? await _host.ChangePasswordAsync(client, LocalAuthenticationTestHost.ValidPassword, replacement, key)
+            : await _host.PostEmptyCsrfAsync(client, "/api/v1/auth/logout-all", key);
+        Assert.Equal(HttpStatusCode.Unauthorized, unauthenticatedReplay.StatusCode);
+        if (restart) await _host.RestartAsync();
+        using var relogin = await _host.LoginAsync(client, name, passwordChange ? replacement : LocalAuthenticationTestHost.ValidPassword);
+        Assert.Equal(HttpStatusCode.OK, relogin.StatusCode);
+        await using var db = await _host.CreateIdentityContextAsync();
+        var revision = await db.Principals.AsNoTracking().Where(x => x.Id == enrolled.PrincipalId).Select(x => x.Revision).SingleAsync();
+        using var replay = passwordChange
+            ? await _host.ChangePasswordAsync(client, LocalAuthenticationTestHost.ValidPassword, replacement, key)
+            : await _host.PostEmptyCsrfAsync(client, "/api/v1/auth/logout-all", key);
+        Assert.Equal(HttpStatusCode.NoContent, replay.StatusCode);
+        Assert.Equal(revision, await db.Principals.AsNoTracking().Where(x => x.Id == enrolled.PrincipalId).Select(x => x.Revision).SingleAsync());
+        Assert.Equal(1, await db.AuthenticationCommands.CountAsync(x => x.PrincipalId == enrolled.PrincipalId));
+        Assert.Equal(1, await db.Sessions.CountAsync(x => x.PrincipalId == enrolled.PrincipalId && !x.IsRevoked));
+        await using var audit = await _host.CreateAuditContextAsync();
+        Assert.Equal(1, await audit.Entries.CountAsync(x => x.SubjectRef == enrolled.PrincipalId &&
+            x.Permission == (passwordChange ? "iam.password-change" : "iam.logout-all")));
+    }
 
     [Fact]
     public async Task Offline_enrollment_is_case_insensitive_and_commits_the_audit_record_with_iam_state()
@@ -336,6 +474,60 @@ public sealed class IdentityAccessAuthenticationServiceTests : IAsyncLifetime
     {
         using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
         return document.RootElement.GetProperty("code").GetString();
+    }
+
+    private sealed class ActivityUpdateBarrier : DbCommandInterceptor
+    {
+        public bool Armed { get; set; }
+        private int _seen;
+        public TaskCompletionSource Entered { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public TaskCompletionSource Release { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public override async ValueTask<InterceptionResult<int>> NonQueryExecutingAsync(
+            DbCommand command, CommandEventData eventData, InterceptionResult<int> result,
+            CancellationToken cancellationToken = default)
+        {
+            if (Armed && command.CommandText.StartsWith("UPDATE", StringComparison.Ordinal) &&
+                command.CommandText.Contains("last_activity_at_utc", StringComparison.Ordinal) && Interlocked.Increment(ref _seen) == 1)
+            {
+                Entered.TrySetResult();
+                await Release.Task.WaitAsync(cancellationToken);
+            }
+            return result;
+        }
+    }
+
+    private sealed class FaultAuditFactory : IIdentityAuditTransactionFactory
+    {
+        private readonly IdentityAccessAuditTransactionAdapter _inner = new();
+        public bool LoseNextMutationAck { get; set; }
+        public bool SlowDenial { get; init; }
+        public TimeSpan DenialWait { get; set; }
+        public async ValueTask<IIdentityAuditTransaction> EnlistAsync(DbConnection connection, DbTransaction transaction,
+            CancellationToken cancellationToken = default) => new FaultTransaction(this, await _inner.EnlistAsync(connection, transaction, cancellationToken));
+
+        private sealed class FaultTransaction(FaultAuditFactory factory, IIdentityAuditTransaction inner) : IIdentityAuditTransaction
+        {
+            public async Task<AuditAppendOutcome> CommitWithOwnerMutationAsync(AuditIntent intent,
+                Func<CancellationToken, Task> saveOwnerMutationAsync, CancellationToken cancellationToken = default)
+            {
+                if (factory.SlowDenial && intent.SafeReason == "login-denied")
+                {
+                    var watch = Stopwatch.StartNew();
+                    try { await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken); }
+                    catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { }
+                    factory.DenialWait = watch.Elapsed;
+                    return AuditAppendOutcome.Unavailable();
+                }
+                var outcome = await inner.CommitWithOwnerMutationAsync(intent, saveOwnerMutationAsync, cancellationToken);
+                if (factory.LoseNextMutationAck && intent.Stage == AuditIntentStage.Mutation && outcome.Status == AuditAppendStatus.Durable)
+                {
+                    factory.LoseNextMutationAck = false;
+                    return AuditAppendOutcome.Unknown();
+                }
+                return outcome;
+            }
+            public ValueTask DisposeAsync() => inner.DisposeAsync();
+        }
     }
 
     private sealed class UnknownAuditFactory : IIdentityAuditTransactionFactory

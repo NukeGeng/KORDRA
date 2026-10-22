@@ -63,12 +63,14 @@ public sealed class LocalPilotHostOptions : IDisposable
             var certificatePath = RequirePrivateFile(config.TlsCertificatePemFile);
             var privateKeyPath = RequirePrivateFile(config.TlsPrivateKeyPemFile);
             var certificate = X509Certificate2.CreateFromPemFile(certificatePath, privateKeyPath);
-            if (!certificate.HasPrivateKey || certificate.NotBefore.ToUniversalTime() > DateTime.UtcNow ||
-                certificate.NotAfter.ToUniversalTime() <= DateTime.UtcNow ||
-                !string.Equals(certificate.GetNameInfo(X509NameType.DnsName, false), "localhost", StringComparison.OrdinalIgnoreCase))
+            try
+            {
+                ValidateInstalledCertificate(certificate);
+            }
+            catch
             {
                 certificate.Dispose();
-                throw new InvalidOperationException("The local-pilot TLS certificate is expired, incomplete, or not valid for localhost.");
+                throw;
             }
 
             var denylistPath = RequirePrivateFile(config.PasswordDenylistFile);
@@ -88,6 +90,25 @@ public sealed class LocalPilotHostOptions : IDisposable
         {
             processLock.Dispose();
             throw;
+        }
+    }
+
+    // An injectable chain is internal and used only by deterministic certificate fixtures.
+    // Installed startup always creates the native machine-trust chain here.
+    internal static void ValidateInstalledCertificate(X509Certificate2 certificate, X509Chain? testChain = null)
+    {
+        using var machineChain = testChain is null ? new X509Chain() : null;
+        var chain = testChain ?? machineChain!;
+        var serverAuthentication = new System.Security.Cryptography.Oid("1.3.6.1.5.5.7.3.1");
+        chain.ChainPolicy.ApplicationPolicy.Add(serverAuthentication);
+        var eku = certificate.Extensions.OfType<X509EnhancedKeyUsageExtension>().SingleOrDefault();
+        if (!certificate.HasPrivateKey || certificate.NotBefore.ToUniversalTime() > DateTime.UtcNow ||
+            certificate.NotAfter.ToUniversalTime() <= DateTime.UtcNow ||
+            !certificate.MatchesHostname("localhost", allowWildcards: false, allowCommonName: false) ||
+            eku is null || !eku.EnhancedKeyUsages.Cast<System.Security.Cryptography.Oid>()
+                .Any(oid => oid.Value == serverAuthentication.Value) || !chain.Build(certificate))
+        {
+            throw new InvalidOperationException("The local-pilot TLS certificate must be trusted and valid for localhost server authentication.");
         }
     }
 

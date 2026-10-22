@@ -135,10 +135,11 @@ public sealed class LocalAuthenticationService
             if (snapshot is null || snapshot.PasswordHash is null ||
                 verification == PasswordVerificationResult.Failed || !active || locked)
             {
-                var failure = snapshot is not null && active && !locked && verification == PasswordVerificationResult.Failed
-                    ? await RecordFailedLoginAsync(snapshot, now, token)
+                var requiresFailureMutation = snapshot is not null && active && !locked && verification == PasswordVerificationResult.Failed;
+                var failure = requiresFailureMutation
+                    ? await RecordFailedLoginAsync(snapshot!, now, token)
                     : await RecordCredentialDenialAsync(snapshot?.Id, now, token);
-                return failure == AuditAppendStatus.Durable
+                return !requiresFailureMutation || failure == AuditAppendStatus.Durable
                     ? new LocalLoginResult(LocalAuthenticationStatus.InvalidCredentials)
                     : new LocalLoginResult(LocalAuthenticationStatus.AuthorityUnavailable);
             }
@@ -238,7 +239,9 @@ public sealed class LocalAuthenticationService
                 .Where(value => value.SessionId == session.SessionId && !value.IsRevoked &&
                     value.PrincipalRevision == session.PrincipalRevision && value.BootGeneration == bootGeneration &&
                     value.AbsoluteExpiresAtUtc > now && value.LastActivityAtUtc + _configuration.IdleLifetime > now)
-                .ExecuteUpdateAsync(setters => setters.SetProperty(value => value.LastActivityAtUtc, now), requestDeadline.Token);
+                .ExecuteUpdateAsync(setters => setters.SetProperty(
+                    value => value.LastActivityAtUtc,
+                    value => value.LastActivityAtUtc < now ? now : value.LastActivityAtUtc), requestDeadline.Token);
             if (changed != 1)
             {
                 await lease.DisposeAsync();
@@ -375,10 +378,10 @@ public sealed class LocalAuthenticationService
                 return new LocalCommandResult(LocalAuthenticationStatus.SessionInvalid);
             }
 
-            if (await db.AuthenticationCommands.AnyAsync(
-                    command => command.IdempotencyKeyHash == idempotencyHash, requestDeadline.Token))
+            var previous = await FindCommandReplayAsync(db, idempotencyHash, principalId, "logout-all", requestDeadline.Token);
+            if (previous is not null)
             {
-                return new LocalCommandResult(LocalAuthenticationStatus.Conflict);
+                return previous;
             }
 
             db.AuthenticationCommands.Add(new KordraAuthenticationCommand
@@ -452,6 +455,24 @@ public sealed class LocalAuthenticationService
         {
             using var requestDeadline = CreateRequestDeadline(cancellationToken);
             var token = requestDeadline.Token;
+            sessionHash = SHA256.HashData(reference);
+            // Recovery still requires a fresh valid self session, but not the superseded password.
+            await using (var recoveryLease = await _admission.AcquireReadAsync(token))
+            await using (var recoveryDb = await _contexts.CreateDbContextAsync(token))
+            {
+                var recoverySession = await recoveryDb.Sessions.Include(value => value.Principal)
+                    .SingleOrDefaultAsync(value => value.PrincipalId == principalId &&
+                        value.BootGeneration == bootGeneration && value.SessionReferenceHash == sessionHash, token);
+                if (!IsCurrentSession(recoverySession, principalId, bootGeneration, GetTrustedUtcNow()))
+                {
+                    return new LocalCommandResult(LocalAuthenticationStatus.SessionInvalid);
+                }
+                var replay = await FindCommandReplayAsync(recoveryDb, idempotencyHash, principalId, "password-change", token);
+                if (replay is not null)
+                {
+                    return replay;
+                }
+            }
             await using var initialDb = await _contexts.CreateDbContextAsync(token);
             var snapshot = await initialDb.Principals.AsNoTracking()
                 .SingleOrDefaultAsync(user => user.Id == principalId, token);
@@ -464,7 +485,6 @@ public sealed class LocalAuthenticationService
             var replacementHash = _passwordHasher.HashPassword(snapshot, newPassword!);
             await using var lease = await _admission.AcquireWriteAsync(token);
             var now = GetTrustedUtcNow();
-            sessionHash = SHA256.HashData(reference);
             await using var db = await _contexts.CreateDbContextAsync(token);
             await using var transaction = await db.Database.BeginTransactionAsync(token);
             var user = await db.Principals.SingleOrDefaultAsync(value => value.Id == principalId, token);
@@ -478,10 +498,10 @@ public sealed class LocalAuthenticationService
                 return new LocalCommandResult(LocalAuthenticationStatus.Conflict);
             }
 
-            if (await db.AuthenticationCommands.AnyAsync(
-                    command => command.IdempotencyKeyHash == idempotencyHash, token))
+            var previous = await FindCommandReplayAsync(db, idempotencyHash, principalId, "password-change", token);
+            if (previous is not null)
             {
-                return new LocalCommandResult(LocalAuthenticationStatus.Conflict);
+                return previous;
             }
 
             user.PasswordHash = replacementHash;
@@ -834,6 +854,9 @@ public sealed class LocalAuthenticationService
         DateTimeOffset now,
         CancellationToken cancellationToken)
     {
+        using var budget = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        budget.CancelAfter(TimeSpan.FromMilliseconds(100));
+        cancellationToken = budget.Token;
         try
         {
             await using var lease = await _admission.AcquireWriteAsync(cancellationToken);
@@ -848,6 +871,18 @@ public sealed class LocalAuthenticationService
         {
             return AuditAppendStatus.Unavailable;
         }
+    }
+
+    private static async Task<LocalCommandResult?> FindCommandReplayAsync(
+        KordraIdentityDbContext db, byte[] keyHash, Guid principalId, string commandKind,
+        CancellationToken cancellationToken)
+    {
+        var previous = await db.AuthenticationCommands.AsNoTracking()
+            .SingleOrDefaultAsync(command => command.IdempotencyKeyHash == keyHash, cancellationToken);
+        if (previous is null) return null;
+        return previous.PrincipalId == principalId && previous.CommandKind == commandKind
+            ? new LocalCommandResult(LocalAuthenticationStatus.Success, principalId, previous.CommandId)
+            : new LocalCommandResult(LocalAuthenticationStatus.Conflict);
     }
 
     private static async Task RevokePrincipalSessionsAsync(
@@ -871,11 +906,23 @@ public sealed class LocalAuthenticationService
         Func<CancellationToken, Task> saveOwnerMutationAsync,
         CancellationToken cancellationToken)
     {
-        await using var audit = await _auditTransactions.EnlistAsync(
-            db.Database.GetDbConnection(),
-            transaction.GetDbTransaction(),
-            cancellationToken);
-        return await audit.CommitWithOwnerMutationAsync(intent, saveOwnerMutationAsync, cancellationToken);
+        try
+        {
+            await using var audit = await _auditTransactions.EnlistAsync(
+                db.Database.GetDbConnection(), transaction.GetDbTransaction(), cancellationToken);
+            var outcome = await audit.CommitWithOwnerMutationAsync(intent, saveOwnerMutationAsync, cancellationToken);
+            if (outcome.Status == AuditAppendStatus.Unknown)
+            {
+                _admission.Close();
+            }
+            return outcome;
+        }
+        catch
+        {
+            // An exception/cleanup failure cannot prove rollback or restore the fence.
+            _admission.Close();
+            throw;
+        }
     }
 
     private AuditIntent CreateIntent(

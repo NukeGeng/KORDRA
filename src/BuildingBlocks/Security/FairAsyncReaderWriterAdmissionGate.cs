@@ -10,6 +10,26 @@ public sealed class FairAsyncReaderWriterAdmissionGate
     private readonly LinkedList<Waiter> _writers = [];
     private int _activeReaders;
     private bool _writerActive;
+    private bool _closed;
+    public const int MaximumReaders = 16;
+
+    /// <summary>Irreversibly closes this process gate when a commit outcome is unresolved.</summary>
+    public void Close()
+    {
+        lock (_sync)
+        {
+            _closed = true;
+            foreach (var queue in new[] { _readers, _writers })
+            {
+                while (queue.First is { } node)
+                {
+                    queue.RemoveFirst();
+                    node.Value.Node = null;
+                    node.Value.Completion.TrySetException(new InvalidOperationException("Authority admission is closed until offline reconciliation/restart."));
+                }
+            }
+        }
+    }
 
     public ValueTask<AdmissionLease> AcquireReadAsync(CancellationToken cancellationToken = default) =>
         AcquireAsync(writer: false, MaximumWait, cancellationToken);
@@ -37,6 +57,10 @@ public sealed class FairAsyncReaderWriterAdmissionGate
         var waiter = new Waiter(writer);
         lock (_sync)
         {
+            if (_closed)
+            {
+                throw new InvalidOperationException("Authority admission is closed until offline reconciliation/restart.");
+            }
             if (CanEnterImmediately(writer))
             {
                 Grant(waiter);
@@ -60,7 +84,7 @@ public sealed class FairAsyncReaderWriterAdmissionGate
     }
 
     private bool CanEnterImmediately(bool writer) =>
-        !_writerActive && _writers.Count == 0 && (writer ? _activeReaders == 0 : true);
+        !_writerActive && _writers.Count == 0 && (writer ? _activeReaders == 0 : _activeReaders < MaximumReaders && _readers.Count == 0);
 
     private void Cancel(Waiter waiter, CancellationToken cancellationToken)
     {
@@ -107,7 +131,7 @@ public sealed class FairAsyncReaderWriterAdmissionGate
 
     private void Drain()
     {
-        if (_writerActive)
+        if (_closed || _writerActive)
         {
             return;
         }
@@ -135,7 +159,7 @@ public sealed class FairAsyncReaderWriterAdmissionGate
 
     private void GrantReaders()
     {
-        while (_readers.First is { } node)
+        while (_activeReaders < MaximumReaders && _readers.First is { } node)
         {
             _readers.RemoveFirst();
             node.Value.Node = null;

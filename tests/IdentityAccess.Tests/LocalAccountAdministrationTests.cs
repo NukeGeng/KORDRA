@@ -1,5 +1,8 @@
 using System.Data.Common;
 using System.Security.Cryptography;
+using System.Security.Cryptography.X509Certificates;
+using System.Reflection;
+using Kordra.Api;
 using System.Text;
 using System.Text.Json;
 using Kordra.BuildingBlocks.Security;
@@ -13,6 +16,53 @@ namespace Kordra.Modules.IdentityAccess.Tests;
 
 public sealed class LocalAccountAdministrationTests
 {
+    [Theory]
+    [InlineData("valid")]
+    [InlineData("untrusted")]
+    [InlineData("client-only")]
+    [InlineData("no-eku")]
+    [InlineData("cn-only")]
+    [InlineData("wrong-san")]
+    [InlineData("expired")]
+    [InlineData("no-private-key")]
+    public void Installed_tls_enforces_trust_server_usage_and_actual_localhost_SAN(string scenario)
+    {
+        using var rootKey = RSA.Create(2048);
+        var rootRequest = new CertificateRequest("CN=Kordra synthetic test root", rootKey, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
+        rootRequest.CertificateExtensions.Add(new X509BasicConstraintsExtension(true, false, 0, true));
+        rootRequest.CertificateExtensions.Add(new X509KeyUsageExtension(X509KeyUsageFlags.KeyCertSign, true));
+        var now = DateTimeOffset.UtcNow;
+        using var root = rootRequest.CreateSelfSigned(now.AddDays(-2), now.AddDays(2));
+        using var leafKey = RSA.Create(2048);
+        var request = new CertificateRequest("CN=localhost", leafKey, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
+        request.CertificateExtensions.Add(new X509BasicConstraintsExtension(false, false, 0, true));
+        if (scenario != "cn-only")
+        {
+            var san = new SubjectAlternativeNameBuilder();
+            san.AddDnsName(scenario == "wrong-san" ? "foreign.example" : "localhost");
+            request.CertificateExtensions.Add(san.Build());
+        }
+        if (scenario != "no-eku")
+            request.CertificateExtensions.Add(new X509EnhancedKeyUsageExtension(
+                new OidCollection { new(scenario == "client-only" ? "1.3.6.1.5.5.7.3.2" : "1.3.6.1.5.5.7.3.1") }, true));
+        using var publicLeaf = request.Create(root, now.AddDays(-1), scenario == "expired" ? now.AddMinutes(-1) : now.AddDays(1), RandomNumberGenerator.GetBytes(16));
+        using var leaf = publicLeaf.CopyWithPrivateKey(leafKey);
+        using var chain = new X509Chain();
+        chain.ChainPolicy.TrustMode = X509ChainTrustMode.CustomRootTrust;
+        if (scenario != "untrusted") chain.ChainPolicy.CustomTrustStore.Add(root);
+        chain.ChainPolicy.RevocationMode = X509RevocationMode.NoCheck;
+        var method = typeof(LocalPilotHostOptions).GetMethod("ValidateInstalledCertificate", BindingFlags.NonPublic | BindingFlags.Static)!;
+        if (scenario == "valid") method.Invoke(null, [leaf, chain]);
+        else
+        {
+            var failure = Assert.Throws<TargetInvocationException>(() => method.Invoke(null, [scenario == "no-private-key" ? publicLeaf : leaf, chain]));
+            Assert.IsType<InvalidOperationException>(failure.InnerException);
+        }
+        // The real startup path must reject this same synthetic root under native OS trust.
+        var machineFailure = Assert.Throws<TargetInvocationException>(() => method.Invoke(null, [leaf, null]));
+        Assert.IsType<InvalidOperationException>(machineFailure.InnerException);
+    }
+
     [Theory]
     [InlineData("operator_1", "OPERATOR_1")]
     [InlineData("A.B-c", "A.B-C")]
