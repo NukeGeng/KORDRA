@@ -1,5 +1,7 @@
 """Offline goal integration tests; only native execution/check boundaries are mocked."""
+import argparse
 import copy
+import hashlib
 import json
 from pathlib import Path
 import stat
@@ -25,7 +27,10 @@ class GoalIntegration(unittest.TestCase):
             'test_source.py': 'assert True\n',
             'feature.md': ('---\nfeature_id: FEAT-FIXTURE-001\nmodule_id: FIXTURE\n'
                            'status: implemented\nsource_paths: ["source.py"]\n'
-                           'test_paths: ["test_source.py"]\n---\nFixture owner\n'),
+                           'test_paths: ["test_source.py"]\n'
+                           'planned_source_paths: ["generated.py"]\n'
+                           'planned_test_paths: ["generated_test.py"]\n'
+                           'planned_doc_paths: ["notes.md", "feature.md"]\n---\nFixture owner\n'),
         }.items():
             (self.root/name).write_text(content)
         self.git('init', '-q')
@@ -143,7 +148,7 @@ class GoalIntegration(unittest.TestCase):
         self.architect_task()
         goal.init(self.root, self.plan)
         with self.boundaries():
-            goal.step(self.root, goal_id)
+            goal.native_step(self.root, goal_id)
         state = self.state(goal_id)
         record = state['tasks']['A']
         record['policy_version'] = '3.1'
@@ -172,7 +177,7 @@ class GoalIntegration(unittest.TestCase):
         self.assertEqual(stat.S_IMODE(checkpoint.parent.stat().st_mode), 0o700)
         self.assertEqual(self.state()['plan']['base'], self.plan['base'])
         with self.boundaries():
-            result = goal.step(self.root, 'fixture')
+            result = goal.native_step(self.root, 'fixture')
             self.assertEqual(result['tasks']['A']['status'], 'awaiting_triage')
             self.assertIsNone(result['next_task'])
             self.assertEqual(goal.status(self.root, 'fixture')['tasks']['A']['status'], 'awaiting_triage')
@@ -184,12 +189,12 @@ class GoalIntegration(unittest.TestCase):
     def test_developer_tasks_never_invoke_sol_for_critical_or_final_milestone_review(self):
         goal.init(self.root, self.plan)
         with self.boundaries(review=lambda *args, **kwargs: self.fail('v4 must not invoke local AI review')):
-            first = goal.step(self.root, 'fixture')
+            first = goal.native_step(self.root, 'fixture')
             self.assertEqual(first['tasks']['A']['policy_version'], '4')
             self.assertEqual(first['tasks']['A']['route']['model'], 'gpt-6-luna')
             self.assertEqual(first['tasks']['A']['review']['status'], 'not_required')
             goal.accept(self.root, 'fixture', 'A', self.triage())
-            second = goal.step(self.root, 'fixture')
+            second = goal.native_step(self.root, 'fixture')
             self.assertEqual(second['tasks']['B']['review']['status'], 'not_required')
             triage = self.triage(); triage['task_id'] = 'B'
             goal.accept(self.root, 'fixture', 'B', triage)
@@ -223,14 +228,14 @@ class GoalIntegration(unittest.TestCase):
                     self.fail('parent lock was released during dispatch')
             return self.execution(root, task, model, effort, **kwargs)
         with self.boundaries(execution=inspect):
-            goal.step(self.root, 'fixture')
+            goal.native_step(self.root, 'fixture')
             self.review_mock.assert_not_called()
 
     def test_architect_design_requires_exact_human_approval_after_sol_output(self):
         self.architect_task()
         goal.init(self.root, self.plan)
         with self.boundaries():
-            result = goal.step(self.root, 'fixture')
+            result = goal.native_step(self.root, 'fixture')
             self.review_mock.assert_not_called()
             self.assertEqual(result['tasks']['A']['route']['model'], 'gpt-6.1-sol')
             self.assertEqual(result['tasks']['A']['route']['effort'], 'high')
@@ -301,7 +306,7 @@ class GoalIntegration(unittest.TestCase):
         goal.init(self.root, plan)
         with self.boundaries(execution=lambda *args, **kwargs: self.execution(
                 *args, outcome_status='blocked', **kwargs)):
-            result = goal.step(self.root, 'fixture')
+            result = goal.native_step(self.root, 'fixture')
         self.assertEqual(result['tasks']['A']['status'], 'failed')
         self.assertIn('blocked', result['control']['pause']['reason'])
 
@@ -316,7 +321,7 @@ class GoalIntegration(unittest.TestCase):
             gate_calls.append((root, base))
             return self.gates(root, base)
         with self.boundaries(execution=no_outcome, gates=gates):
-            result = goal.step(self.root, 'fixture')
+            result = goal.native_step(self.root, 'fixture')
         self.assertEqual(result['tasks']['A']['status'], 'failed')
         self.assertEqual(gate_calls, [])
 
@@ -327,7 +332,7 @@ class GoalIntegration(unittest.TestCase):
         goal.init(self.root, plan)
         with self.boundaries(execution=lambda *args, **kwargs: self.execution(
                 *args, mutate=False, **kwargs)):
-            result = goal.step(self.root, 'fixture')
+            result = goal.native_step(self.root, 'fixture')
         self.assertEqual(result['tasks']['A']['status'], 'failed')
         self.assertIn('no-op', result['control']['pause']['reason'])
 
@@ -339,7 +344,7 @@ class GoalIntegration(unittest.TestCase):
         with self.boundaries(execution=lambda *args, **kwargs: self.execution(
                 *args, mutate=False,
                 no_change_reason='Inspected the source; no modification was required.', **kwargs)):
-            result = goal.step(self.root, 'fixture')
+            result = goal.native_step(self.root, 'fixture')
             self.assertEqual(result['tasks']['A']['status'], 'awaiting_triage')
             goal.accept(self.root, 'fixture', 'A', self.triage())
         self.assertEqual(goal.status(self.root, 'fixture')['tasks']['A']['status'], 'completed')
@@ -350,7 +355,7 @@ class GoalIntegration(unittest.TestCase):
         plan['tasks'][0]['write_paths'] = ['source.py']
         goal.init(self.root, plan)
         with self.boundaries():
-            result = goal.step(self.root, 'fixture')
+            result = goal.native_step(self.root, 'fixture')
             record = self.state()['tasks']['A']
             self.assertEqual(result['tasks']['A']['status'], 'awaiting_triage')
             self.assertEqual(record['task_outcome']['artifacts'], ['source.py'])
@@ -362,7 +367,7 @@ class GoalIntegration(unittest.TestCase):
     def test_read_only_inspection_can_complete_with_explicit_empty_artifacts(self):
         goal.init(self.root, self.plan)
         with self.boundaries():
-            result = goal.step(self.root, 'fixture')
+            result = goal.native_step(self.root, 'fixture')
             self.assertEqual(result['tasks']['A']['status'], 'awaiting_triage')
             self.assertEqual(self.state()['tasks']['A']['task_outcome']['artifacts'], [])
             goal.accept(self.root, 'fixture', 'A', self.triage())
@@ -374,7 +379,7 @@ class GoalIntegration(unittest.TestCase):
         plan['tasks'][0]['write_paths'] = ['source.py']
         goal.init(self.root, plan)
         with self.boundaries():
-            goal.step(self.root, 'fixture')
+            goal.native_step(self.root, 'fixture')
             goal.accept(self.root, 'fixture', 'A', self.triage())
         original = self.state()
         record = original['tasks']['A']
@@ -397,7 +402,7 @@ class GoalIntegration(unittest.TestCase):
     def test_completed_prefix_v4_checkpoint_without_outcome_remains_readable(self):
         goal.init(self.root, self.plan)
         with self.boundaries():
-            goal.step(self.root, 'fixture')
+            goal.native_step(self.root, 'fixture')
             goal.accept(self.root, 'fixture', 'A', self.triage())
         path = self.root/'.amr-local/goals/fixture.json'
         state = self.state()
@@ -409,7 +414,7 @@ class GoalIntegration(unittest.TestCase):
         self.plan['tasks'][0]['signals']=['auth']
         goal.init(self.root,self.plan)
         with self.boundaries(review=lambda *args, **kwargs: self.fail('PR review is a separate workflow')):
-            result = goal.step(self.root, 'fixture')
+            result = goal.native_step(self.root, 'fixture')
             self.assertEqual(result['tasks']['A']['route']['model'], 'gpt-6-luna')
             self.assertFalse(goal.review_required(self.state(), 'A'))
             goal.accept(self.root, 'fixture', 'A', self.triage())
@@ -428,9 +433,9 @@ class GoalIntegration(unittest.TestCase):
         goal.init(self.root,self.plan)
         with self.boundaries():
             with self.assertRaisesRegex(ValueError, 'does not consume AI design-review'):
-                goal.step(self.root, 'fixture', {'status': 'verified'})
+                goal.native_step(self.root, 'fixture', {'status': 'verified'})
             self.execute_mock.assert_not_called()
-            result=goal.step(self.root,'fixture')
+            result=goal.native_step(self.root,'fixture')
             self.assertEqual(result['tasks']['A']['status'],'awaiting_triage')
             self.assertEqual(self.execute_mock.call_count, 1)
             self.review_mock.assert_not_called()
@@ -442,7 +447,7 @@ class GoalIntegration(unittest.TestCase):
     def test_legacy_completed_receipts_keep_original_selection_and_review_obligations(self):
         goal.init(self.root,self.plan)
         with self.boundaries():
-            goal.step(self.root,'fixture')
+            goal.native_step(self.root,'fixture')
             goal.accept(self.root,'fixture','A',self.triage())
         state=self.state();record=state['tasks']['A'];record.pop('policy_version')
         record.pop('task_outcome', None)
@@ -454,7 +459,7 @@ class GoalIntegration(unittest.TestCase):
         path=self.root/'.amr-local/goals/fixture.json';path.write_text(json.dumps(state))
         self.assertEqual(goal.status(self.root,'fixture')['tasks']['A'],record)
         with self.boundaries():
-            result=goal.step(self.root,'fixture')
+            result=goal.native_step(self.root,'fixture')
             self.assertEqual(result['tasks']['B']['route']['model'],'gpt-6-luna')
             self.assertEqual(result['tasks']['B']['route']['effort'],'max')
             self.assertEqual(result['tasks']['B']['policy_version'],'4')
@@ -466,13 +471,13 @@ class GoalIntegration(unittest.TestCase):
         self.architect_task()
         goal.init(self.root,self.plan)
         with self.boundaries():
-            goal.step(self.root, 'fixture')
+            goal.native_step(self.root, 'fixture')
         approval = self.design_approval()
         other=copy.deepcopy(self.plan);other['goal_id']='other'
         other['tasks'][0]['objective']='A different architectural decision'
         goal.init(self.root,other)
         with self.boundaries():
-            goal.step(self.root, 'other')
+            goal.native_step(self.root, 'other')
             triage = self.triage(); triage['human_design_approval'] = approval
             with self.assertRaisesRegex(ValueError, 'explicit human approval'):
                 goal.accept(self.root, 'other', 'A', triage)
@@ -498,7 +503,7 @@ class GoalIntegration(unittest.TestCase):
         normalized=amr.validate_task(copy.deepcopy(self.state()['plan']['tasks'][0]),self.root)
         self.assertIs(normalized['spec_verified'],False)
         with self.boundaries():
-            result=goal.step(self.root,'fixture')
+            result=goal.native_step(self.root,'fixture')
             self.assertEqual(result['tasks']['A']['status'],'awaiting_triage')
             triage = self.triage()
             triage['human_design_approval'] = self.design_approval(task=normalized)
@@ -517,7 +522,7 @@ class GoalIntegration(unittest.TestCase):
         normalized=amr.validate_task(copy.deepcopy(self.state()['plan']['tasks'][0]),self.root)
         self.assertIs(normalized['tests_known'],False)
         with self.boundaries():
-            goal.step(self.root,'fixture')
+            goal.native_step(self.root,'fixture')
             goal.validate(self.root,'fixture','A')
             goal.accept(self.root,'fixture','A',self.triage())
         self.assertEqual(goal.status(self.root,'fixture')['tasks']['A']['status'],'completed')
@@ -526,7 +531,7 @@ class GoalIntegration(unittest.TestCase):
         self.plan['tasks'][0]['spec_verified']=False
         goal.init(self.root,self.plan)
         with self.boundaries():
-            goal.step(self.root,'fixture')
+            goal.native_step(self.root,'fixture')
             goal.accept(self.root,'fixture','A',self.triage())
         original=self.state();path=self.root/'.amr-local/goals/fixture.json'
         for override in ({'objective':'unreviewed work'},{'scope':'production'},
@@ -547,7 +552,7 @@ class GoalIntegration(unittest.TestCase):
     def test_v31_completed_sol_retention_checkpoint_remains_readable_and_bound(self):
         goal.init(self.root,self.plan)
         with self.boundaries():
-            goal.step(self.root,'fixture')
+            goal.native_step(self.root,'fixture')
             goal.accept(self.root,'fixture','A',self.triage())
         state=self.state()
         record=state['tasks']['A']
@@ -629,9 +634,9 @@ class GoalIntegration(unittest.TestCase):
             recommendation = goal.recommend(self.root, 'fixture', 'gpt-6.1-sol', 'high')
             self.assertEqual(recommendation['recommendation']['action'], 'awaiting_model_switch')
             with self.assertRaisesRegex(ValueError, 'awaiting_model_switch'):
-                goal.step(self.root, 'fixture')
+                goal.native_step(self.root, 'fixture')
             goal.resume(self.root, 'fixture', model='gpt-6-luna', effort='max')
-            result = goal.step(self.root, 'fixture')
+            result = goal.native_step(self.root, 'fixture')
         self.assertEqual(result['tasks']['A']['route']['model'], 'gpt-6-luna')
         self.assertEqual(result['tasks']['A']['route']['effort'], 'max')
         self.assertEqual(result['tasks']['A']['status'], 'awaiting_triage')
@@ -678,7 +683,7 @@ class GoalIntegration(unittest.TestCase):
         with self.boundaries():
             result = goal.recommend(self.root, 'fixture', 'gpt-6-luna', 'max')
             with self.assertRaisesRegex(ValueError, 'awaiting_model_switch'):
-                goal.step(self.root, 'fixture')
+                goal.native_step(self.root, 'fixture')
         self.assertEqual(result['status'], 'awaiting_model_switch')
         self.assertEqual(result['recommendation']['recommended'], {'model':'gpt-6.1-sol','effort':'high'})
         self.assertEqual(self.state()['control']['model_switch']['task_id'], 'A')
@@ -763,6 +768,25 @@ class GoalIntegration(unittest.TestCase):
             with self.subTest(tasks=plan['tasks']), self.assertRaises(ValueError):
                 goal.validate_plan(self.root, plan)
 
+    def test_goal_plan_tracks_explicit_new_outputs_before_and_after_creation(self):
+        plan=copy.deepcopy(self.plan)
+        plan['tasks']=[copy.deepcopy(plan['tasks'][0])]
+        outputs=['generated.py', 'generated_test.py', 'notes.md', 'feature.md']
+        plan['tasks'][0].update(output_paths=outputs, write_paths=outputs)
+        goal.init(self.root, plan)
+        self.assertEqual(goal.status(self.root, 'fixture')['tasks']['A']['status'], 'pending')
+        (self.root/'generated.py').write_text('value = 2\n')
+        (self.root/'generated_test.py').write_text('assert True\n')
+        (self.root/'notes.md').write_text('updated notes\n')
+        feature=self.root/'feature.md'
+        feature.write_text(feature.read_text().replace(
+            'source_paths: ["source.py"]',
+            'source_paths: ["source.py", "generated.py"]').replace(
+            'test_paths: ["test_source.py"]',
+            'test_paths: ["test_source.py", "generated_test.py"]'))
+        goal.validate_plan(self.root, plan)
+        self.assertEqual(goal.status(self.root, 'fixture')['tasks']['A']['status'], 'pending')
+
     def test_untrusted_objective_drift_blocks_reuse(self):
         goal.init(self.root, self.plan)
         (self.root/'GOAL.md').write_text('Different objective\n')
@@ -772,7 +796,7 @@ class GoalIntegration(unittest.TestCase):
     def test_exact_model_unavailable_never_executes_or_advances(self):
         goal.init(self.root, self.plan)
         with self.boundaries(capabilities=lambda root: {'models': [{'model': 'gpt-6-sol', 'efforts': ['medium']}] }):
-            result = goal.step(self.root, 'fixture')
+            result = goal.native_step(self.root, 'fixture')
             self.execute_mock.assert_not_called()
         self.assertEqual(result['tasks']['A']['status'], 'failed')
         self.assertIsNone(result['next_task'])
@@ -784,13 +808,13 @@ class GoalIntegration(unittest.TestCase):
             raise RuntimeError('executor process died')
         with self.boundaries(execution=crash):
             with self.assertRaisesRegex(RuntimeError, 'process died'):
-                goal.step(self.root, 'fixture')
+                goal.native_step(self.root, 'fixture')
             self.assertEqual(self.state()['tasks']['A']['native_thread_id'], 'accepted-before-crash')
             result = goal.status(self.root, 'fixture')
             self.assertEqual(result['tasks']['A']['status'], 'unknown')
             self.assertIsNone(result['next_task'])
             with self.assertRaisesRegex(ValueError, 'goal is blocked'):
-                goal.step(self.root, 'fixture')
+                goal.native_step(self.root, 'fixture')
             self.assertEqual(self.execute_mock.call_count, 1)
 
     def test_source_scope_violation_blocks_gates_and_review(self):
@@ -800,7 +824,7 @@ class GoalIntegration(unittest.TestCase):
             (self.root/'source.py').write_text('value = 2\n')
             return receipt
         with self.boundaries(execution=changed):
-            result = goal.step(self.root, 'fixture')
+            result = goal.native_step(self.root, 'fixture')
             self.review_mock.assert_not_called()
         self.assertEqual(result['tasks']['A']['status'], 'failed')
         self.assertEqual(result['tasks']['A']['files_changed'], ['source.py'])
@@ -810,7 +834,7 @@ class GoalIntegration(unittest.TestCase):
         def failed(root, base):
             result = self.gates(root, base); result['local_status'] = 'failed'; return result
         with self.boundaries(gates=failed):
-            result = goal.step(self.root, 'fixture')
+            result = goal.native_step(self.root, 'fixture')
             self.assertEqual(result['tasks']['A']['status'], 'validation_failed')
             self.assertIsNone(result['next_task'])
             self.review_mock.assert_not_called()
@@ -820,7 +844,7 @@ class GoalIntegration(unittest.TestCase):
     def test_validate_rejects_source_drift_outside_write_paths_after_execution(self):
         goal.init(self.root, self.plan)
         with self.boundaries():
-            result = goal.step(self.root, 'fixture')
+            result = goal.native_step(self.root, 'fixture')
             self.assertEqual(result['tasks']['A']['status'], 'awaiting_triage')
             review_count = self.review_mock.call_count
             (self.root/'source.py').write_text('value = 7\n')
@@ -844,7 +868,7 @@ class GoalIntegration(unittest.TestCase):
                 result['local_status'] = 'failed'
             return result
         with self.boundaries(gates=first_gate_fails):
-            result = goal.step(self.root, 'fixture')
+            result = goal.native_step(self.root, 'fixture')
             self.assertEqual(result['tasks']['A']['status'], 'validation_failed')
             (self.root/'source.py').write_text('value = 2\n')
             result = goal.validate(self.root, 'fixture', 'A')
@@ -861,7 +885,7 @@ class GoalIntegration(unittest.TestCase):
             (self.root/'source.py').unlink()
             return receipt
         with self.boundaries(execution=delete_source):
-            result = goal.step(self.root, 'fixture')
+            result = goal.native_step(self.root, 'fixture')
             self.assertEqual(result['tasks']['A']['status'], 'awaiting_triage')
             self.assertFalse((self.root/'source.py').exists())
             reloaded = goal.status(self.root, 'fixture')
@@ -886,7 +910,7 @@ class GoalIntegration(unittest.TestCase):
         def mismatch(*args, **kwargs):
             result = self.execution(*args, **kwargs); result['observed_model'] = 'gpt-6-sol'; return result
         with self.boundaries(execution=mismatch):
-            result = goal.step(self.root, 'fixture')
+            result = goal.native_step(self.root, 'fixture')
             self.review_mock.assert_not_called()
         self.assertEqual(result['tasks']['A']['status'], 'unknown')
         self.assertIsNone(result['next_task'])
@@ -902,7 +926,7 @@ class GoalIntegration(unittest.TestCase):
             def invalid(*args, **kwargs):
                 receipt = self.execution(*args, **kwargs); receipt.update(override); return receipt
             with self.subTest(override=override), self.boundaries(execution=invalid):
-                result = goal.step(self.root, plan['goal_id'])
+                result = goal.native_step(self.root, plan['goal_id'])
                 self.assertEqual(result['tasks']['A']['status'], 'unknown')
                 self.review_mock.assert_not_called()
                 self.assertIsNone(result['next_task'])
@@ -910,7 +934,7 @@ class GoalIntegration(unittest.TestCase):
     def test_local_sol_review_receipt_cannot_substitute_for_pr_review_evidence(self):
         goal.init(self.root, self.plan)
         with self.boundaries(review=lambda *args, **kwargs: self.fail('v4 does not invoke local AI review')):
-            result = goal.step(self.root, 'fixture')
+            result = goal.native_step(self.root, 'fixture')
             self.assertEqual(result['tasks']['A']['status'], 'awaiting_triage')
             state = self.state()
             state['tasks']['A']['review'] = self.review()
@@ -925,7 +949,7 @@ class GoalIntegration(unittest.TestCase):
             self.git('commit', '--allow-empty', '-qm', 'Unexpected executor commit')
             return receipt
         with self.boundaries(execution=commits):
-            result = goal.step(self.root, 'fixture')
+            result = goal.native_step(self.root, 'fixture')
             self.review_mock.assert_not_called()
         self.assertNotEqual(result['tasks']['A']['status'], 'awaiting_triage')
         self.assertIsNone(result['next_task'])
@@ -952,13 +976,13 @@ class GoalIntegration(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, 'completed checkpoint lacks'):
                 goal.status(self.root, 'fixture')
             with self.assertRaisesRegex(ValueError, 'completed checkpoint lacks'):
-                goal.step(self.root, 'fixture')
+                goal.native_step(self.root, 'fixture')
             self.execute_mock.assert_not_called()
 
     def test_completed_checkpoint_cannot_rebind_task_or_drop_terminal_evidence(self):
         goal.init(self.root, self.plan)
         with self.boundaries():
-            goal.step(self.root, 'fixture')
+            goal.native_step(self.root, 'fixture')
             goal.accept(self.root, 'fixture', 'A', self.triage())
         path = self.root/'.amr-local/goals/fixture.json'
         original = self.state()
@@ -978,14 +1002,14 @@ class GoalIntegration(unittest.TestCase):
     def test_historical_completed_receipt_allows_next_task_after_unrelated_progress_change(self):
         goal.init(self.root, self.plan)
         with self.boundaries():
-            goal.step(self.root, 'fixture')
+            goal.native_step(self.root, 'fixture')
             goal.accept(self.root, 'fixture', 'A', self.triage())
             historical = copy.deepcopy(self.state()['tasks']['A'])
             (self.root/'progress.md').write_text('Milestone one progress updated\n')
             resumed = goal.status(self.root, 'fixture')
             self.assertEqual(resumed['next_task'], 'B')
             self.assertEqual(resumed['tasks']['A'], historical)
-            result = goal.step(self.root, 'fixture')
+            result = goal.native_step(self.root, 'fixture')
             self.assertEqual(result['tasks']['B']['status'], 'awaiting_triage')
             self.assertEqual(self.execute_mock.call_count, 2)
             self.assertEqual(self.execute_mock.call_args.args[1]['task_id'], 'B')
@@ -999,14 +1023,14 @@ class GoalIntegration(unittest.TestCase):
     def test_completed_dependency_source_or_consulted_feature_drift_blocks_dispatch(self):
         goal.init(self.root, self.plan)
         with self.boundaries():
-            goal.step(self.root, 'fixture')
+            goal.native_step(self.root, 'fixture')
             goal.accept(self.root, 'fixture', 'A', self.triage())
             for relative in ('source.py', 'feature.md'):
                 path = self.root/relative
                 original = path.read_text()
                 path.write_text(original+'\nChanged dependency context\n')
                 with self.subTest(relative=relative), self.assertRaisesRegex(ValueError, 'dependency inputs changed'):
-                    goal.step(self.root, 'fixture')
+                    goal.native_step(self.root, 'fixture')
                 path.write_text(original)
             self.assertEqual(self.execute_mock.call_count, 1)
         self.assertEqual(self.state()['tasks']['B']['attempts'], 0)
@@ -1014,7 +1038,7 @@ class GoalIntegration(unittest.TestCase):
     def test_completed_route_cannot_null_or_mismatch_profile_model_effort(self):
         goal.init(self.root, self.plan)
         with self.boundaries():
-            goal.step(self.root, 'fixture')
+            goal.native_step(self.root, 'fixture')
             goal.accept(self.root, 'fixture', 'A', self.triage())
         path = self.root/'.amr-local/goals/fixture.json'
         original = self.state()
@@ -1030,7 +1054,7 @@ class GoalIntegration(unittest.TestCase):
     def test_new_product_solution_does_not_retroactively_invalidate_historical_completion(self):
         goal.init(self.root, self.plan)
         with self.boundaries():
-            goal.step(self.root, 'fixture')
+            goal.native_step(self.root, 'fixture')
             goal.accept(self.root, 'fixture', 'A', self.triage())
         historical = copy.deepcopy(self.state()['tasks']['A'])
         self.assertFalse(historical['product_required'])
@@ -1043,7 +1067,7 @@ class GoalIntegration(unittest.TestCase):
     def test_completed_product_requirement_missing_forged_or_inconsistent_blocks(self):
         goal.init(self.root, self.plan)
         with self.boundaries():
-            goal.step(self.root, 'fixture')
+            goal.native_step(self.root, 'fixture')
             goal.accept(self.root, 'fixture', 'A', self.triage())
         path = self.root/'.amr-local/goals/fixture.json'
         original = self.state()
@@ -1066,7 +1090,7 @@ class GoalIntegration(unittest.TestCase):
     def test_exact_content_contributor_triage_and_blocking_findings_are_required(self):
         goal.init(self.root, self.plan)
         with self.boundaries():
-            goal.step(self.root, 'fixture')
+            goal.native_step(self.root, 'fixture')
             for key in ('reviewed_by', 'rationale', 'findings'):
                 invalid = self.triage(); invalid.pop(key)
                 with self.subTest(key=key), self.assertRaises(ValueError):
@@ -1081,7 +1105,7 @@ class GoalIntegration(unittest.TestCase):
         self.plan['tasks'][0]['signals'] = ['auth']
         goal.init(self.root, self.plan)
         with self.boundaries(review=lambda *args, **kwargs: self.fail('GOAL must not invoke an AI reviewer')):
-            goal.step(self.root, 'fixture')
+            goal.native_step(self.root, 'fixture')
             goal.accept(self.root, 'fixture', 'A', self.triage())
             self.review_mock.assert_not_called()
 
@@ -1089,7 +1113,7 @@ class GoalIntegration(unittest.TestCase):
         self.plan['tasks'][0]['signals'] = ['auth']
         goal.init(self.root, self.plan)
         with self.boundaries():
-            result = goal.step(self.root, 'fixture')
+            result = goal.native_step(self.root, 'fixture')
             goal.accept(self.root, 'fixture', 'A', self.triage())
         state = self.state()
         record = state['tasks']['A']
@@ -1118,7 +1142,7 @@ class GoalIntegration(unittest.TestCase):
         self.plan['tasks'][0]['signals'] = ['auth']
         goal.init(self.root, self.plan)
         with self.boundaries(review=lambda *args, **kwargs: self.fail('legacy review must not repeat')):
-            goal.step(self.root, 'fixture')
+            goal.native_step(self.root, 'fixture')
             state = self.state()
             state['tasks']['A']['policy_version'] = '3.1'
             (self.root/'.amr-local/goals/fixture.json').write_text(json.dumps(state))
@@ -1134,7 +1158,7 @@ class GoalIntegration(unittest.TestCase):
     def test_stale_content_accept_rejected_even_with_fresh_triage(self):
         goal.init(self.root, self.plan)
         with self.boundaries():
-            goal.step(self.root, 'fixture')
+            goal.native_step(self.root, 'fixture')
             (self.root/'source.py').write_text('value = 3\n')
             with self.assertRaisesRegex(ValueError, 'source/Git changed'):
                 goal.accept(self.root, 'fixture', 'A', self.triage())
@@ -1158,12 +1182,593 @@ class GoalIntegration(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'symlink'):
             goal.status(self.root, 'fixture')
 
+    def recovery_fixture(self, *, architect=False):
+        self.plan['tasks'] = self.plan['tasks'][:1]
+        if architect:
+            self.architect_task()
+        goal.init(self.root, self.plan)
+        def blocked(*args, **kwargs):
+            return self.execution(*args, **kwargs, outcome_status='blocked')
+        with self.boundaries(execution=blocked):
+            goal.native_step(self.root, 'fixture')
+        origin_path = self.root/'.amr-local/goals/fixture.json'
+        self.assertEqual(self.state()['tasks']['A']['status'], 'failed')
+        home = self.root/'.amr-local/native-home'
+        sessions = home/'sessions'; sessions.mkdir(parents=True)
+        self.enterContext(patch.dict('os.environ', {'CODEX_HOME': str(home)}))
+        native_path = sessions/'fixture.jsonl'
+        native_path.write_text(json.dumps(dict(type='session_meta', payload={'id': 'direct-thread'}))+'\n'+
+            json.dumps(dict(type='turn_context', payload=dict(turn_id='direct-turn',
+                       model='gpt-6-luna', effort='max')))+'\n')
+        state = self.state(); task = goal.dispatched_task(state, 'A')
+        identity = goal.current_identity(self.root)
+        gates = self.gates(self.root, self.plan['base'])
+        for check in gates['checks']:
+            check['exit_code'] = 0
+            if check['name'] == 'mapping':
+                check['command'] = [sys.executable, 'docs/tooling/changeguard.py', '--base',
+                                    self.plan['base'], '--working-tree']
+        self.recovery_gates = self.root/'.amr-local/recovery-gates.json'
+        self.recovery_gates.write_text(json.dumps(gates))
+        files = amr.tree_identity(self.root)['files']
+        self.recovery_input = dict(schemaVersion=1,
+            origin=dict(goal_id='fixture', task_id='A',
+                        checkpoint_sha256=hashlib.sha256(origin_path.read_bytes()).hexdigest(),
+                        task_digest=amr.task_identity(task)), identity=identity,
+            gates='.amr-local/recovery-gates.json',
+            artifacts={p: files[p] for p in task['paths']+task['consulted']},
+            authorization=dict(decision='approved', purpose='checkpoint_recovery', task_id='A',
+                task_digest=amr.task_identity(task), content=identity['content'],
+                approved_by='fixture-maintainer', scope='Recover fixture A only',
+                decision_evidence='Explicit recovery authorization in fixture'),
+            triage=dict(self.triage(), rationale='Inspected preserved artifacts and current gates'),
+            native_context=dict(source=str(native_path), thread_id='direct-thread',
+                                turn_id='direct-turn', model='gpt-6-luna', effort='max'))
+        return origin_path
+
+    def recover_fixture(self):
+        path = self.root/'.amr-local/recovery-input.json'
+        path.write_text(json.dumps(self.recovery_input))
+        return goal.recover(self.root, 'fixture', 'A', 'recovered', '.amr-local/recovery-input.json')
+
+    def test_evidence_recovery_preserves_failure_and_never_dispatches_or_retests(self):
+        origin = self.recovery_fixture(); original = origin.read_bytes()
+        with (patch.object(goal, 'execute_task', side_effect=AssertionError('no dispatch')),
+              patch.object(goal, 'local_review', side_effect=AssertionError('no AI review')),
+              patch.object(goal, 'discover', side_effect=AssertionError('no new probe')),
+              patch.object(amr, 'gates', side_effect=AssertionError('reuse existing gates'))):
+            result = self.recover_fixture()
+            self.assertEqual(goal.status(self.root, 'recovered')['status'], 'completed')
+        self.assertEqual(origin.read_bytes(), original)
+        self.assertEqual(result['status'], 'completed')
+        recovered = result['tasks']['A']
+        self.assertEqual(recovered['completion_kind'], 'evidence_recovery')
+        self.assertEqual(recovered['attempts'], 0)
+        self.assertNotIn('execution', recovered)
+        self.assertNotIn('task_outcome', recovered)
+        self.assertEqual(set(recovered['output_artifacts']), {'source.py', 'test_source.py', 'feature.md'})
+        path = self.root/'.amr-local/goals/recovered.json'
+        self.assertEqual(stat.S_IMODE(path.stat().st_mode), 0o600)
+        saved = path.read_bytes()
+        with self.assertRaisesRegex(ValueError, 'already exists'):
+            self.recover_fixture()
+        self.assertEqual(path.read_bytes(), saved)
+
+    def test_evidence_recovery_rejects_stale_source_git_or_artifacts(self):
+        self.recovery_fixture()
+        baseline = copy.deepcopy(self.recovery_input)
+        mutations = [lambda e: e['identity'].update(content='stale'),
+                     lambda e: e['identity']['git'].update(head='0'*40),
+                     lambda e: e['artifacts'].update({'source.py': 'stale'}),
+                     lambda e: e['artifacts'].pop('test_source.py'),
+                     lambda e: e['origin'].update(task_digest='wrong'),
+                     lambda e: e['origin'].update(checkpoint_sha256='wrong')]
+        for mutate in mutations:
+            with self.subTest(mutate=mutate):
+                self.recovery_input = copy.deepcopy(baseline); mutate(self.recovery_input)
+                with self.assertRaises(ValueError): self.recover_fixture()
+                self.assertFalse((self.root/'.amr-local/goals/recovered.json').exists())
+
+    def test_evidence_recovery_rejects_failed_stale_missing_or_wrong_base_gates(self):
+        self.recovery_fixture()
+        baseline = json.loads(self.recovery_gates.read_text())
+        mutations = [lambda e: e.update(local_status='failed'),
+                     lambda e: e.update(content='stale'),
+                     lambda e: e.update(source_stable=False),
+                     lambda e: e.update(source_mapping='not_configured'),
+                     lambda e: e['checks'][0].update(exit_code=1),
+                     lambda e: e['checks'].pop(),
+                     lambda e: e['checks'][-1]['command'].__setitem__(3, 'wrong-base')]
+        for mutate in mutations:
+            with self.subTest(mutate=mutate):
+                gates = copy.deepcopy(baseline); mutate(gates)
+                self.recovery_gates.write_text(json.dumps(gates))
+                with self.assertRaises(ValueError): self.recover_fixture()
+
+    def test_evidence_recovery_requires_separate_approval_and_no_blocking_findings(self):
+        self.recovery_fixture(); baseline = copy.deepcopy(self.recovery_input)
+        mutations = [lambda e: e['authorization'].update(decision='pending'),
+                     lambda e: e['authorization'].update(purpose='design'),
+                     lambda e: e['authorization'].update(content='stale'),
+                     lambda e: e['authorization'].update(task_id='B'),
+                     lambda e: e['triage'].update(content='stale'),
+                     lambda e: e['triage'].update(rationale=''),
+                     lambda e: e['triage'].update(findings=[dict(id='F1', state='open',
+                                                               severity='high', evidence='fixture bug')])]
+        for mutate in mutations:
+            with self.subTest(mutate=mutate):
+                self.recovery_input = copy.deepcopy(baseline); mutate(self.recovery_input)
+                with self.assertRaises(ValueError): self.recover_fixture()
+
+    def test_evidence_recovery_verifies_actual_native_context_and_model_override(self):
+        self.recovery_fixture(); baseline = copy.deepcopy(self.recovery_input)
+        for field, value in [('thread_id', 'other'), ('turn_id', 'other'),
+                             ('model', 'gpt-6.1-sol'), ('effort', 'low')]:
+            with self.subTest(field=field):
+                self.recovery_input = copy.deepcopy(baseline)
+                self.recovery_input['native_context'][field] = value
+                with self.assertRaisesRegex(ValueError, 'native model/effort'): self.recover_fixture()
+        self.recovery_input = copy.deepcopy(baseline)
+        native = self.recovery_input['native_context']
+        path = Path(native['source'])
+        path.write_text(path.read_text().replace('gpt-6-luna', 'gpt-6.1-sol').replace('max', 'low'))
+        native.update(model='gpt-6.1-sol', effort='low')
+        with self.assertRaisesRegex(ValueError, 'task-local approval'): self.recover_fixture()
+        self.recovery_input['authorization']['model_override'] = dict(
+            model='gpt-6.1-sol', effort='low', decision_evidence='Explicit user task-only override')
+        self.assertEqual(self.recover_fixture()['status'], 'completed')
+
+    def test_evidence_recovery_rejects_private_path_escape_and_symlinks(self):
+        self.recovery_fixture()
+        for value in ('../gates.json', '/tmp/gates.json', 'GOAL.md'):
+            with self.subTest(value=value):
+                self.recovery_input['gates'] = value
+                with self.assertRaises(ValueError): self.recover_fixture()
+        link = self.root/'.amr-local/gates-link.json'; link.symlink_to(self.recovery_gates)
+        self.recovery_input['gates'] = '.amr-local/gates-link.json'
+        with self.assertRaisesRegex(ValueError, 'symlink'): self.recover_fixture()
+
+    def test_evidence_recovery_detects_origin_and_successor_tampering(self):
+        origin = self.recovery_fixture(); original = origin.read_bytes()
+        self.recover_fixture()
+        path = self.root/'.amr-local/goals/recovered.json'; saved = path.read_bytes()
+        state = json.loads(saved); state['tasks']['A']['recovery']['authorization']['scope'] = 'wider'
+        path.write_text(json.dumps(state))
+        with self.assertRaisesRegex(ValueError, 'evidence-recovery'): goal.status(self.root, 'recovered')
+        path.write_bytes(saved)
+        origin.write_bytes(original+b'\n')
+        with self.assertRaisesRegex(ValueError, 'origin checkpoint changed'): goal.status(self.root, 'recovered')
+
+    def test_evidence_recovery_rejects_legacy_and_nonfailed_tasks(self):
+        origin = self.recovery_fixture()
+        original = json.loads(origin.read_text())
+        for status, policy in [('failed', '3.1'), ('pending', '4'), ('running', '4'),
+                               ('unknown', '4'), ('awaiting_triage', '4'), ('validation_failed', '4')]:
+            with self.subTest(status=status, policy=policy):
+                state = copy.deepcopy(original)
+                state['tasks']['A'].update(status=status, policy_version=policy)
+                origin.write_text(json.dumps(state))
+                self.recovery_input['origin']['checkpoint_sha256'] = hashlib.sha256(origin.read_bytes()).hexdigest()
+                with self.assertRaisesRegex(ValueError, 'failed v4 local Developer'): self.recover_fixture()
+
+    def test_evidence_recovery_cannot_replace_architect_design_approval(self):
+        self.recovery_fixture(architect=True)
+        with self.assertRaisesRegex(ValueError, 'failed v4 local Developer'): self.recover_fixture()
+
+    def test_evidence_recovery_retains_known_findings_and_rejects_missing_product_gates(self):
+        origin = self.recovery_fixture()
+        state = json.loads(origin.read_text())
+        finding = dict(id='OLD-1', state='open', evidence='known regression', severity='high')
+        task = state['plan']['tasks'][0]; task['findings'] = [finding]
+        state['plan_digest'] = goal.digest(state['plan'])
+        state['tasks']['A']['dispatch_task'] = copy.deepcopy(task)
+        state['tasks']['A']['dispatch_task_digest'] = amr.task_identity(task)
+        origin.write_text(json.dumps(state))
+        self.recovery_input['origin'].update(task_digest=amr.task_identity(task),
+            checkpoint_sha256=hashlib.sha256(origin.read_bytes()).hexdigest())
+        self.recovery_input['authorization']['task_digest'] = amr.task_identity(task)
+        with self.assertRaisesRegex(ValueError, 'cannot omit'): self.recover_fixture()
+        self.recovery_input['triage']['findings'] = [dict(finding, state='dismissed',
+                                                      rationale='Fixture reproduction disproves finding')]
+        (self.root/'Kordra.slnx').write_text('<Solution/>\n')
+        identity = goal.current_identity(self.root)
+        self.recovery_input['identity'] = identity
+        self.recovery_input['authorization']['content'] = identity['content']
+        self.recovery_input['triage']['content'] = identity['content']
+        gates = json.loads(self.recovery_gates.read_text()); gates['content'] = identity['content']
+        self.recovery_gates.write_text(json.dumps(gates))
+        with self.assertRaisesRegex(ValueError, 'product'): self.recover_fixture()
+
+    def test_evidence_recovery_rejects_native_log_escape_symlink_and_source_race(self):
+        self.recovery_fixture()
+        native = self.recovery_input['native_context']; original = native['source']
+        outside = self.root/'.amr-local/not-a-session.jsonl'
+        outside.write_text(Path(original).read_text())
+        native['source'] = str(outside)
+        with self.assertRaisesRegex(ValueError, 'actual local session log'): self.recover_fixture()
+        link = Path(original).parent/'linked.jsonl'; link.symlink_to(Path(original))
+        native['source'] = str(link)
+        with self.assertRaisesRegex(ValueError, 'actual local session log'): self.recover_fixture()
+        native['source'] = original
+        observe = goal.native_context_evidence
+        def raced(context):
+            result = observe(context)
+            (self.root/'source.py').write_text('value = 99\n')
+            return result
+        with patch.object(goal, 'native_context_evidence', side_effect=raced):
+            with self.assertRaisesRegex(ValueError, 'changed during recovery'): self.recover_fixture()
+        self.assertFalse((self.root/'.amr-local/goals/recovered.json').exists())
+
+    def test_reconcile_accepts_cli_evidence_and_preserves_exact_checkpoint_snapshot(self):
+        goal.init(self.root, self.plan); context = self.coordinator_context_fixture()
+        with self.boundaries(): goal.step(self.root, 'fixture', context=context)
+        path = self.root/'.amr-local/goals/fixture.json'; before = path.read_bytes()
+        with patch.object(goal, 'execute_task', side_effect=AssertionError('no replay')), patch.object(goal, 'local_review', side_effect=AssertionError('no review')):
+            result = goal.reconcile(self.root, 'fixture', 'A', 'Inspected stopped local work; retain artifacts')
+        self.assertEqual(result['tasks']['A']['status'], 'failed')
+        record = self.state()['tasks']['A']; snapshot = record['reconciliation']['checkpoint_before']
+        self.assertEqual((self.root/snapshot['path']).read_bytes(), before)
+        self.assertEqual(snapshot['sha256'], hashlib.sha256(before).hexdigest())
+        self.assertEqual(stat.S_IMODE((self.root/snapshot['path']).stat().st_mode), 0o600)
+        self.assertNotIn('execution', record)
+        self.assertNotIn('completion_kind', record)
+        self.assertEqual(record['preparation_digest'], json.loads(before)['tasks']['A']['preparation_digest'])
+
+    def test_reconcile_rejects_invalid_evidence_without_mutating_checkpoint(self):
+        goal.init(self.root, self.plan); context = self.coordinator_context_fixture()
+        with self.boundaries(): goal.step(self.root, 'fixture', context=context)
+        path = self.root/'.amr-local/goals/fixture.json'; before = path.read_bytes()
+        for evidence in ('', ' ', {}, [], None):
+            with self.subTest(evidence=evidence), self.assertRaises(ValueError):
+                goal.reconcile(self.root, 'fixture', 'A', evidence)
+            self.assertEqual(path.read_bytes(), before)
+
+    def test_reconcile_cli_forwards_string_evidence_without_model_dispatch(self):
+        goal.init(self.root, self.plan); context = self.coordinator_context_fixture()
+        with self.boundaries(): goal.step(self.root, 'fixture', context=context)
+        parser = argparse.ArgumentParser(); goal.add_parser(parser.add_subparsers(dest='command'))
+        args = parser.parse_args(['goal', 'reconcile', '--id', 'fixture', '--task-id', 'A',
+                                  '--evidence', 'Inspected the stopped fixture'])
+        with patch.object(goal, 'execute_task', side_effect=AssertionError('no dispatch')):
+            result = goal.main(self.root, args)
+        self.assertEqual(result['tasks']['A']['status'], 'failed')
+        self.assertIsNone(result['active_task'])
+
+    def test_reconcile_rejects_snapshot_directory_symlink_without_checkpoint_mutation(self):
+        goal.init(self.root, self.plan); context = self.coordinator_context_fixture()
+        with self.boundaries(): goal.step(self.root, 'fixture', context=context)
+        path = self.root/'.amr-local/goals/fixture.json'; before = path.read_bytes()
+        outside = self.root/'outside'; outside.mkdir()
+        (self.root/'.amr-local/reconciliation').symlink_to(outside, target_is_directory=True)
+        with self.assertRaisesRegex(ValueError, 'symlink'):
+            goal.reconcile(self.root, 'fixture', 'A', 'Stopped and inspected')
+        self.assertEqual(path.read_bytes(), before)
+        self.assertEqual(list(outside.iterdir()), [])
+
+    def test_coordinator_status_explains_added_changed_deleted_protected_paths(self):
+        goal.init(self.root, self.plan); context = self.coordinator_context_fixture()
+        with self.boundaries(): goal.step(self.root, 'fixture', context=context)
+        path = self.root/'.amr-local/goals/fixture.json'; before = path.read_bytes()
+        (self.root/'source.py').write_text('unexpected edit\n')
+        (self.root/'unexpected.py').write_text('new undeclared output\n')
+        (self.root/'test_source.py').unlink()
+        diagnostics = goal.status(self.root, 'fixture')['coordinator_diagnostics']['A']
+        self.assertTrue(diagnostics['protected_content_changed'])
+        self.assertEqual(set(diagnostics['protected_changes']), {'source.py', 'unexpected.py', 'test_source.py'})
+        self.assertFalse(diagnostics['git_head_or_branch_changed'])
+        self.assertEqual(path.read_bytes(), before)
+        with self.assertRaisesRegex(ValueError, 'source.py'):
+            goal.finish(self.root, 'fixture', 'A', self.coordinator_finish_evidence())
+
+    def test_coordinator_manifest_is_digest_bound_and_legacy_preparations_stay_readable(self):
+        goal.init(self.root, self.plan); context = self.coordinator_context_fixture()
+        with self.boundaries(): goal.step(self.root, 'fixture', context=context)
+        path = self.root/'.amr-local/goals/fixture.json'; state = self.state(); original = copy.deepcopy(state)
+        state['tasks']['A']['protected_file_identities']['source.py'] = 'forged'
+        path.write_text(json.dumps(state))
+        with self.assertRaisesRegex(ValueError, 'protected.*manifest'): goal.status(self.root, 'fixture')
+        original['tasks']['A'].pop('protected_file_identities')
+        original['tasks']['A']['preparation_digest'] = goal.preparation_identity(original['tasks']['A'])
+        path.write_text(json.dumps(original)); before = path.read_bytes()
+        diagnostics = goal.status(self.root, 'fixture')['coordinator_diagnostics']['A']
+        self.assertIsNone(diagnostics['protected_changes'])
+        self.assertEqual(diagnostics['protected_manifest'], 'unavailable_historical_checkpoint')
+        self.assertEqual(path.read_bytes(), before)
+
+    def test_coordinator_status_distinguishes_commit_drift_without_source_drift(self):
+        goal.init(self.root, self.plan); context = self.coordinator_context_fixture()
+        with self.boundaries(): goal.step(self.root, 'fixture', context=context)
+        self.git('commit', '--allow-empty', '-qm', 'Metadata-only fixture commit')
+        diagnostics = goal.status(self.root, 'fixture')['coordinator_diagnostics']['A']
+        self.assertTrue(diagnostics['git_head_or_branch_changed'])
+        self.assertFalse(diagnostics['protected_content_changed'])
+
+    def test_reconcile_retains_private_findings_and_rejects_unsafe_evidence(self):
+        goal.init(self.root, self.plan); context = self.coordinator_context_fixture()
+        with self.boundaries(): goal.step(self.root, 'fixture', context=context)
+        checkpoint = self.root/'.amr-local/goals/fixture.json'; before = checkpoint.read_bytes()
+        evidence = self.root/'.amr-local/findings.json'
+        for value in ({'findings': [{'id': 'A'}, {'id': 'A'}]}, {'findings': [None]}):
+            evidence.write_text(json.dumps(value))
+            with self.assertRaisesRegex(ValueError, 'findings'):
+                goal.reconcile(self.root, 'fixture', 'A', '.amr-local/findings.json')
+            self.assertEqual(checkpoint.read_bytes(), before)
+        evidence.unlink(); evidence.symlink_to(self.root/'feature.md')
+        with self.assertRaisesRegex(ValueError, 'symlink'):
+            goal.reconcile(self.root, 'fixture', 'A', '.amr-local/findings.json')
+        evidence.unlink()
+        findings = [{'id': 'PR-F1', 'state': 'open', 'blocking': True, 'evidence': 'provider finding'}]
+        evidence.write_text(json.dumps({'findings': findings}))
+        goal.reconcile(self.root, 'fixture', 'A', '.amr-local/findings.json')
+        self.assertEqual(self.state()['tasks']['A']['reconciliation']['findings'], findings)
+
+    def test_recovery_cannot_omit_or_accept_open_reconciliation_findings(self):
+        origin = self.recovery_fixture(); state = self.state()
+        finding = {'id': 'PR-F1', 'state': 'open', 'blocking': True, 'evidence': 'provider finding'}
+        state['tasks']['A']['reconciliation'] = {'findings': [finding]}
+        origin.write_text(json.dumps(state))
+        self.recovery_input['origin']['checkpoint_sha256'] = hashlib.sha256(origin.read_bytes()).hexdigest()
+        with self.assertRaisesRegex(ValueError, 'cannot omit'): self.recover_fixture()
+        self.recovery_input['triage']['findings'] = [finding]
+        with self.assertRaisesRegex(ValueError, 'unresolved blocking'): self.recover_fixture()
+        self.assertFalse((self.root/'.amr-local/goals/recovered.json').exists())
+
+    def coordinator_context_fixture(self):
+        home = self.root/'.amr-local/coordinator-home'
+        sessions = home/'sessions'; sessions.mkdir(parents=True, exist_ok=True)
+        self.enterContext(patch.dict('os.environ', {'CODEX_HOME': str(home)}))
+        path = sessions/'coordinator.jsonl'
+        path.write_text(json.dumps({'type':'session_meta','payload':{'id':'coordinator'}})+'\n'+
+            json.dumps({'type':'turn_context','payload':{'turn_id':'turn','model':'gpt-6-luna','effort':'max'}})+'\n')
+        return {'scope_basis':'Existing accepted fixture design; repository files only',
+                'native_context':{'source':str(path),'thread_id':'coordinator','turn_id':'turn',
+                                  'model':'gpt-6-luna','effort':'max'}}
+
+    def coordinator_finish_evidence(self, task_id='A'):
+        state = self.state(); task = goal.dispatched_task(state, task_id)
+        record = state['tasks'][task_id]; identity = goal.current_identity(self.root)
+        gates = self.gates(self.root, self.plan['base'])
+        for c in gates['checks']:
+            c.update(exit_code=0)
+            if c['name']=='mapping':
+                c['command']=[sys.executable,'docs/tooling/changeguard.py','--base',self.plan['base'],'--working-tree']
+        path=self.root/'.amr-local/coordinator-gates.json';path.write_text(json.dumps(gates))
+        files=amr.tree_identity(self.root)['files']
+        return {'task_id':task_id,'task_digest':amr.task_identity(task),'identity':identity,
+                'gates':'.amr-local/coordinator-gates.json',
+                'native_context':record['coordinator_context'],
+                'summary':'Implemented/inspected the approved fixture slice',
+                'no_change_reason':'Read-only fixture inspection' if not task['write_paths'] else None,
+                'artifacts':{p:files.get(p) for p,h in record['input_file_identities'].items() if files.get(p)!=h},
+                'triage':dict(task_id=task_id,content=identity['content'],reviewed_by='contributor',
+                              rationale='Inspected the actual diff and passing deterministic gates',findings=[])}
+
+    def test_default_step_prepares_current_session_and_never_dispatches_or_restarts(self):
+        goal.init(self.root,self.plan);context=self.coordinator_context_fixture()
+        with self.boundaries():
+            result=goal.step(self.root,'fixture',context=context)
+            self.assertEqual(result['active_task'],'A')
+            self.assertEqual(result['tasks']['A']['status'],'in_progress')
+            saved=self.state()['tasks']['A']
+            self.assertEqual(goal.status(self.root,'fixture')['tasks']['A']['status'],'in_progress')
+            again=goal.step(self.root,'fixture',context=context)
+            self.assertEqual(again['tasks']['A'],saved)
+            self.assertEqual(saved['attempts'],0)
+            self.execute_mock.assert_not_called();self.review_mock.assert_not_called()
+
+    def test_coordinator_finish_advances_dependencies_without_native_receipts(self):
+        self.plan['tasks'][0]['write_paths']=['source.py']
+        goal.init(self.root,self.plan);context=self.coordinator_context_fixture()
+        with self.boundaries():
+            goal.step(self.root,'fixture',context=context)
+            (self.root/'source.py').write_text('value = 2\n')
+            result=goal.finish(self.root,'fixture','A',self.coordinator_finish_evidence())
+            self.assertEqual(result['next_task'],'B')
+            self.assertEqual(result['tasks']['A']['completion_kind'],'coordinator_execution')
+            self.assertNotIn('execution',result['tasks']['A'])
+            self.assertNotIn('task_outcome',result['tasks']['A'])
+            goal.step(self.root,'fixture',context=context)
+            goal.finish(self.root,'fixture','B',self.coordinator_finish_evidence('B'))
+            self.assertEqual(goal.status(self.root,'fixture')['status'],'completed')
+            self.execute_mock.assert_not_called();self.review_mock.assert_not_called()
+
+    def test_current_session_requires_actual_native_context_and_advertised_route(self):
+        goal.init(self.root,self.plan);context=self.coordinator_context_fixture()
+        with self.boundaries():
+            with self.assertRaisesRegex(ValueError,'requires --context'):goal.step(self.root,'fixture')
+            bad=copy.deepcopy(context);bad['native_context']['turn_id']='wrong'
+            with self.assertRaisesRegex(ValueError,'native model/effort'):goal.step(self.root,'fixture',context=bad)
+            with patch.object(goal,'discover',return_value={'models':[]}):
+                with self.assertRaisesRegex(ValueError,'advertised Developer route'):goal.step(self.root,'fixture',context=context)
+            self.execute_mock.assert_not_called()
+        self.assertEqual(self.state()['tasks']['A']['status'],'pending')
+
+    def test_current_session_rejects_old_turn_and_changed_model_on_completion(self):
+        goal.init(self.root,self.plan);context=self.coordinator_context_fixture()
+        path=Path(context['native_context']['source']);original=path.read_text()
+        changed=json.dumps({'type':'turn_context','payload':{
+            'turn_id':'new-turn','model':'gpt-6.1-sol','effort':'high'}})+'\n'
+        path.write_text(original+changed)
+        with self.boundaries(),self.assertRaisesRegex(ValueError,'latest native'):
+            goal.step(self.root,'fixture',context=context)
+        path.write_text(original)
+        with self.boundaries():goal.step(self.root,'fixture',context=context)
+        evidence=self.coordinator_finish_evidence();path.write_text(original+changed)
+        with self.assertRaisesRegex(ValueError,'latest native'):goal.finish(self.root,'fixture','A',evidence)
+        evidence['native_context'].update(turn_id='new-turn',model='gpt-6.1-sol',effort='high')
+        with self.assertRaisesRegex(ValueError,'session/model changed'):goal.finish(self.root,'fixture','A',evidence)
+
+    def test_completed_coordinator_receipt_rejects_missing_gates_or_changed_artifacts(self):
+        self.plan['tasks'][0]['write_paths']=['source.py']
+        goal.init(self.root,self.plan);context=self.coordinator_context_fixture()
+        with self.boundaries():goal.step(self.root,'fixture',context=context)
+        (self.root/'source.py').write_text('value = 2\n')
+        goal.finish(self.root,'fixture','A',self.coordinator_finish_evidence())
+        path=self.root/'.amr-local/goals/fixture.json';original=path.read_text()
+        for mutate in (lambda r:r['gates'].update(checks=[None]),
+                       lambda r:r['gates']['checks'][-1].update(command=['wrong']),
+                       lambda r:r.update(product_required=True),
+                       lambda r:r['coordinator_receipt'].update(artifacts={})):
+            state=json.loads(original);record=state['tasks']['A'];mutate(record)
+            record['coordinator_receipt_digest']=goal.digest(record['coordinator_receipt'])
+            path.write_text(json.dumps(state))
+            with self.subTest(mutation=mutate),self.assertRaises(ValueError):goal.status(self.root,'fixture')
+        path.write_text(original)
+
+    def test_finish_rejects_stale_wrong_scope_artifacts_gates_and_blockers(self):
+        self.plan['tasks'][0]['write_paths']=['source.py']
+        goal.init(self.root,self.plan);context=self.coordinator_context_fixture()
+        with self.boundaries():goal.step(self.root,'fixture',context=context)
+        (self.root/'source.py').write_text('value = 2\n')
+        evidence=self.coordinator_finish_evidence()
+        mutations=[lambda e:e.update(task_digest='wrong'),lambda e:e['identity'].update(content='stale'),
+                   lambda e:e.update(artifacts={}),lambda e:e['native_context'].update(thread_id='other'),
+                   lambda e:e['triage'].update(findings=[{'id':'BUG','state':'open','evidence':'repro'}]),
+                   lambda e:e['triage'].update(rationale='')]
+        for mutate in mutations:
+            bad=copy.deepcopy(evidence);mutate(bad)
+            with self.subTest(mutate=mutate),self.assertRaises(ValueError):goal.finish(self.root,'fixture','A',bad)
+        p=self.root/'.amr-local/coordinator-gates.json';g=json.loads(p.read_text());g['checks'][-1]['command'][3]='wrong';p.write_text(json.dumps(g))
+        with self.assertRaisesRegex(ValueError,'exact base'):goal.finish(self.root,'fixture','A',evidence)
+        evidence=self.coordinator_finish_evidence()
+        (self.root/'test_source.py').write_text('unauthorized edit\n')
+        evidence['identity']=goal.current_identity(self.root)
+        with self.assertRaisesRegex(ValueError,'outside prepared task scope'):goal.finish(self.root,'fixture','A',evidence)
+        self.assertEqual(self.state()['tasks']['A']['status'],'in_progress')
+
+    def test_coordinator_noop_requires_reason_and_completed_receipt_detects_tampering(self):
+        self.plan['tasks'][0]['write_paths']=['source.py']
+        goal.init(self.root,self.plan);context=self.coordinator_context_fixture()
+        with self.boundaries():goal.step(self.root,'fixture',context=context)
+        e=self.coordinator_finish_evidence()
+        with self.assertRaisesRegex(ValueError,'artifact evidence'):goal.finish(self.root,'fixture','A',e)
+        e['no_change_reason']=['not a text explanation']
+        with self.assertRaisesRegex(ValueError,'artifact evidence'):goal.finish(self.root,'fixture','A',e)
+        e['no_change_reason']='Inspected approved implementation; already satisfies fixture acceptance'
+        goal.finish(self.root,'fixture','A',e)
+        p=self.root/'.amr-local/goals/fixture.json';d=json.loads(p.read_text())
+        d['tasks']['A']['coordinator_receipt']['summary']='tampered';p.write_text(json.dumps(d))
+        with self.assertRaisesRegex(ValueError,'coordinator completion'):goal.status(self.root,'fixture')
+
+    def test_persisted_coordinator_claim_blocks_other_coordinator_and_native_tasks(self):
+        context=self.coordinator_context_fixture()
+        goal.init(self.root,self.plan);other=copy.deepcopy(self.plan);other['goal_id']='other';goal.init(self.root,other)
+        with self.boundaries():
+            goal.step(self.root,'fixture',context=context)
+            for fn in (lambda:goal.step(self.root,'other',context=context),lambda:goal.step(self.root,'other',native_runner=True)):
+                with self.assertRaisesRegex(ValueError,'owns this checkout'):fn()
+            self.execute_mock.assert_not_called()
+
+    def test_coordinator_rejects_architect_debugger_and_unapproved_model_changes(self):
+        self.architect_task();goal.init(self.root,self.plan);context=self.coordinator_context_fixture()
+        with self.boundaries(),self.assertRaisesRegex(ValueError,'local Developer'):goal.step(self.root,'fixture',context=context)
+
+    def continuation_fixture(self):
+        self.plan['tasks'][0].update(write_paths=['generated.py'],output_paths=['generated.py'])
+        (self.root/'generated.py').write_text('new fixture output\n')
+        origin=self.recovery_fixture();e=self.recovery_input
+        e.update(schemaVersion=2);e.pop('authorization')
+        e['continuation']={'scope_basis':'Previously approved local fixture design',
+            'inspection_evidence':'Inspected all retained outputs; no external operation was executed',
+            'execution_stopped':True,'effects':'repository_files_only','external_operations':[]}
+        files=amr.tree_identity(self.root)['files'];task=goal.dispatched_task(self.state(),'A')
+        e['artifacts']={p:files[p] for p in set(task['paths']+task['consulted']+task['write_paths'])}
+        path=self.root/'.amr-local/continue.json';path.write_text(json.dumps(e))
+        return origin,path,e
+
+    def test_continuation_records_deleted_write_output_without_replaying_origin(self):
+        origin, path, evidence = self.continuation_fixture()
+        original = origin.read_bytes()
+        (self.root/'generated.py').unlink()
+        evidence['identity'] = goal.current_identity(self.root)
+        evidence['triage']['content'] = evidence['identity']['content']
+        evidence['artifacts']['generated.py'] = None
+        gates = json.loads(self.recovery_gates.read_text())
+        gates['content'] = evidence['identity']['content']
+        self.recovery_gates.write_text(json.dumps(gates))
+        path.write_text(json.dumps(evidence))
+        with patch.object(goal, 'execute_task', side_effect=AssertionError('no replay')):
+            result = goal.recover(self.root, 'fixture', 'A', 'continued',
+                                  '.amr-local/continue.json', coordinator=True)
+        self.assertEqual(result['status'], 'completed')
+        self.assertIsNone(self.state('continued')['tasks']['A']['output_artifacts']['generated.py'])
+        self.assertEqual(goal.status(self.root, 'continued')['status'], 'completed')
+        self.assertEqual(origin.read_bytes(), original)
+
+    def test_continuation_rejects_null_for_existing_output_or_context(self):
+        origin, path, evidence = self.continuation_fixture()
+        for name in ('generated.py', 'feature.md'):
+            bad = copy.deepcopy(evidence)
+            bad['artifacts'][name] = None
+            path.write_text(json.dumps(bad))
+            with self.subTest(path=name), self.assertRaisesRegex(ValueError, 'artifact hashes'):
+                goal.recover(self.root, 'fixture', 'A', 'continued',
+                             '.amr-local/continue.json', coordinator=True)
+
+    def test_architect_rejects_source_outputs_and_write_paths_before_dispatch(self):
+        self.architect_task()
+        for field in ('output_paths', 'write_paths'):
+            plan = copy.deepcopy(self.plan)
+            plan['tasks'][0][field] = ['generated.py']
+            with self.subTest(field=field), self.assertRaisesRegex(ValueError, 'Architect'):
+                goal.validate_plan(self.root, plan)
+
+    def test_inspected_local_continuation_needs_no_new_maintainer_approval_or_execution(self):
+        origin,path,e=self.continuation_fixture();before=origin.read_bytes()
+        with patch.object(goal,'execute_task',side_effect=AssertionError('no dispatch')),patch.object(goal,'local_review',side_effect=AssertionError('no review')):
+            result=goal.recover(self.root,'fixture','A','continued','.amr-local/continue.json',coordinator=True)
+        self.assertEqual(result['status'],'completed')
+        r=result['tasks']['A'];self.assertEqual(r['completion_kind'],'coordinator_continuation')
+        self.assertNotIn('authorization',r['recovery']);self.assertNotIn('execution',r)
+        self.assertEqual(origin.read_bytes(),before)
+        self.assertEqual(goal.status(self.root,'continued')['status'],'completed')
+
+    def test_local_continuation_rejects_unknown_effects_stale_or_missing_created_outputs(self):
+        origin,path,e=self.continuation_fixture()
+        mutations=[lambda x:x['continuation'].update(execution_stopped=False),
+                   lambda x:x['continuation'].update(external_operations=['database mutation']),
+                   lambda x:x['continuation'].update(effects='unknown'),
+                   lambda x:x['continuation'].update(scope_basis=''),
+                   lambda x:x['artifacts'].pop('generated.py'),lambda x:x['identity'].update(content='stale')]
+        for mutate in mutations:
+            bad=copy.deepcopy(e);mutate(bad);path.write_text(json.dumps(bad))
+            with self.subTest(mutate=mutate),self.assertRaises(ValueError):
+                goal.recover(self.root,'fixture','A','continued','.amr-local/continue.json',coordinator=True)
+            self.assertFalse((self.root/'.amr-local/goals/continued.json').exists())
+
+    def test_local_continuation_cannot_adopt_running_unknown_or_nondefault_execution(self):
+        origin,path,e=self.continuation_fixture();original=origin.read_text()
+        for status in ('running','unknown'):
+            state=json.loads(original);state['tasks']['A']['status']=status;origin.write_text(json.dumps(state))
+            e['origin']['checkpoint_sha256']=hashlib.sha256(origin.read_bytes()).hexdigest()
+            path.write_text(json.dumps(e))
+            with self.subTest(status=status),self.assertRaisesRegex(ValueError,'failed v4 local Developer'):
+                goal.recover(self.root,'fixture','A','continued','.amr-local/continue.json',coordinator=True)
+        origin.write_text(original);e['origin']['checkpoint_sha256']=hashlib.sha256(origin.read_bytes()).hexdigest()
+        native=Path(e['native_context']['source'])
+        native.write_text(native.read_text().replace('gpt-6-luna','gpt-6.1-sol').replace('"max"','"high"'))
+        e['native_context'].update(model='gpt-6.1-sol',effort='high');path.write_text(json.dumps(e))
+        with self.assertRaisesRegex(ValueError,'exact default Developer'):
+            goal.recover(self.root,'fixture','A','continued','.amr-local/continue.json',coordinator=True)
+
+    def test_optional_native_runner_persists_turn_before_timeout_without_replay(self):
+        goal.init(self.root,self.plan)
+        def interrupted(*args,**kwargs):
+            kwargs['on_start']('running-thread');kwargs['on_turn_started']('running-turn')
+            raise goal.NativeError('connection interrupted; outcome unknown')
+        with self.boundaries(execution=interrupted):
+            r=goal.step(self.root,'fixture',native_runner=True)
+            self.assertEqual(r['tasks']['A']['native_turn_id'],'running-turn')
+            self.assertEqual(r['tasks']['A']['status'],'unknown')
+            with self.assertRaisesRegex(ValueError,'blocked'):goal.step(self.root,'fixture',native_runner=True)
+            self.assertEqual(self.execute_mock.call_count,1)
+
     def test_bounded_validation_retries_do_not_replay_native_execution(self):
         goal.init(self.root, self.plan)
         def failed(root, base):
             result = self.gates(root, base); result['local_status'] = 'failed'; return result
         with self.boundaries(gates=failed):
-            goal.step(self.root, 'fixture')
+            goal.native_step(self.root, 'fixture')
             for _ in range(3):
                 goal.validate(self.root, 'fixture', 'A')
             with self.assertRaisesRegex(ValueError, 'repair limit'):

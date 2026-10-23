@@ -45,3 +45,13 @@ Mitigation for the explicit local continuation: a private observer retained the 
 DEBT-AMR-001's missing automatic-provider-execution evidence is resolved for PR #4 at `705c6227ddebd4293ae437a0bdefc5d907ae4ec7`: the native bot completed [review 5566543009](https://github.com/NukeGeng/KORDRA/pull/4#pullrequestreview-5566543009), triggered by PR opening, and returned four findings. The historical register describes what was known before this observation. The integration gap is no longer described as wholly unconfigured; the local adapter's `provider_review=not_configured` discovery value does not describe the separately configured GitHub connector.
 
 Keep the debt open for native hard-cap/incremental enforcement capability and exact-current-head follow-up. The private PR #4 BIR ledger records round 1 and canonical unresolved findings; fixes require current-head evidence before merge. No fourth trigger, new review controller, automatic Sol review or human merge authority is introduced. DEBT-AMR-003/004 remain unchanged.
+
+
+## DEBT-AMR-003 partial remediation — 2026-10-21
+
+The owner-requested coordinator efficiency correction removes the default need for another native execution session merely to record local Developer progress. Current-session completion checks referenced real session/turn model context and stores a separate contributor receipt; inspected repository-only failed-task continuation no longer needs repeat design approval. Historical native/recovery checkpoints are unchanged. This resolves the direct-edit completion/bookkeeping gap through an explicitly different evidence kind, not fabricated terminal execution. Native desktop GOAL pause/resume, authenticated active-caller identity and automatic reconnection to ephemeral interrupted runners remain unsupported. DEBT-AMR-003 stays open for those limits; use current-session `step --context` / `finish` by default, and explicit `--native-runner` only when chosen. See the [contract](ai-orchestration/contract.md#current-session-developer-completion).
+
+
+## Checkpoint reconciliation defect — 2026-10-22
+
+FEAT-AMR-001 reproduced a contradictory `dict`/`str` check that made the documented reconciliation CLI unusable. The repair accepts its evidence reference, retains an exact private snapshot, and gives new preparations digest-bound protected-file manifests. Historical records without per-file baselines remain explicit limitations; their original hashes are not reset. Reconciliation captures known findings so recovery cannot hide unresolved provider defects. DEBT-AMR-003 remains open for native Goal-control/authenticated-caller limitations. This bounded tooling repair does not clear the six product findings on PR #10.
