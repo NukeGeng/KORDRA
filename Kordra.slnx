@@ -1,12 +1,45 @@
 <Solution>
+  <Folder Name="/BuildingBlocks/">
+    <Project Path="src/BuildingBlocks/Security/Kordra.BuildingBlocks.Security.csproj" />
+  </Folder>
   <Folder Name="/ArtifactManagement/">
     <Project Path="src/Modules/ArtifactManagement/Domain/Kordra.ArtifactManagement.Domain.csproj" />
     <Project Path="tests/ArtifactManagement.Domain.Tests/ArtifactManagement.Domain.Tests.csproj" />
+  </Folder>
+  <Folder Name="/AuditCompliance/">
+    <Project Path="src/Modules/AuditCompliance/Contracts/Kordra.Modules.AuditCompliance.Contracts.csproj" />
+    <Project Path="src/Modules/AuditCompliance/Kordra.Modules.AuditCompliance.csproj" />
+    <Project Path="tests/AuditCompliance.Tests/AuditCompliance.Tests.csproj" />
   </Folder>
   <Folder Name="/InfrastructureInventory/">
     <Project Path="src/Modules/InfrastructureInventory/Contracts/Kordra.Modules.InfrastructureInventory.Contracts.csproj" />
     <Project Path="src/Modules/InfrastructureInventory/Kordra.Modules.InfrastructureInventory.csproj" />
     <Project Path="src/Host/Kordra.Api/Kordra.Api.csproj" />
     <Project Path="tests/InfrastructureInventory.Bootstrap.Tests/InfrastructureInventory.Bootstrap.Tests.csproj" />
+  </Folder>
+  <Folder Name="/src/" />
+  <Folder Name="/src/BuildingBlocks/" />
+  <Folder Name="/src/BuildingBlocks/Security/" />
+  <Folder Name="/src/Host/">
+    <Project Path="src/Host/Kordra.DbMigrator/Kordra.DbMigrator.csproj" />
+  </Folder>
+  <Folder Name="/src/Modules/" />
+  <Folder Name="/src/Modules/AuditCompliance/" />
+  <Folder Name="/src/Modules/AuditCompliance/Contracts/" />
+  <Folder Name="/src/Modules/IdentityAccess/">
+    <Project Path="src/Modules/IdentityAccess/Kordra.Modules.IdentityAccess.csproj" />
+  </Folder>
+  <Folder Name="/src/Modules/IdentityAccess/Contracts/">
+    <Project Path="src/Modules/IdentityAccess/Contracts/Kordra.Modules.IdentityAccess.Contracts.csproj" />
+  </Folder>
+  <Folder Name="/src/Modules/TenantManagement/">
+    <Project Path="src/Modules/TenantManagement/Kordra.Modules.TenantManagement.csproj" />
+  </Folder>
+  <Folder Name="/src/Modules/TenantManagement/Contracts/">
+    <Project Path="src/Modules/TenantManagement/Contracts/Kordra.Modules.TenantManagement.Contracts.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/IdentityAccess.Tests/IdentityAccess.Tests.csproj" />
+    <Project Path="tests/TenantManagement.Tests/TenantManagement.Tests.csproj" />
   </Folder>
 </Solution>

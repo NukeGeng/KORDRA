@@ -4,6 +4,10 @@ using System.Reflection.PortableExecutable;
 using System.Text.Json;
 using System.Xml.Linq;
 using Kordra.Api;
+using Kordra.BuildingBlocks.Security;
+using Kordra.Modules.AuditCompliance.Contracts;
+using Kordra.Modules.AuditCompliance.Infrastructure;
+using Kordra.Modules.IdentityAccess.Authentication;
 using Kordra.Modules.InfrastructureInventory;
 using Kordra.Modules.InfrastructureInventory.Contracts;
 using Microsoft.AspNetCore.Builder;
@@ -17,8 +21,19 @@ public sealed class ArchitectureTests
     private const string Inventory = "src/Modules/InfrastructureInventory/Kordra.Modules.InfrastructureInventory.csproj";
     private const string Host = "src/Host/Kordra.Api/Kordra.Api.csproj";
     private const string Artifact = "src/Modules/ArtifactManagement/Domain/Kordra.ArtifactManagement.Domain.csproj";
+    private const string IdentityAccess = "src/Modules/IdentityAccess/Kordra.Modules.IdentityAccess.csproj";
+    private const string IdentityContracts = "src/Modules/IdentityAccess/Contracts/Kordra.Modules.IdentityAccess.Contracts.csproj";
+    private const string TenantContracts = "src/Modules/TenantManagement/Contracts/Kordra.Modules.TenantManagement.Contracts.csproj";
+    private const string TenantManagement = "src/Modules/TenantManagement/Kordra.Modules.TenantManagement.csproj";
+    private const string TenantTests = "tests/TenantManagement.Tests/TenantManagement.Tests.csproj";
+    private const string AuditContracts = "src/Modules/AuditCompliance/Contracts/Kordra.Modules.AuditCompliance.Contracts.csproj";
+    private const string AuditCompliance = "src/Modules/AuditCompliance/Kordra.Modules.AuditCompliance.csproj";
+    private const string Security = "src/BuildingBlocks/Security/Kordra.BuildingBlocks.Security.csproj";
+    private const string DbMigrator = "src/Host/Kordra.DbMigrator/Kordra.DbMigrator.csproj";
     private const string BootstrapTests = "tests/InfrastructureInventory.Bootstrap.Tests/InfrastructureInventory.Bootstrap.Tests.csproj";
     private const string ArtifactTests = "tests/ArtifactManagement.Domain.Tests/ArtifactManagement.Domain.Tests.csproj";
+    private const string IdentityTests = "tests/IdentityAccess.Tests/IdentityAccess.Tests.csproj";
+    private const string AuditTests = "tests/AuditCompliance.Tests/AuditCompliance.Tests.csproj";
 
     [Fact]
     public void ProductProjects_EnforceActualXmlGraphAndRestoredDependencies()
@@ -27,7 +42,7 @@ public sealed class ArchitectureTests
         var graph = ApprovedGraph(root);
         foreach (var (project, references) in graph)
         {
-            Assert.Empty(ProjectViolations(project, references));
+            Assert.Empty(ProjectViolations(project, references, ApprovedPackages(root, project)));
             AssertRestoredGraph(project, references);
         }
         Assert.False(HasCycle(graph.Keys.ToDictionary(project => project, ReadProjectEdges, StringComparer.Ordinal)));
@@ -40,7 +55,34 @@ public sealed class ArchitectureTests
         var solution = XDocument.Load(Path.Combine(root, "Kordra.slnx"));
         var solutionProjects = solution.Descendants("Project")
             .Select(element => Absolute(root, RequiredAttribute(element, "Path"))).Order().ToArray();
-        Assert.Equal(graph.Keys.Concat([Absolute(root, BootstrapTests), Absolute(root, ArtifactTests)]).Order(), solutionProjects);
+        Assert.Equal(graph.Keys.Concat([
+            Absolute(root, BootstrapTests), Absolute(root, ArtifactTests), Absolute(root, IdentityTests),
+            Absolute(root, AuditTests), Absolute(root, TenantTests)
+        ]).Order(), solutionProjects);
+        var solutionList = new ProcessStartInfo("dotnet")
+        {
+            WorkingDirectory = root,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            UseShellExecute = false
+        };
+        solutionList.ArgumentList.Add("sln");
+        solutionList.ArgumentList.Add(Path.Combine(root, "Kordra.slnx"));
+        solutionList.ArgumentList.Add("list");
+        using (var process = Process.Start(solutionList) ?? throw new InvalidOperationException("dotnet sln could not start."))
+        {
+            var exited = process.WaitForExit(15_000);
+            Assert.True(exited, "dotnet sln list did not finish within its bound.");
+            var output = process.StandardOutput.ReadToEnd();
+            var error = process.StandardError.ReadToEnd();
+            Assert.True(process.ExitCode == 0, $"dotnet sln list failed: {error}");
+            var listedProjects = output.Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries)
+                .Select(line => line.Trim())
+                .Where(line => line.EndsWith(".csproj", StringComparison.OrdinalIgnoreCase))
+                .Select(path => Absolute(root, path))
+                .Order().ToArray();
+            Assert.Equal(solutionProjects, listedProjects);
+        }
         var actualProductProjects = Directory.EnumerateFiles(Path.Combine(root, "src"), "*.csproj", SearchOption.AllDirectories)
             .Where(path => !IsBuildOutput(path)).Order().ToArray();
         Assert.Equal(graph.Keys.Order(), actualProductProjects);
@@ -72,6 +114,23 @@ public sealed class ArchitectureTests
         Assert.All(tests.Descendants("PackageReference"), element => Assert.Equal("all", (string?)element.Attribute("PrivateAssets")));
         Assert.Equal(new[] { Absolute(root, Host), Absolute(root, Inventory), Absolute(root, Contracts) }.Order(),
             ReadProjectEdges(Absolute(root, BootstrapTests)).Order());
+        Assert.Equal(new[] { Absolute(root, Host), Absolute(root, DbMigrator), Absolute(root, IdentityAccess), Absolute(root, Security) }.Order(),
+            ReadProjectEdges(Absolute(root, IdentityTests)).Order());
+        Assert.Equal(new[] { Absolute(root, Host), Absolute(root, DbMigrator), Absolute(root, IdentityAccess),
+            Absolute(root, TenantManagement), Absolute(root, Security) }.Order(), ReadProjectEdges(Absolute(root, TenantTests)).Order());
+        var tenantTests = XDocument.Load(Absolute(root, TenantTests));
+        Assert.Equal(pinned.OrderBy(pair => pair.Key), tenantTests.Descendants("PackageReference").ToDictionary(
+            element => RequiredAttribute(element, "Include"), element => RequiredAttribute(element, "Version")).OrderBy(pair => pair.Key));
+        Assert.All(tenantTests.Descendants("PackageReference"), element => Assert.Equal("all", (string?)element.Attribute("PrivateAssets")));
+        var auditTests = XDocument.Load(Absolute(root, AuditTests));
+        var auditPackages = auditTests.Descendants("PackageReference").ToDictionary(
+            element => RequiredAttribute(element, "Include"), element => RequiredAttribute(element, "Version"));
+        Assert.Equal(pinned.OrderBy(pair => pair.Key), auditPackages.OrderBy(pair => pair.Key));
+        Assert.All(auditTests.Descendants("PackageReference"), element => Assert.Equal("all", (string?)element.Attribute("PrivateAssets")));
+        Assert.Equal(new[]
+        {
+            Absolute(root, Host), Absolute(root, DbMigrator), Absolute(root, AuditCompliance), Absolute(root, AuditContracts)
+        }.Order(), ReadProjectEdges(Absolute(root, AuditTests)).Order());
     }
 
     [Fact]
@@ -82,20 +141,57 @@ public sealed class ArchitectureTests
         var contracts = ReadAssembly(typeof(IInventoryReader).Assembly.Location);
         var inventory = ReadAssembly(typeof(UnavailableInventoryReader).Assembly.Location);
         var host = ReadAssembly(typeof(LocalApiHost).Assembly.Location);
+        var identity = ReadAssembly(typeof(LocalAuthenticationService).Assembly.Location);
+        var auditContracts = ReadAssembly(typeof(IAuditAppendPort).Assembly.Location);
+        var audit = ReadAssembly(typeof(AuditAppendStore).Assembly.Location);
+        var security = ReadAssembly(typeof(FairAsyncReaderWriterAdmissionGate).Assembly.Location);
+        var identityContracts = ReadAssembly(typeof(Kordra.Modules.IdentityAccess.Contracts.IRoleDefinitionReader).Assembly.Location);
+        var tenantContracts = ReadAssembly(typeof(Kordra.Modules.TenantManagement.Contracts.ITenantSubjectReader).Assembly.Location);
+        var tenant = ReadAssembly(typeof(Kordra.Modules.TenantManagement.TenantMembershipService).Assembly.Location);
         var artifact = ReadAssembly(ArtifactOutput());
+        var persistencePackages = new[]
+        {
+            "Microsoft.AspNetCore.Identity.EntityFrameworkCore",
+            "Microsoft.EntityFrameworkCore",
+            "Microsoft.EntityFrameworkCore.Relational",
+            "Microsoft.EntityFrameworkCore.Abstractions",
+            "Npgsql.EntityFrameworkCore.PostgreSQL",
+            "Npgsql"
+        };
 
         Assert.Empty(AssemblyViolations(contracts, core));
         Assert.Empty(AssemblyViolations(inventory, core.Append(contracts.Name)));
-        Assert.Empty(AssemblyViolations(host, core.Concat(web).Concat([contracts.Name, inventory.Name])));
+        Assert.Empty(AssemblyViolations(host, core.Concat(web).Concat(persistencePackages).Concat(
+            [contracts.Name, inventory.Name, identity.Name, identityContracts.Name, tenant.Name, auditContracts.Name, audit.Name])));
+        Assert.Empty(AssemblyViolations(identityContracts, core));
+        Assert.Empty(AssemblyViolations(tenantContracts, core));
+        Assert.Empty(AssemblyViolations(identity, core.Concat(web).Concat(persistencePackages).Concat([identityContracts.Name, auditContracts.Name, security.Name])));
+        Assert.Empty(AssemblyViolations(tenant, core.Concat(persistencePackages).Concat([tenantContracts.Name, identityContracts.Name, auditContracts.Name, security.Name])));
+        Assert.Equal(new[] { tenantContracts.Name, identityContracts.Name, auditContracts.Name, security.Name }.Order(),
+            tenant.References.Where(x => x.StartsWith("Kordra.", StringComparison.Ordinal)).Order());
+        Assert.DoesNotContain(tenant.Types, x => x.StartsWith("Kordra.Modules.TenantManagement.Contracts.", StringComparison.Ordinal));
+        Assert.DoesNotContain(identity.Types, x => x.StartsWith("Kordra.Modules.IdentityAccess.Contracts.", StringComparison.Ordinal));
+        Assert.Empty(AssemblyViolations(security, core));
+        Assert.Empty(AssemblyViolations(auditContracts, core));
         Assert.Empty(AssemblyViolations(artifact, core));
         Assert.Contains(contracts.Name, inventory.References);
         Assert.Contains(inventory.Name, host.References);
         Assert.Contains(contracts.Name, host.References);
+        var hostProductReferences = host.References.Where(reference => new[]
+            { contracts.Name, inventory.Name, identity.Name, tenant.Name, auditContracts.Name, audit.Name }
+            .Contains(reference, StringComparer.Ordinal)).Order(StringComparer.Ordinal);
+        Assert.Equal(new[] { contracts.Name, inventory.Name, identity.Name, tenant.Name, auditContracts.Name, audit.Name }
+            .Order(StringComparer.Ordinal), hostProductReferences);
+        Assert.Equal(new[] { auditContracts.Name, security.Name }.Order(StringComparer.Ordinal),
+            identity.References.Where(reference => reference == auditContracts.Name || reference == security.Name)
+                .Order(StringComparer.Ordinal));
+        Assert.Equal(new[] { auditContracts.Name },
+            audit.References.Where(reference => reference == auditContracts.Name));
         Assert.Contains("Kordra.Modules.InfrastructureInventory.Contracts.IInventoryReader", contracts.Types);
         Assert.DoesNotContain(inventory.Types, name => name.StartsWith(
             "Kordra.Modules.InfrastructureInventory.Contracts.", StringComparison.Ordinal));
         Assert.DoesNotContain(inventory.Types.Intersect(contracts.Types), name => name != ".<Module>");
-        var productAssemblies = new[] { contracts, inventory, host, artifact };
+        var productAssemblies = new[] { contracts, inventory, host, identity, auditContracts, audit, security, artifact, identityContracts, tenantContracts, tenant };
         var productNames = productAssemblies.Select(assembly => assembly.Name).ToHashSet(StringComparer.Ordinal);
         Assert.False(HasCycle(productAssemblies.ToDictionary(assembly => assembly.Name,
             assembly => assembly.References.Where(productNames.Contains).ToArray(), StringComparer.Ordinal)));
@@ -171,21 +267,70 @@ public sealed class ArchitectureTests
     {
         [Absolute(root, Contracts)] = [],
         [Absolute(root, Inventory)] = [Absolute(root, Contracts)],
-        [Absolute(root, Host)] = [Absolute(root, Inventory), Absolute(root, Contracts)],
-        [Absolute(root, Artifact)] = []
+        [Absolute(root, Host)] = [Absolute(root, Inventory), Absolute(root, Contracts), Absolute(root, IdentityAccess),
+            Absolute(root, AuditCompliance), Absolute(root, AuditContracts), Absolute(root, TenantManagement)],
+        [Absolute(root, Artifact)] = [],
+        [Absolute(root, IdentityAccess)] = [Absolute(root, AuditContracts), Absolute(root, Security), Absolute(root, IdentityContracts)],
+        [Absolute(root, IdentityContracts)] = [],
+        [Absolute(root, TenantContracts)] = [],
+        [Absolute(root, TenantManagement)] = [Absolute(root, TenantContracts), Absolute(root, IdentityContracts), Absolute(root, AuditContracts), Absolute(root, Security)],
+        [Absolute(root, AuditContracts)] = [],
+        [Absolute(root, AuditCompliance)] = [Absolute(root, AuditContracts)],
+        [Absolute(root, Security)] = [],
+        [Absolute(root, DbMigrator)] = [Absolute(root, IdentityAccess), Absolute(root, AuditCompliance), Absolute(root, TenantManagement)]
     };
 
-    private static List<string> ProjectViolations(string project, IEnumerable<string> allowedReferences)
+    private static IReadOnlyDictionary<string, string> ApprovedPackages(string root, string project)
+    {
+        var identity = Absolute(root, IdentityAccess);
+        var audit = Absolute(root, AuditCompliance);
+        var migrator = Absolute(root, DbMigrator);
+        if (project == audit || project == Absolute(root, TenantManagement))
+        {
+            return new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["Microsoft.EntityFrameworkCore.Design"] = "10.0.11",
+                ["Npgsql.EntityFrameworkCore.PostgreSQL"] = "10.0.3"
+            };
+        }
+        if (project == identity)
+        {
+            return new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["Microsoft.AspNetCore.Identity.EntityFrameworkCore"] = "10.0.11",
+                ["Microsoft.EntityFrameworkCore.Design"] = "10.0.11",
+                ["Npgsql.EntityFrameworkCore.PostgreSQL"] = "10.0.3"
+            };
+        }
+
+        if (project == migrator)
+        {
+            return new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["Microsoft.EntityFrameworkCore.Design"] = "10.0.11"
+            };
+        }
+
+        return new Dictionary<string, string>(StringComparer.Ordinal);
+    }
+
+    private static List<string> ProjectViolations(
+        string project,
+        IEnumerable<string> allowedReferences,
+        IReadOnlyDictionary<string, string>? allowedPackages = null)
     {
         var document = XDocument.Load(project);
         var violations = new List<string>();
         var allowed = allowedReferences.ToHashSet(StringComparer.Ordinal);
         var references = new HashSet<string>(StringComparer.Ordinal);
+        allowedPackages ??= new Dictionary<string, string>(StringComparer.Ordinal);
+        var packages = new HashSet<string>(StringComparer.Ordinal);
         var properties = new Dictionary<string, string>(StringComparer.Ordinal)
         {
             ["TargetFramework"] = "net10.0", ["ImplicitUsings"] = "enable", ["Nullable"] = "enable",
             ["TreatWarningsAsErrors"] = "true", ["RestorePackagesWithLockFile"] = "true"
         };
+        if (project == Absolute(RepositoryRoot(), DbMigrator)) properties["OutputType"] = "Exe";
         var root = document.Root!;
         if (root.Name != "Project" || root.Attributes().Any(attribute => attribute.Name != "Sdk"))
             violations.Add("Unapproved project root/attributes");
@@ -201,6 +346,8 @@ public sealed class ArchitectureTests
                 if (element.Parent != root || element.HasAttributes) violations.Add($"Nested/modified group: {name}");
                 continue;
             }
+            if ((name is "PrivateAssets" or "IncludeAssets") && element.Parent?.Name == "PackageReference")
+                continue; // The package node validates the exact metadata and values.
             if (element.Parent?.Name == "PropertyGroup" && properties.TryGetValue(name, out var value))
             {
                 if (element.HasAttributes || element.HasElements || element.Value != value || root.Descendants(name).Count() != 1)
@@ -220,11 +367,43 @@ public sealed class ArchitectureTests
                 if (!allowed.Contains(target)) violations.Add($"Forbidden project edge: {target}");
                 continue;
             }
+            if (name == "PackageReference" && element.Parent?.Name == "ItemGroup")
+            {
+                var include = (string?)element.Attribute("Include");
+                var version = (string?)element.Attribute("Version");
+                if (include is null || version is null || element.Attributes().Count() != 2 ||
+                    !packages.Add(include) || !allowedPackages.TryGetValue(include, out var expectedVersion) ||
+                    version != expectedVersion)
+                {
+                    violations.Add($"Unapproved package reference: {include ?? "<missing>"}");
+                    continue;
+                }
+
+                var expectedMetadata = include == "Microsoft.EntityFrameworkCore.Design"
+                    ? new Dictionary<string, string>(StringComparer.Ordinal)
+                    {
+                        ["PrivateAssets"] = "all",
+                        ["IncludeAssets"] = "runtime; build; native; contentfiles; analyzers; buildtransitive"
+                    }
+                    : new Dictionary<string, string>(StringComparer.Ordinal);
+                var actualMetadata = element.Elements().ToDictionary(
+                    child => child.Name.LocalName, child => child.Value, StringComparer.Ordinal);
+                if (actualMetadata.Count != expectedMetadata.Count ||
+                    expectedMetadata.Any(pair => actualMetadata.GetValueOrDefault(pair.Key) != pair.Value) ||
+                    element.Elements().Any(child => child.HasAttributes || child.HasElements))
+                {
+                    violations.Add($"Unapproved package metadata: {include}");
+                }
+
+                continue;
+            }
             if (name == "Compile" && (string?)element.Attribute("Remove") == "Contracts/**/*.cs" &&
                 element.Attributes().Count() == 1 && !element.HasElements) continue;
             violations.Add($"Unapproved XML element: {name}");
         }
         foreach (var target in allowed.Except(references)) violations.Add($"Missing declared project edge: {target}");
+        foreach (var package in allowedPackages.Keys.Except(packages, StringComparer.Ordinal))
+            violations.Add($"Missing declared package reference: {package}");
         foreach (var property in properties.Keys)
             if (root.Descendants(property).Count() != 1) violations.Add($"Missing/duplicate required property: {property}");
         return violations;
@@ -238,7 +417,10 @@ public sealed class ArchitectureTests
         var assetsPath = Path.Combine(Path.GetDirectoryName(project)!, "obj", "project.assets.json");
         using var assets = JsonDocument.Parse(File.ReadAllText(assetsPath));
         Assert.All(assets.RootElement.GetProperty("libraries").EnumerateObject(), library =>
-            Assert.Equal("project", library.Value.GetProperty("type").GetString()));
+        {
+            var type = library.Value.GetProperty("type").GetString();
+            Assert.True(type is "project" or "package", $"Unexpected restored library type: {type}");
+        });
         var restored = assets.RootElement.GetProperty("project").GetProperty("restore")
             .GetProperty("frameworks").GetProperty("net10.0").GetProperty("projectReferences")
             .EnumerateObject().Select(reference => Path.GetFullPath(reference.Name)).Order().ToArray();

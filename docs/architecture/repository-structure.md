@@ -7,6 +7,8 @@ last_reviewed: 2026-10-16
 
 # Kordra — Root Repository Structure
 
+**Accepted scoped exception:** [ADR-0013](../decisions/0013-clients-git-submodule.md) preserves the `clients/` location but gives its contents independent Git ownership in KORDRA-Clients. Product records a submodule pin. The remainder of this target architecture stays proposed under ADR-0009; the historical monorepo wording does not override that explicit Git split. See [development workflow](../engineering/clients-development.md).
+
 > **Status: proposed.** Đây là target architecture, không chứng minh các project/file đã tồn tại. Chỉ trở thành baseline sau khi ADR-0009 được phê duyệt; source thực tế, test và Git commit phải được đối chiếu trước khi đánh dấu implemented/verified.
 
 ## 1. Mục tiêu và nguyên tắc
@@ -85,7 +87,7 @@ kordra/
 │       ├── Architecture/
 │       ├── Contract/
 │       └── EndToEnd/
-├── clients/
+├── clients/                    # Independent KORDRA-Clients Git submodule (ADR-0013)
 │   ├── web/                    # Vue 3
 │   ├── desktop/                # Tauri + Vue; shared UI khi có giá trị
 │   └── packages/

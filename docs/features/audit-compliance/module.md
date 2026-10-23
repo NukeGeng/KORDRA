@@ -1,14 +1,14 @@
 ---
 id: MOD-AUD
 status: proposed
-owner: unassigned
-last_reviewed: 2026-10-15
+owner: NukeGeng
+last_reviewed: 2026-10-21
 module_id: MOD-AUD
 ---
 
 # Audit & Governance Ledger — module definition
 
-**Module ID:** `MOD-AUD` · **Phase:** MVP · **Owner:** unassigned (assign before acceptance).
+**Module ID:** `MOD-AUD` · **Phase:** MVP · **Owner:** NukeGeng (accountable for ADR-0012 Foundation T01–T07; wider module scope remains proposed).
 
 ## Responsibility and boundary
 Audit & Governance Ledger owns: **AuditRecord, PolicyDecisionAudit, OperationTimeline**. Không nhận ownership business của module khác. Giao tiếp bằng commands/events hoặc read contracts, không query trực tiếp internal storage của context khác.
@@ -35,7 +35,7 @@ Audit sink down, unauthorized purge, event timeline ambiguous. Đây là test đ
 - [FEAT-AUD-001 — Tamper-evident privileged action audit trail](features/immutable-audit.md)
 
 ## Implementation mapping
-`source_paths: []` và `test_paths: []` có nghĩa **chưa đối chiếu repository thật**. Sau khi có code, bổ sung path, commit/test evidence ở mỗi feature, không điền đường dẫn dự đoán.
+FEAT-AUD-001 maps the T02 append/lookup foundation to actual AUD, DbMigrator and PostgreSQL test paths; its 34 isolated tests and full deterministic gates pass locally. The original native T02 checkpoint remains failed without an execution receipt; a separate T02 evidence-recovery successor now records the inspected completion without replay, as detailed in the owner feature. The broader module and query/export capabilities remain proposed.
 
 ## Definition of done
 Tuân thủ [DoD](../../engineering/definition-of-done.md), [module boundaries](../../engineering/module-boundaries.md), [architecture](../../architecture/bounded-contexts.md).

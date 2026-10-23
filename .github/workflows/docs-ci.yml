@@ -4,6 +4,20 @@ on:
   push:
     branches: [main, develop]
 jobs:
+  clients-pin:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Verify exact Clients pin in a fresh checkout
+        run: python3 docs/tooling/submodulecheck.py --require-checkout
   docs-integrity:
     runs-on: ubuntu-latest
     steps:

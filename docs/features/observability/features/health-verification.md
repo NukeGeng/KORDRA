@@ -2,7 +2,7 @@
 id: FEAT-OBS-001
 status: proposed
 owner: unassigned
-last_reviewed: 2026-10-15
+last_reviewed: 2026-10-20
 module_id: MOD-OBS
 feature_id: FEAT-OBS-001
 phase: MVP core / Phase 2 full
@@ -11,6 +11,15 @@ test_paths: []
 ---
 
 # FEAT-OBS-001 — Verify deployment health and publish scoped status
+
+## Read-only status and deployment verification slices — proposed 2026-10-20
+
+Luna T09 supplies scoped read-only observations; T13 adds verification evidence consumed by DEP. Actor authorized User with `target.read`/`project.read` at catalog scope, or exact delegated worker identity. OBS owns HealthPolicy/ProbeResult/StatusProjection; INV owns inventory/target identity and DEP owns final deployment outcome. Freshness/coverage/source revision and current disclosure authority are independent: a current grant never makes stale data healthy.
+
+Before adapter code, approve probe destinations/SSRF/TLS policy, signal-specific freshness/clock/deadline limits and bounded result DTOs. OP-P0 can label unknown/unavailable/stale without pretending health verification is implemented. M2 verification compares observed target/workload/image digest, rollout readiness and approved health requirements with frozen intent; UI projections are not deployment authority. No secret-bearing raw logs/manifests, unbounded stream or cross-tenant subscription is enabled by this first slice.
+
+Acceptance OBS-V1: healthy requires fresh identity-bound coverage for every policy condition. OBS-V2: old/future/missing timestamps, partial coverage, wrong target/digest, denied credentials and network failure cannot pass as healthy. OBS-V3: selection/revoke while data waits prevents unauthorized disclosure; bounded polls never reuse another tenant's cached data. OBS-V4: failed/unknown verification reaches DEP safely with correlation and redacted evidence; fake probe success alone does not establish real rollout. Follow [handoff](../../../engineering/luna-implementation-handoff.md) and contract fixtures before clients integration.
+
 
 ## User story / outcome
 **Actor:** System / Operator. **Goal:** Verify deployment health and publish scoped status. **Primary owner:** `MOD-OBS`. **Phase:** MVP core / Phase 2 full.

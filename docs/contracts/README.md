@@ -2,10 +2,19 @@
 id: CTR-INDEX
 status: proposed
 owner: unassigned
-last_reviewed: 2026-10-15
+last_reviewed: 2026-10-20
 ---
 
 # Public contracts and compatibility
+
+## Delivery contracts and current adoption status
+
+- [Local authentication v1](local-authentication-v1.md) — accepted for Foundation T01–T07; FEAT-IAM-002 browser/session contract and numeric bounds.
+- [Authority/admission v1](authority-admission-v1.md) — accepted for Foundation T01–T07; owner facts, management DTOs, single-process ordering and AUD intent/idempotency.
+- [Client API handoff v1](client-api-handoff-v1.md) — proposed independently owned clients integration, schemas and UI states.
+- [Release/execution v1](release-execution-v1.md) — proposed immutable release/approval, operation transitions, durable delivery and verification/rollback.
+
+The delivery design and ADR-0012 distinguish accepted runtime contracts from proposed future contracts. The accepted contracts remain unimplemented until source and tests provide evidence; none grants permission to operate targets.
 
 Ở đây lưu chuẩn được nhiều module dùng chung, không thay thế feature specs của owner. [Permissions](permissions.md), [Message catalog](message-catalog.md), [Message envelope](message-envelope.md), [Driver contract](driver-contract.md), [Agent protocol](agent-protocol.md), [API guidelines](api-guidelines.md), [Error codes](error-codes.md).
 

@@ -2,7 +2,7 @@
 id: DOC-README
 status: proposed
 owner: unassigned
-last_reviewed: 2026-10-18
+last_reviewed: 2026-10-20
 ---
 
 # Tổng mục lục tài liệu
@@ -22,6 +22,7 @@ last_reviewed: 2026-10-18
 | Evidence lifecycle & AI tool boundary | [`engineering/status-evidence-policy.md`](engineering/status-evidence-policy.md), [`engineering/ai-tooling-boundary.md`](engineering/ai-tooling-boundary.md) |
 | Kiến trúc / component | [`architecture/`](architecture/README.md) |
 | Source tree / .NET solution structure | [Architecture proposal and repository audit](architecture/README.md), [ADR-0009](decisions/0009-source-architecture.md) |
+| Product / frontend repository ownership | [Clients submodule workflow](engineering/clients-development.md), [accepted narrow ADR-0012](decisions/0013-clients-git-submodule.md) |
 | Tại sao đã chọn X? | [`decisions/`](decisions/README.md) |
 | Module nào sở hữu nghiệp vụ? | [`governance/module-feature-definition.md`](governance/module-feature-definition.md), [`features/`](features/README.md) |
 | Thay đổi permission hoặc Super Admin | [`architecture/security-multitenancy.md`](architecture/security-multitenancy.md), [`contracts/permissions.md`](contracts/permissions.md) |
@@ -62,3 +63,7 @@ Nhiều tài liệu vẫn là `proposed`; đọc trạng thái từng file. ADR-
 ### Narrow authorization baseline
 
 [ADR-0003](decisions/0003-tenant-authorization.md) is human-accepted for the bounded permission/trusted-resource-scope policy baseline. This does not accept IAM runtime, authentication/session/storage, the whole permission catalog or positive inventory access. See [current roadmap](product/roadmap.md) for remaining contract prerequisites.
+
+### Comprehensive feature design and Luna handoff — 2026-10-20
+
+Read the [delivery design](architecture/control-plane-delivery-design.md), [Luna tasks](engineering/luna-implementation-handoff.md), [local authentication feature](features/identity-access/features/local-account-session.md) and [accepted scoped ADR-0012](decisions/0012-operator-pilot-runtime-foundation.md). Foundation T01–T07 and their narrow runtime contracts are accepted; later provider/distributed-workflow choices remain proposed. Product implementation and test evidence are tracked by their owner features.

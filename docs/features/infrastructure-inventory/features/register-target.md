@@ -1,8 +1,8 @@
 ---
 id: FEAT-INV-001
 status: proposed
-owner: unassigned
-last_reviewed: 2026-10-19
+owner: NukeGeng
+last_reviewed: 2026-10-20
 module_id: MOD-INV
 feature_id: FEAT-INV-001
 phase: MVP
@@ -11,6 +11,15 @@ test_paths: ["tests/InfrastructureInventory.Bootstrap.Tests/InfrastructureInvent
 ---
 
 # FEAT-INV-001 — Register infrastructure target and discover capability
+
+## Product delivery slices — T05/T07 approved; T09 remains proposed (2026-10-20)
+
+The implementation handoff separates T05 registration, T07 enforced fake read and T09 real OP-P0 reads. Accepted ADR-0012 and authority/admission v1 adopt the T05/T07 metadata/read contracts. T05 creates stable Active/Disabled/Deleted target identity, exact tenant/project/environment and revision under target.manage; no credential/provider call. IDs are never reused. T07 requires trusted target.read, U/D audit and actual output-count race assertions; fakes never become production authority. These slices are approved for implementation, not yet implemented.
+
+T09 consumes reviewed SEC binding and independently verified cluster/context identity. Approve exact Kubernetes/Helm resources/verbs/fields, supported SDK/CLI versions, TLS and secret-bearing metadata exclusions before provider integration. target.read implies no Secrets/exec/values/manifests/write permission. Proposed read envelope: schemaVersion=1, exact target/selection/binding, capturedAtUtc, coverage/freshness and bounded sanitized resources. Missing/partial/stale coverage is explicit; network/auth failure is not observed unhealthy. No namespace/context fallback.
+
+Acceptance INV-F1: idempotent registration with foreign ownership/conflicting binding/stale ETag denial. INV-F2: actual HTTP enforcer with delayed provider, scope switch/revoke, oversize/audit failure releases no unauthorized output. INV-P0: zero mutation calls, exact target identity/allowlist, finite timeouts/freshness and secret-free errors, plus separately authorized live evidence for actual OP-P0. Preserve old denied paths/BCL consumers until explicit migration; versioned positive API examples and consumer tests are required. Live target access is not authorized by this design.
+
 
 ## User story / outcome
 **Actor:** Operator / Tenant Admin. **Goal:** Register infrastructure target and discover capability. **Primary owner:** `MOD-INV`. **Phase:** MVP.
@@ -31,6 +40,12 @@ Unreachable target becomes Pending/Unknown; stale discovery cannot support a suc
 - Principal verified, permission key from [catalog](../../../contracts/permissions.md) and resource owner resolved from trusted store.
 - The `organization_id`/scope is validated on read, write, event handler and any background job.
 - Audit sensitive decisions with `actorRef`, `resourceRef`, `correlationId`, policy version.
+
+### I2 runtime-authority handoff — proposed
+
+For the bounded candidate in [FEAT-IAM-001/I2](../../identity-access/features/authorize-resource.md#i2--runtime-authority-contract-increment-proposed), MOD-INV remains the source of target identity, lifecycle eligibility, target revision and tenant/project/environment associations. Those metadata facts do not prove provider identity, credential validity or observed inventory; those remain separate owner decisions. Resolve the target side of each association against MOD-PRJ's authoritative result. Missing, disabled, ambiguous, stale or unavailable target evidence denies access and must not reveal cross-tenant existence.
+
+At the original I2.7 proposal, formal ownership and exact lifecycle states eligible for read were unresolved. Accepted ADR-0012 assigns NukeGeng accountability for the approved Foundation slice and MOD-INV ownership of target identity/lifecycle facts. T09 provider access remains separately proposed; the existing local API inventory denial remains unchanged until T06/T07 implementation evidence passes.
 
 ## Negative & recovery scenarios
 Bind agent from different org; namespace outside permission; insecure certificate bypass.
@@ -218,3 +233,16 @@ The finalization above is **local task acceptance** only. ADR-0010's clean GitHu
 PR #2's first `artifact-domain` run failed in `CompiledNegativeFixtures_RejectActualRuntimeAndArtifactAssemblyEdges` before fixture compilation: the sanitized child process pointed `HOME` at a path that did not exist, and Linux .NET could not initialize NuGet's named migration mutex without a valid runtime directory ([failed CI run](https://github.com/NukeGeng/KORDRA/actions/runs/39188376089)). The fixture now creates its isolated HOME and CLI-home first, then supplies a user-only `XDG_RUNTIME_DIR` on Linux. Its empty NuGet source list, product assembly inputs, forbidden-edge assertions and cleanup bounds are unchanged. The upstream runtime behavior is tracked in [dotnet/runtime #135726](https://github.com/dotnet/runtime/issues/135726).
 
 Current local verification: the targeted fixture passed on macOS. A sanitized tracked-file checkout with the corrected test passed locked restore, Release build (zero warnings/errors), and the exact root test command in `mcr.microsoft.com/dotnet/sdk:10.0.400` on Linux: Artifact 48/48 and Inventory Bootstrap 85/85, zero skipped. Hosted `docs-integrity` and `artifact-domain` checks then passed on implementation commit [`38da931`](https://github.com/NukeGeng/KORDRA/commit/38da931edae3c36182c46712502b242598f9e0da): [documentation run](https://github.com/NukeGeng/KORDRA/actions/runs/39188847531) and [product run](https://github.com/NukeGeng/KORDRA/actions/runs/39188847534). This validates the bootstrap increment on that SHA; it does not complete full FEAT-INV-001 registration.
+
+
+## Shared Foundation composition — T01–T03 implementation boundary
+
+T01 adds IAM persistence and its separate migrator/tests; T02 adds AUD Contracts/persistence/tests and the AUD migrator command. T03 adds IAM/AUD/Security project composition for the explicitly selected local-pilot authentication profile. The default API profile remains health-only with inventory routes denied, and the local-pilot profile also denies inventory routes. Shared product CI uses disposable loopback PostgreSQL fixtures. Architecture tests constrain the exact project and assembly graph and verify that `dotnet sln list` sees every solution project.
+
+## T04 shared composition boundary — 2026-10-22
+
+The shared root solution/API graph and restored lock files now include IAM definition Contracts and TEN persistence for accepted ADR-0012. ArchitectureTests explicitly checks their allowed XML/restored/PE dependencies and Contracts isolation while retaining compiled forbidden-edge fixtures. No inventory source, positive route, provider registration or protected response behavior changed. TEN requires a future trusted PRJ/INV scope-owner adapter; there is no permissive substitute. Existing denied inventory HTTP tests remain required.
+
+## T04 shared PostgreSQL fixture scheduling — 2026-10-22
+
+The canonical Product CI and existing amr.py deterministic gate now pass MSBuild -m:1 to the solution test command, so separate Product test projects run sequentially. AUD saturation tests deliberately acquire ACCESS EXCLUSIVE on the shared isolated aud_intents table; running new TEN fixture provisioning concurrently produced legitimate bounded unavailable results. Project serialization preserves every assertion, timeout, failure fixture and test count, and changes no product runtime or AMR routing/review/checkpoint policy. No Website process, service or test is involved.

@@ -2,7 +2,7 @@
 id: FEAT-MSG-001
 status: proposed
 owner: unassigned
-last_reviewed: 2026-10-15
+last_reviewed: 2026-10-20
 module_id: MOD-MSG
 feature_id: FEAT-MSG-001
 phase: MVP
@@ -11,6 +11,13 @@ test_paths: []
 ---
 
 # FEAT-MSG-001 — Durable command delivery and recovery
+
+## Independent worker delivery slice — proposed 2026-10-20
+
+Luna T12 MSG task follows accepted release/approval behavior. Adopt ADR-0002's exact package/store/envelope/retention/retry configuration and worker identity before runtime changes; the current proposed Wolverine direction is not installed by this design. [Release-execution v1](../../../contracts/release-execution-v1.md) requires atomic business intent/outbox, inbox dedup, commit-before-ACK and sanitized DLQ. MSG is internal operations delivery, not customer/business queue administration. No event candidates become live topics until owner/consumers and schema are registered.
+
+Acceptance MSG-D1: kill before/after state+outbox commit and ACK; no tested committed command is lost and duplicate results do not duplicate logical effects. MSG-D2: wrong tenant/origin/expired authorization/schema rejects or quarantines without infinite retry. MSG-D3: bounded transient retry/deadline, DLQ metrics and explicit replay guards are verified; unknown provider outcome never causes blind execution redrive. MSG-D4: rolling compatible envelope fixtures and isolated database migration/restart tests pass. Message dedup is not proof of exactly-once provider effects. Worker hosting/authority protocol is a separate accepted gate; no broker/service is started here.
+
 
 ## User story / outcome
 **Actor:** System / Platform Operator. **Goal:** Durable command delivery and recovery. **Primary owner:** `MOD-MSG`. **Phase:** MVP.

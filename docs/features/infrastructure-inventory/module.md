@@ -1,14 +1,14 @@
 ---
 id: MOD-INV
 status: proposed
-owner: unassigned
+owner: NukeGeng
 last_reviewed: 2026-10-18
 module_id: MOD-INV
 ---
 
 # Infrastructure Inventory — module definition
 
-**Module ID:** `MOD-INV` · **Phase:** MVP · **Owner:** unassigned (assign before acceptance).
+**Module ID:** `MOD-INV` · **Phase:** MVP · **Owner:** NukeGeng (accountable for ADR-0012 Foundation T01–T07; wider module scope remains proposed).
 
 ## Responsibility and boundary
 Infrastructure Inventory owns: **Target, ClusterRef, NodeSnapshot, TargetCapability, OwnershipMode**. Không nhận ownership business của module khác. Giao tiếp bằng commands/events hoặc read contracts, không query trực tiếp internal storage của context khác.

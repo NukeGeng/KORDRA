@@ -1,5 +1,6 @@
 """Offline acceptance/regression tests. Native calls are separate opt-in probes."""
 import copy
+import datetime
 import json
 from pathlib import Path
 import subprocess
@@ -158,7 +159,10 @@ class Context(unittest.TestCase):
         (self.root/'source.py').write_text('x=1\n')
         (self.root/'spec.md').write_text('---\nfeature_id: FEAT-AMR-001\n'
             'module_id: ENG-TOOLING\nstatus: accepted\nsource_paths: ["source.py"]\n'
-            'test_paths: []\n---\nspec\n')
+            'test_paths: []\nplanned_source_paths: ["generated.py"]\n'
+            'planned_test_paths: ["generated_test.py"]\n'
+            'planned_doc_paths: ["planned.md", "spec.md", "other.md"]\n'
+            '---\nspec\n')
 
     def tearDown(self): self.tmp.cleanup()
 
@@ -186,6 +190,48 @@ class Context(unittest.TestCase):
         (self.root/'other.py').write_text('x=1')
         t=task();t['paths']=['other.py']
         with self.assertRaisesRegex(ValueError,'mapped'):amr.validate_task(t,self.root)
+
+    def test_explicit_owner_mapped_outputs_allow_new_and_existing_files(self):
+        t=task(); t.update(output_paths=['generated.py', 'planned.md'],
+                           write_paths=['generated.py', 'planned.md'])
+        amr.validate_task(t,self.root)
+        self.assertFalse((self.root/'generated.py').exists())
+        (self.root/'generated.py').write_text('value = 2\n')
+        (self.root/'planned.md').write_text('planned output\n')
+        self.assertEqual(amr.validate_task(t,self.root)['output_paths'],['generated.py','planned.md'])
+
+    def test_matching_owner_feature_can_be_updated_to_map_created_source_and_tests(self):
+        t=task(); outputs=['generated.py', 'generated_test.py', 'spec.md']
+        t.update(output_paths=outputs, write_paths=outputs)
+        amr.validate_task(t,self.root)
+        (self.root/'generated.py').write_text('value = 2\n')
+        (self.root/'generated_test.py').write_text('assert True\n')
+        spec=self.root/'spec.md'
+        spec.write_text(spec.read_text().replace(
+            'source_paths: ["source.py"]',
+            'source_paths: ["source.py", "generated.py"]').replace(
+            'test_paths: []', 'test_paths: ["generated_test.py"]'))
+        normalized=amr.validate_task(t,self.root)
+        self.assertIn('test_paths: ["generated_test.py"]', spec.read_text())
+        self.assertFalse(normalized['tests_known'])
+
+    def test_only_matching_owner_feature_may_overlap_consulted_and_output_paths(self):
+        (self.root/'other.md').write_text('Other consulted document\n')
+        t=task(); t['consulted'].append('other.md')
+        t.update(output_paths=['other.md'], write_paths=['other.md'])
+        with self.assertRaisesRegex(ValueError, 'only the matching owner feature'):
+            amr.validate_task(t,self.root)
+
+    def test_unmapped_duplicate_escaping_and_symlink_outputs_rejected(self):
+        for outputs in (['unmapped.py'], ['source.py'], ['../outside.py'],
+                        ['.amr-local/receipt.json'], ['/tmp/out.py']):
+            t=task(); t['output_paths']=outputs
+            with self.subTest(outputs=outputs), self.assertRaises(ValueError):
+                amr.validate_task(t,self.root)
+        (self.root/'linked').symlink_to(self.root.parent)
+        t=task(); t['output_paths']=['linked/new.py']
+        with self.assertRaisesRegex(ValueError,'symlink'):
+            amr.validate_task(t,self.root)
 
     def test_proposed_spec_cannot_be_claimed_verified(self):
         p=self.root/'spec.md';p.write_text(p.read_text().replace('accepted','proposed'))
@@ -719,11 +765,18 @@ class Mapping(unittest.TestCase):
     def test_feature_must_be_updated_for_tooling_and_tests(self):
         root=amr.ROOT
         spec='docs/engineering/ai-orchestration/features/quality-first-amr.md'
+        clients_spec='docs/engineering/ai-orchestration/features/clients-repository.md'
+        shared={'docs/tooling/amr.py','.github/workflows/docs-ci.yml'}
         for path in ('docs/tooling/amr.py','docs/tooling/tests/test_amr.py',
                      '.codex/config.toml','.github/workflows/docs-ci.yml'):
             _,errors=changeguard.check_changes(root,{path})
-            self.assertTrue(any('STALE' in e for e in errors))
+            self.assertTrue(any('STALE' in e and spec in e for e in errors))
             _,errors=changeguard.check_changes(root,{path,spec})
+            if path in shared:
+                self.assertTrue(any('STALE' in e and clients_spec in e for e in errors))
+                _,errors=changeguard.check_changes(root,{path,clients_spec})
+                self.assertTrue(any('STALE' in e and spec in e for e in errors))
+                _,errors=changeguard.check_changes(root,{path,spec,clients_spec})
             self.assertEqual(errors,[])
 
     def test_unmapped_source_fails(self):
@@ -793,6 +846,95 @@ class Mapping(unittest.TestCase):
 
 
 class Gates(unittest.TestCase):
+    def cached_fixture(self):
+        tmp=tempfile.TemporaryDirectory(); self.addCleanup(tmp.cleanup)
+        root=Path(tmp.name)
+        for name,text in {'Kordra.slnx':'<Solution />','Source.cs':'class Source {}',
+                          'Tests.cs':'class Tests {}','AGENTS.md':'Rules',
+                          'docs/spec.md':'Feature spec','NuGet.Config':'<configuration />'}.items():
+            p=root/name;p.parent.mkdir(parents=True,exist_ok=True);p.write_text(text)
+        def command(cmd,**kwargs):
+            return subprocess.CompletedProcess(cmd,0,'stable SDK' if cmd==['dotnet','--info'] else 'passed','')
+        self.run=self.enterContext(patch.object(amr.subprocess,'run',side_effect=command))
+        return root,amr.gates(root,'base',validation_context='fixture-epoch-1')
+
+    def test_docs_only_change_reuses_product_but_runs_docs_mapping_and_tooling_tests(self):
+        root,previous=self.cached_fixture();(root/'docs/spec.md').write_text('Updated behavior evidence')
+        result=amr.gates(root,'base',reuse=previous,validation_context='fixture-epoch-1')
+        self.assertEqual(result['local_status'],'passed')
+        self.assertNotEqual(previous['content'],result['content'])
+        self.assertEqual({c['name'] for c in result['checks'] if c['execution']=='reused'},
+                         {'product-restore','product-build','product-test'})
+        for c in result['checks']:
+            if c['execution']=='reused':self.assertEqual(c['reuse']['content'],previous['content'])
+
+    def test_unchanged_inputs_reuse_unit_and_product_with_original_timestamp(self):
+        root,previous=self.cached_fixture()
+        second=amr.gates(root,'base',reuse=previous,validation_context='fixture-epoch-1')
+        third=amr.gates(root,'base',reuse=second,validation_context='fixture-epoch-1')
+        for old,new in zip(previous['checks'],third['checks']):
+            if old['name'] in {'unit','product-restore','product-build','product-test'}:
+                self.assertEqual(new['execution'],'reused')
+                self.assertEqual(new['reuse']['executed_at'],old['executed_at'])
+            else:self.assertEqual(new['execution'],'executed')
+
+    def test_source_tests_config_and_instruction_changes_invalidate_cached_checks(self):
+        root,previous=self.cached_fixture()
+        for name in ('Source.cs','Tests.cs','NuGet.Config','AGENTS.md'):
+            path=root/name;old=path.read_text();path.write_text(old+' changed')
+            with self.subTest(path=name):
+                result=amr.gates(root,'base',reuse=previous,validation_context='fixture-epoch-1')
+                self.assertFalse(any(c['execution']=='reused' for c in result['checks']))
+            path.write_text(old)
+
+    def test_environment_toolchain_and_fixture_epoch_changes_invalidate_reuse(self):
+        root,previous=self.cached_fixture()
+        with patch.dict('os.environ',{'AMR_TEST_INPUT_CHANGED':'yes'}):
+            changed=amr.gates(root,'base',reuse=previous,validation_context='fixture-epoch-1')
+        self.assertFalse(any(c['execution']=='reused' for c in changed['checks']))
+        changed=amr.gates(root,'base',reuse=previous,validation_context='fixture-epoch-2')
+        self.assertFalse(any(c['execution']=='reused' for c in changed['checks']))
+        self.run.side_effect=lambda cmd,**kw:subprocess.CompletedProcess(cmd,0,'new SDK','')
+        changed=amr.gates(root,'base',reuse=previous,validation_context='fixture-epoch-1')
+        self.assertTrue(all(c['execution']=='executed' for c in changed['checks'] if c['name'].startswith('product-')))
+
+    def test_no_fixture_epoch_always_executes_integration_tests(self):
+        root,_=self.cached_fixture();previous=amr.gates(root,'base')
+        current=amr.gates(root,'base',reuse=previous)
+        checks={c['name']:c for c in current['checks']}
+        self.assertEqual(checks['product-build']['execution'],'reused')
+        self.assertEqual(checks['product-test']['execution'],'executed')
+
+    def test_native_tool_call_correlation_is_not_a_build_or_test_input(self):
+        with patch.dict('os.environ',{'CODEX_TOOL_CALL_ID':'first-call'}):
+            root,previous=self.cached_fixture()
+        with patch.dict('os.environ',{'CODEX_TOOL_CALL_ID':'next-call'}):
+            current=amr.gates(root,'base',reuse=previous,validation_context='fixture-epoch-1')
+        self.assertEqual({c['name'] for c in current['checks'] if c['execution']=='reused'},
+                         {'unit','product-restore','product-build','product-test'})
+
+    def test_malformed_failed_stale_and_legacy_receipts_never_supply_reused_gate(self):
+        _,previous=self.cached_fixture();old=next(c for c in previous['checks'] if c['name']=='unit')
+        cases=[None,{},dict(previous,schemaVersion=99),dict(previous,local_status='failed'),dict(previous,source_stable=False),
+               dict(previous,checks=[None]),dict(previous,checks=[old,old])]
+        for delta in ({'execution':'unknown'},{'executed_at':None},{'executed_at':'invalid'}, {'execution':'reused','reuse':[]},
+                      {'executed_at':(datetime.datetime.now(datetime.timezone.utc)-datetime.timedelta(hours=2)).isoformat()},
+                      {'executed_at':(datetime.datetime.now(datetime.timezone.utc)+datetime.timedelta(hours=2)).isoformat()},
+                      {'exit_code':1},{'status':'failed'},{'command':['wrong']},{'input_digest':None}):
+            cases.append(dict(previous,checks=[dict(old,**delta)]))
+        for receipt in cases:
+            with self.subTest(receipt=receipt):
+                self.assertIsNone(amr.reusable_gate(receipt,'unit',old['command'],old['input_digest'],'fixture-epoch-1'))
+
+    def test_environment_changes_during_run_invalidate_passing_checks(self):
+        root,_=self.cached_fixture()
+        def command(cmd,**kw):
+            if cmd[0]!='dotnet':amr.os.environ['AMR_DURING_RUN']='changed'
+            return subprocess.CompletedProcess(cmd,0,'stable SDK' if cmd==['dotnet','--info'] else 'passed','')
+        with patch.dict('os.environ',{}),patch.object(amr.subprocess,'run',side_effect=command):
+            result=amr.gates(root,'base')
+        self.assertFalse(result['source_stable']);self.assertEqual(result['local_status'],'failed')
+
     def test_failed_product_restore_blocks_build_and_stale_binary_tests(self):
         with tempfile.TemporaryDirectory() as d:
             root=Path(d);(root/'Kordra.slnx').write_text('<Solution />')
@@ -802,7 +944,8 @@ class Gates(unittest.TestCase):
                 result=amr.gates(root)
             stages=[x['status'] for x in result['checks'] if x['name'].startswith('product-')]
             self.assertEqual(stages,['failed','blocked','blocked'])
-            self.assertEqual(sum(x.args[0][0]=='dotnet' for x in run.call_args_list),1)
+            self.assertEqual([x.args[0][1] for x in run.call_args_list
+                              if x.args[0][0]=='dotnet' and x.args[0][1]!='--info'],['restore'])
             self.assertEqual(result['local_status'],'failed')
 
     def test_real_failing_commands_cannot_pass(self):

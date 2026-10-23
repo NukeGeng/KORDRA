@@ -1,14 +1,14 @@
 ---
 id: MOD-TEN
 status: proposed
-owner: unassigned
+owner: NukeGeng
 last_reviewed: 2026-10-15
 module_id: MOD-TEN
 ---
 
 # Tenant & Membership — module definition
 
-**Module ID:** `MOD-TEN` · **Phase:** MVP · **Owner:** unassigned (assign before acceptance).
+**Module ID:** `MOD-TEN` · **Phase:** MVP · **Owner:** NukeGeng (accountable for ADR-0012 Foundation T01–T07; wider module scope remains proposed).
 
 ## Responsibility and boundary
 Tenant & Membership owns: **Organization, Membership, Invitation, TenantStatus**. Không nhận ownership business của module khác. Giao tiếp bằng commands/events hoặc read contracts, không query trực tiếp internal storage của context khác.
@@ -35,7 +35,7 @@ Invite replay, role escalation, tenant status race. Đây là test đầu vào b
 - [FEAT-TEN-001 — Organization membership lifecycle](features/membership-lifecycle.md)
 
 ## Implementation mapping
-`source_paths: []` và `test_paths: []` có nghĩa **chưa đối chiếu repository thật**. Sau khi có code, bổ sung path, commit/test evidence ở mỗi feature, không điền đường dẫn dự đoán.
+FEAT-TEN-001 maps the local T04 owner context, Contracts, membership/exact-scope assignment handlers and isolated tests in its feature record. No TEN HTTP route, invitation/email lifecycle or real provisioning is enabled; T05/T06 composition remains pending.
 
 ## Definition of done
 Tuân thủ [DoD](../../engineering/definition-of-done.md), [module boundaries](../../engineering/module-boundaries.md), [architecture](../../architecture/bounded-contexts.md).

@@ -2,7 +2,7 @@
 id: ARCH-INDEX
 status: proposed
 owner: unassigned
-last_reviewed: 2026-10-15
+last_reviewed: 2026-10-20
 ---
 
 # Architecture map
@@ -27,3 +27,7 @@ The v1.2 source-architecture set is linked here for review; every document below
 
 ## Reference implementation / validation
 - [LAB-01 reported infrastructure](../reference-environments/lab-01/README.md) is a testbed, **not** an accepted production architecture baseline for the product.
+
+## Comprehensive delivery design — 2026-10-20
+
+[Control Plane delivery design](control-plane-delivery-design.md) composes the management, OP-P0, release/approval and independent worker deployment milestones. The overall direction is human-approved; [ADR-0012](../decisions/0012-operator-pilot-runtime-foundation.md) and its authentication/admission contracts are accepted only for Foundation T01–T07; later contracts remain proposed. [Luna handoff](../engineering/luna-implementation-handoff.md) preserves existing source/ADR evidence and supplies task dependencies.
