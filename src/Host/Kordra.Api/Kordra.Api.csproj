@@ -7,6 +7,7 @@
     <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
   </PropertyGroup>
   <ItemGroup>
+    <ProjectReference Include="../../Modules/TenantManagement/Kordra.Modules.TenantManagement.csproj" />
     <ProjectReference Include="../../Modules/IdentityAccess/Kordra.Modules.IdentityAccess.csproj" />
     <ProjectReference Include="../../Modules/AuditCompliance/Kordra.Modules.AuditCompliance.csproj" />
     <ProjectReference Include="../../Modules/AuditCompliance/Contracts/Kordra.Modules.AuditCompliance.Contracts.csproj" />

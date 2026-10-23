@@ -238,3 +238,11 @@ Current local verification: the targeted fixture passed on macOS. A sanitized tr
 ## Shared Foundation composition — T01–T03 implementation boundary
 
 T01 adds IAM persistence and its separate migrator/tests; T02 adds AUD Contracts/persistence/tests and the AUD migrator command. T03 adds IAM/AUD/Security project composition for the explicitly selected local-pilot authentication profile. The default API profile remains health-only with inventory routes denied, and the local-pilot profile also denies inventory routes. Shared product CI uses disposable loopback PostgreSQL fixtures. Architecture tests constrain the exact project and assembly graph and verify that `dotnet sln list` sees every solution project.
+
+## T04 shared composition boundary — 2026-10-22
+
+The shared root solution/API graph and restored lock files now include IAM definition Contracts and TEN persistence for accepted ADR-0012. ArchitectureTests explicitly checks their allowed XML/restored/PE dependencies and Contracts isolation while retaining compiled forbidden-edge fixtures. No inventory source, positive route, provider registration or protected response behavior changed. TEN requires a future trusted PRJ/INV scope-owner adapter; there is no permissive substitute. Existing denied inventory HTTP tests remain required.
+
+## T04 shared PostgreSQL fixture scheduling — 2026-10-22
+
+The canonical Product CI and existing amr.py deterministic gate now pass MSBuild -m:1 to the solution test command, so separate Product test projects run sequentially. AUD saturation tests deliberately acquire ACCESS EXCLUSIVE on the shared isolated aud_intents table; running new TEN fixture provisioning concurrently produced legitimate bounded unavailable results. Project serialization preserves every assertion, timeout, failure fixture and test count, and changes no product runtime or AMR routing/review/checkpoint policy. No Website process, service or test is involved.

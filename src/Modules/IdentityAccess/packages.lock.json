@@ -395,6 +395,9 @@
       },
       "kordra.modules.auditcompliance.contracts": {
         "type": "Project"
+      },
+      "kordra.modules.identityaccess.contracts": {
+        "type": "Project"
       }
     }
   }

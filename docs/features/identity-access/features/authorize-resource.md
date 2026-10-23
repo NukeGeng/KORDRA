@@ -2,12 +2,14 @@
 id: FEAT-IAM-001
 status: proposed
 owner: unassigned
-last_reviewed: 2026-10-20
+last_reviewed: 2026-10-22
 module_id: MOD-IAM
 feature_id: FEAT-IAM-001
 phase: MVP
-source_paths: []
-test_paths: ["tests/InfrastructureInventory.Bootstrap.Tests/IdentityAccess/AuthorizationPolicyProofTests.cs"]
+source_paths: ["src/Modules/IdentityAccess/Authorization/RoleDefinitionStore.cs", "src/Modules/IdentityAccess/Contracts/Kordra.Modules.IdentityAccess.Contracts.csproj", "src/Modules/IdentityAccess/Contracts/RoleDefinitions.cs", "src/Modules/IdentityAccess/Contracts/packages.lock.json", "src/Modules/IdentityAccess/Infrastructure/KordraIdentityDbContext.cs", "src/Modules/IdentityAccess/Infrastructure/KordraRoleDefinition.cs", "src/Modules/IdentityAccess/Infrastructure/Migrations/20261022041942_AddRoleDefinitions.Designer.cs", "src/Modules/IdentityAccess/Infrastructure/Migrations/20261022041942_AddRoleDefinitions.cs", "src/Modules/IdentityAccess/Infrastructure/Migrations/KordraIdentityDbContextModelSnapshot.cs", "src/Modules/IdentityAccess/Kordra.Modules.IdentityAccess.csproj", "src/Modules/IdentityAccess/packages.lock.json"]
+test_paths: ["tests/IdentityAccess.Tests/RoleDefinitionTests.cs", "tests/InfrastructureInventory.Bootstrap.Tests/ArchitectureTests.cs", "tests/InfrastructureInventory.Bootstrap.Tests/IdentityAccess/AuthorizationPolicyProofTests.cs"]
+planned_source_paths: ["src/Modules/IdentityAccess/Contracts/Kordra.Modules.IdentityAccess.Contracts.csproj", "src/Modules/IdentityAccess/Contracts/RoleDefinitions.cs", "src/Modules/IdentityAccess/Authorization/RoleDefinitionStore.cs", "src/Modules/IdentityAccess/Infrastructure/KordraRoleDefinition.cs"]
+planned_test_paths: ["tests/IdentityAccess.Tests/RoleDefinitionTests.cs"]
 ---
 
 # FEAT-IAM-001 — Authorize scoped resource access
@@ -448,3 +450,15 @@ For T01–T07, use the accepted owner contracts and project composition in ADR-0
 **Schema, compatibility and reversal:** this proposal changes the IAM owner document, linked TEN/PRJ/INV/AUD handoff sections, and their roadmap, traceability and change-history references. Reversal must remove or revert those linked proposal sections and progress references together, while preserving unrelated IAM I0/I1 evidence, human ADR-0003 acceptance and the denied inventory boundary. It adds no permission key, adopted wire schema/event, persistence or product consumer; existing message candidates and the broader catalog remain proposed. No `schemaVersion` bump or data migration applies to this proposal. Future adopted public contracts must inventory consumers, version breaking changes and plan compatibility/rollout. Future persisted bindings/sessions, policy caches and pending work need explicit migration/revocation/rollback rules that cannot resurrect invalid authority.
 
 **Traceability and verification limits:** source/test mappings and all previous receipts above are unchanged. The matrix is a plan, not executed coverage. No runtime, endpoint, database, dependency, permission catalog or infrastructure change; no debt added/closed and no ADR accepted by this increment. Strict doccheck and `git diff --check` are the bounded runner checks; their actual results belong in its handoff. The parent coordinator owns deterministic gates, exact-content contributor triage, the explicit maintainer design decision, progress reconciliation and acceptance. AMR v4 requires no additional AI review for this handoff; Codex Auto PR Review remains a separate later PR gate. No product test, concurrency guarantee, durable audit, remote CI/provider review or model-selection verification is claimed by this proposal.
+
+## T04 bounded implementation — 2026-10-22
+
+Accepted ADR-0012 and authority/admission-v1 govern this owner slice. Implementation remains unpublished. T04 adds exact versioned IAM definition ports first, then TEN-owned tenant/membership/scoped-assignment persistence and handlers. Actor identity comes from trusted composition, never command-body subject claims. Public HTTP routes, invitations/email and positive inventory remain disabled until T06. Role definitions describe permission/scope rules; only TEN assignments create tenant authority. Required negative tests include stale/retired definitions, deny rules, unknown catalog/scope, foreign tenant/member, grant beyond grantor ceiling, revision conflict, expiry equality, ambiguous assignments, duplicate/conflicting commands, audit rollback/unknown outcome and cancellation. No production migration or real account/tenant provisioning is performed. The owner explicitly authorizes Sol Medium for this T04 only; global AMR routing is unchanged.
+
+## T04 IAM owner slice — local implementation 2026-10-22
+
+FEAT-IAM-001 / MOD-IAM now owns the BCL-only definition/principal/clock/offline-lease ports and exact-current role-definition persistence. Accepted ADR-0012 and authority/admission v1 remain normative. The actor is an explicitly trusted offline LocalMaintainer with the API stopped and installation lease retained. Role names confer no permissions. Publication appends an immutable revision and AUD intent atomically; exact manifest replay returns the original result, changed content/stale expected revision conflicts. Retired or noncurrent referenced revisions deny rather than following latest implicitly. Only the accepted Foundation permission/scope allowlist is interpreted; unsupported platform/provider conditions do not grant access.
+
+RoleDefinitionTests exercises manifest replay/conflict, version replacement/retirement, unsupported catalog permission and released offline lease. DefinitionRuleTests covers catalog/scope/effect rejection and explicit deny overriding a misleading role label. ArchitectureTests checks actual restored XML/PE references and BCL-only Contracts. FEAT-IAM-002 co-owns the expanded context/snapshot/package graph; its session semantics are unchanged apart from exposing its existing trusted clock through IAuthorityClock.
+
+This is the T04 definition owner implementation, not T06 policy admission or protected disclosure. No positive inventory route or definition-edit HTTP API is registered. Trusted provisioning composition and PRJ/INV scope owners are later wiring prerequisites. Local validation and exact publication state are recorded in traceability; no AI review, merge or infrastructure permission is implied.

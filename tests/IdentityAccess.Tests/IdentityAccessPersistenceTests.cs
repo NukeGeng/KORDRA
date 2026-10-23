@@ -106,8 +106,12 @@ public sealed class IdentityAccessPersistenceTests
 
         var entityTypes = dbContext.Model.GetEntityTypes().ToArray();
         Assert.Equal(
-            [typeof(KordraAuthenticationCommand), typeof(KordraIdentityUser), typeof(KordraSession)],
+            [typeof(KordraAuthenticationCommand), typeof(KordraIdentityUser), typeof(KordraRoleDefinition), typeof(KordraSession)],
             entityTypes.Select(entity => entity.ClrType).OrderBy(type => type.FullName, StringComparer.Ordinal));
+
+        var definition = Assert.Single(entityTypes, entity => entity.ClrType == typeof(KordraRoleDefinition));
+        Assert.Equal("iam_role_definitions", definition.GetTableName());
+        Assert.Equal(["content_hash", "definition_id", "is_retired", "manifest_id", "name", "revision", "rules_json"], GetColumnNames(definition));
 
         var command = Assert.Single(entityTypes, entity => entity.ClrType == typeof(KordraAuthenticationCommand));
         Assert.Equal("iam_authentication_commands", command.GetTableName());
@@ -187,7 +191,7 @@ public sealed class IdentityAccessPersistenceTests
 
         var entityTypes = dbContext.Model.GetEntityTypes().ToArray();
         Assert.Equal(
-            ["iam_authentication_commands", "iam_principals", "iam_sessions"],
+            ["iam_authentication_commands", "iam_principals", "iam_role_definitions", "iam_sessions"],
             entityTypes.Select(entity => entity.GetTableName()).Order(StringComparer.Ordinal));
         Assert.All(entityTypes, entity => Assert.Equal("app", entity.GetSchema()));
         Assert.DoesNotContain(
