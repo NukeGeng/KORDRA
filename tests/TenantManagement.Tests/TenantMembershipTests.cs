@@ -162,6 +162,37 @@ public sealed class TenantMembershipTests : IAsyncLifetime
         Assert.Empty((await _service.MyMembershipsAsync())!);
     }
 
+    [Theory]
+    [InlineData("suspend")]
+    [InlineData("revoke-membership")]
+    [InlineData("revoke-assignment")]
+    public async Task Committed_self_invalidating_command_reconciles_exact_receipt_without_regranting_authority(string kind)
+    {
+        var command = new TenantCommand(Guid.NewGuid().ToString("N"), kind, _tenant, _founderMember, kind == "suspend" ? 2 : 1);
+        if (kind == "revoke-assignment")
+        {
+            await using var selection = await _ten.CreateDbContextAsync();
+            command = command with { AssignmentId = (await selection.Assignments.SingleAsync(x => x.TenantId == _tenant && x.MembershipId == _founderMember)).Id };
+        }
+        var committed = await _service.ExecuteAsync(command); Assert.Equal("success", committed.Status);
+        Assert.Equal(committed, await _service.ExecuteAsync(command));
+        Assert.Equal("conflict", (await _service.ExecuteAsync(command with { ExpectedRevision = 999 })).Status);
+        Assert.Equal("denied", (await _service.ExecuteAsync(command with { Key = Guid.NewGuid().ToString("N") })).Status);
+        _subject.Principal = _recipient;
+        Assert.Equal("conflict", (await _service.ExecuteAsync(command)).Status); // another subject cannot claim the receipt
+        _subject.Principal = null; Assert.Equal("denied", (await _service.ExecuteAsync(command)).Status);
+        _subject.Principal = _founder;
+        await using (var iam = await _iam.CreateDbContextAsync())
+        {
+            (await iam.Principals.SingleAsync(x => x.Id == _founder)).AccountStatus = "disabled";
+            await iam.SaveChangesAsync();
+        }
+        Assert.Equal("denied", (await _service.ExecuteAsync(command)).Status); // a receipt cannot bypass an inactive account
+        await using var db = await _ten.CreateDbContextAsync();
+        Assert.Equal(kind == "suspend" ? "suspended" : "active", (await db.Organizations.SingleAsync(x => x.Id == _tenant)).Status);
+        Assert.Equal(kind == "revoke-membership" ? "revoked" : "active", (await db.Memberships.SingleAsync(x => x.TenantId == _tenant && x.Id == _founderMember)).Status);
+    }
+
     [Fact]
     public async Task Composite_foreign_key_rejects_cross_tenant_assignment_even_if_owner_is_bypassed()
     {
