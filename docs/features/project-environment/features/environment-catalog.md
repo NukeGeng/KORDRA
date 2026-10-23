@@ -142,6 +142,10 @@ ProjectCatalogTests covers idempotent project/application creation, environment 
 
 No PRJ HTTP endpoint or list-disclosure boundary is registered. Whole-workspace offline manifest/resource/grant composition and current policy persistence/adapters are not a delivered CLI here; they must be wired/proven at T06 under accepted contracts before real provisioning. Policy replacement/downgrade needs its own accepted command/approval semantics. Full module and Operator Pilot readiness are not claimed.
 
+## PR13 migrator locator correction — 2026-10-23
+
+FEAT-PRJ-001 / MOD-PRJ; finding 4345619894. The offline migration command reads the documented `KORDRA_PROJECTENVIRONMENT_MIGRATION_CONNECTION_STRING`. A regression supplies a synthetic test identity via that exact variable and verifies the existing offline-target guard rejects it before opening a connection, rather than reporting a missing locator. It fails before the spelling correction and passes after. Target/role validation, migration approval, runtime architecture and schemas are unchanged; no real migration is executed.
+
 ## Historical T06 resource-policy design input — resolved by accepted ADR-0014 on 2026-10-22
 
 The accepted authority/admission v1 requires complete applicable policy/deny/condition coverage and exact current resource-policy revision. T05 stores environment classification/policyRevision and requires IEnvironmentPolicyReader, but deliberately supplies no positive runtime policy implementation. The approved request shape names only policyRevision; no normative resource-policy document/schema, revision lookup identity or complete applicability/deny source is defined in the current accepted package. IAM RoleDefinition permission/scope/effect interpretation is implemented and cannot silently be treated as the environment resource policy. Copying the synthetic policy allowlist or treating a positive revision integer as allow would violate fail-closed policy completeness.

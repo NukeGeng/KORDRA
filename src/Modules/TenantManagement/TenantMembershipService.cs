@@ -154,8 +154,8 @@ public sealed class TenantMembershipService(
         if (principal is null || !await definitions.IsActivePrincipalAsync(principal.Value, cancellationToken)) return new("denied");
         await using var db = await contexts.CreateDbContextAsync(cancellationToken);
         await using var tx = await db.Database.BeginTransactionAsync(cancellationToken);
-        // Receipt reconciliation is an authenticated subject/body-bound lookup, not new authority.
-        // A committed suspend/self-revoke must remain recoverable after its own invalidation.
+        // Reconcile an already committed result for the current active subject before
+        // mutable grants: the successful operation itself may have revoked authority.
         var hash = Hash(JsonSerializer.Serialize(new { principal, command }));
         var key = Hash(command.Key);
         var replay = await ReplayAsync(db, key, hash, cancellationToken);

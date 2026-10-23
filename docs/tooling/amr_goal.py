@@ -23,7 +23,7 @@ from amr_native import NativeError, discover, execute_task, local_review
 
 
 GOAL_STATES = {'active', 'awaiting_model_switch', 'awaiting_approval', 'blocked', 'completed'}
-UNRESOLVED_TASK_STATES = {'running', 'unknown', 'validation_failed', 'awaiting_triage', 'failed'}
+UNRESOLVED_TASK_STATES = {'running', 'in_progress', 'unknown', 'validation_failed', 'awaiting_triage', 'failed'}
 SAFE_BOUNDARY_TASK_STATES = {'pending', 'completed'}
 PROFILE_SELECTIONS = set(amr.PROFILES.values())
 PROFILE_CAPABILITIES = {
@@ -294,10 +294,20 @@ def validate_plan(root, plan, *, require_inputs=True, legacy_task_ids=None):
                 raise ValueError('expected string array: '+key)
             if len(task[key]) != len(set(task[key])):
                 raise ValueError('duplicate '+key)
+        if (task.get('task_id') not in legacy_task_ids
+                and amr.execution_role(task) == 'architect'
+                and any(Path(p).suffix.lower() != '.md' for p in task['write_paths'])):
+            raise ValueError('Architect write paths must be bounded Markdown design documents')
+        allowed_writes = set(task['paths']) | set(task.get('output_paths', []))
         for rel in task['write_paths']:
-            path = amr.safe_path(root, rel)
-            if rel not in task['paths'] or (require_inputs and not path.is_file()):
-                raise ValueError('write paths must be existing feature-mapped task inputs')
+            if rel not in allowed_writes:
+                raise ValueError('write paths must be declared task inputs or owner-mapped outputs')
+            if rel in task.get('output_paths', []):
+                amr.safe_output_path(root, rel)
+            else:
+                path = amr.safe_path(root, rel)
+                if require_inputs and not path.is_file():
+                    raise ValueError('write input paths must exist')
     if len(ids) != len(set(ids)):
         raise ValueError('duplicate task IDs')
     edges = {t['task_id']: t['depends_on'] for t in plan['tasks']}
@@ -371,12 +381,20 @@ def load(root, path):
                 raise ValueError('invalid historical review-policy migration receipt')
         elif migration is not None:
             raise ValueError('review-policy migration receipt has no matching migrated version')
-        if record.get('status') not in {'pending', 'running', 'unknown', 'validation_failed',
+        if record.get('status') not in {'pending', 'running', 'in_progress', 'unknown', 'validation_failed',
                                         'awaiting_triage', 'completed', 'failed'}:
             raise ValueError('unknown checkpoint task state')
         for counter in ('attempts', 'validation_attempts'):
             if type(record.get(counter)) is not int or record[counter] < 0:
                 raise ValueError('invalid checkpoint attempt counter')
+        if 'protected_file_identities' in record:
+            manifest = record['protected_file_identities']
+            if (not isinstance(manifest, dict)
+                    or any(not isinstance(k, str) or not isinstance(v, str) or not v
+                           for k, v in manifest.items())
+                    or digest(manifest) != record.get('protected_content_identity')
+                    or preparation_identity(record) != record.get('preparation_digest')):
+                raise ValueError('invalid protected-file manifest or preparation binding')
         if 'task_outcome' in record and record.get('status') != 'completed':
             try:
                 task = dispatched_task(state, task_id)
@@ -385,7 +403,11 @@ def load(root, path):
                 raise ValueError('invalid task outcome receipt') from exc
             if outcome_error:
                 raise ValueError('invalid task outcome receipt: '+outcome_error)
-        if record['status'] == 'completed':
+        if record['status'] == 'completed' and record.get('completion_kind') == 'coordinator_execution':
+            validate_coordinator_record(root, state, task_id)
+        elif record['status'] == 'completed' and record.get('completion_kind') in {'evidence_recovery', 'coordinator_continuation'}:
+            validate_recovered_record(root, state, task_id)
+        elif record['status'] == 'completed':
             try:
                 content = record['validated_identity']['content']
                 triage = record['triage']
@@ -444,13 +466,13 @@ def event(state, task_id, status, detail):
         control.update(status='completed' if all(
             record.get('status') == 'completed' for record in state['tasks'].values()) else 'active',
             pause=None, model_switch=None)
-    elif status == 'running':
+    elif status in {'running', 'in_progress'}:
         control.update(status='active', pause=None, model_switch=None)
 
 
 def next_task(state):
     # Never advance around unresolved work, even if another task is independent.
-    unresolved = {'running', 'unknown', 'validation_failed', 'awaiting_triage', 'failed'}
+    unresolved = UNRESOLVED_TASK_STATES
     if any(t['status'] in unresolved for t in state['tasks'].values()):
         return None
     return next((t for t in state['plan']['tasks']
@@ -468,9 +490,16 @@ def projection(root, state):
             'objective': state['plan'].get('objective'),
             'progress_path': state['plan']['progress_path'],
             'next_task': task['task_id'] if task else None,
+            'active_task': next((key for key, value in state['tasks'].items()
+                                 if value['status'] == 'in_progress'), None),
             'status': status,
             'control': control,
             'tasks': state['tasks'], 'events': state['events'],
+            'coordinator_diagnostics': {
+                key: coordinator_diagnostics(root, record)
+                for key, record in state['tasks'].items()
+                if record.get('status') == 'in_progress'
+                and record.get('execution_mode') == 'current_session'},
             'native_goal_control': 'not_available_in_local_cli',
             'limitation': 'local execution checkpoints; native GOAL control, merge and production approval remain external'}
 
@@ -701,12 +730,14 @@ def resume(root, goal_id, *, model=None, effort=None, approval_evidence=None,
 
 def status(root, goal_id):
     with checkpoint(root, goal_id) as path:
+        persisted = json.loads(path.read_text())
         state = load(root, path)
         # Holding the lock proves no executor still owns this running claim.
         for task_id, record in state['tasks'].items():
             if record['status'] == 'running':
                 event(state, task_id, 'unknown', 'executor stopped before durable terminal checkpoint; no automatic replay')
-        atomic_save(path, state)
+        if state != persisted:
+            atomic_save(path, state)
         return projection(root, state)
 
 
@@ -954,9 +985,247 @@ def verified_review(review):
             and review.get('observed_effort') == amr.PROFILES['CRITICAL'][1])
 
 
-def step(root, goal_id, design_review=None):
+def local_developer_only(task):
+    if (task.get('scope') != 'local-development' or amr.execution_role(task) != 'developer'
+            or amr.design_review_required(task)
+            or set(task.get('signals', [])) & {'production', 'secrets', 'remote-execution'}):
+        raise ValueError('coordinator completion supports approved local Developer repository work only')
+
+
+def coordinator_claim(root, goal_id):
+    # The filesystem edits occur between CLI calls. Retain one checkout claim
+    # even though the short-lived atomic checkpoint writer lock is released.
+    for path in private_directory(root).glob('*.json'):
+        if path.stem == goal_id:
+            continue
+        if path.is_symlink():
+            raise ValueError('checkpoint cannot be a symlink')
+        other = json.loads(path.read_text())
+        if any(t.get('status') == 'in_progress' for t in other.get('tasks', {}).values()):
+            raise ValueError('another coordinator task owns this checkout')
+
+
+def preparation_identity(record):
+    value = {key: record.get(key) for key in (
+        'dispatch_task_digest', 'input_identity', 'input_file_identities',
+        'protected_content_identity', 'coordinator_context', 'scope_basis')}
+    # Omit the additive field for historical receipts: preserve their digests.
+    if 'protected_file_identities' in record:
+        value['protected_file_identities'] = record['protected_file_identities']
+    return digest(value)
+
+
+def coordinator_diagnostics(root, record, *, files=None, git=None):
+    """Read-only drift evidence; never widen writes, reset a baseline or replay."""
+    files = amr.tree_identity(root)['files'] if files is None else files
+    git = amr.git_identity(root) if git is None else git
+    task = record['dispatch_task']; writable = set(task['write_paths'])
+    protected = {p: h for p, h in files.items() if p not in writable}
+    baseline = record.get('protected_file_identities')
+    changes = (None if baseline is None else {
+        p: {'before': baseline.get(p), 'after': protected.get(p)}
+        for p in sorted(set(baseline) | set(protected))
+        if baseline.get(p) != protected.get(p)})
+    return {
+        'protected_content_changed': digest(protected) != record['protected_content_identity'],
+        'protected_manifest': ('available' if baseline is not None
+                               else 'unavailable_historical_checkpoint'),
+        'protected_changes': changes,
+        'git_head_or_branch_changed': any(
+            git.get(k) != record['input_identity']['git'].get(k) for k in ('head', 'branch')),
+        'declared_write_changes': [p for p, h in record['input_file_identities'].items()
+                                   if files.get(p) != h],
+        'next_action': 'Inspect drift; use goal reconcile with evidence for stopped work. Do not replay or reset the baseline.'}
+
+
+def step(root, goal_id, design_review=None, *, native_runner=False, context=None):
+    """Default to this chat; optional serial runner is an explicit operation."""
+    if native_runner:
+        return native_step(root, goal_id, design_review)
+    if design_review is not None:
+        raise ValueError('AMR v4 does not consume AI design-review receipts')
     with checkpoint(root, goal_id) as path:
         state = load(root, path)
+        current = next((r for r in state['tasks'].values() if r['status'] == 'in_progress'), None)
+        if current:
+            result = projection(root, state)
+            result['execution_mode'] = 'current_session'
+            result['instruction'] = 'Continue the prepared task; finish with current evidence. Do not start it again.'
+            return result
+        if ensure_control(state)['status'] != 'active':
+            raise ValueError('goal is '+state['control']['status']+'; resolve the existing task first')
+        coordinator_claim(root, goal_id)
+        task = next_task(state)
+        if task is None:
+            raise ValueError('no eligible task')
+        task = amr.validate_task(copy.deepcopy(task), root)
+        local_developer_only(task)
+        if (not isinstance(context, dict) or not isinstance(context.get('scope_basis'), str)
+                or not context['scope_basis'].strip()):
+            raise ValueError('current-session execution requires --context with native_context and approved scope_basis')
+        native = native_context_evidence(context.get('native_context'), current=True)
+        route = amr.resolve(amr.classify(task), discover(root))
+        if (route.get('action') != 'continue' or route.get('support') != 'advertised'
+                or (native['model'], native['effort']) != (route.get('model'), route.get('effort'))):
+            raise ValueError('actual coordinator model/effort must match the advertised Developer route')
+        before = amr.tree_identity(root)
+        for dependency in task['depends_on']:
+            artifacts = state['tasks'][dependency].get('output_artifacts', {})
+            if not artifacts or any(before['files'].get(p) != h for p, h in artifacts.items()):
+                raise ValueError('completed dependency inputs changed; reconcile the task plan')
+        record = state['tasks'][task['task_id']]
+        record.update(policy_version='4', execution_mode='current_session', route=route,
+            dispatch_task=task, dispatch_task_digest=amr.task_identity(task),
+            input_identity=current_identity(root),
+            input_file_identities={p: before['files'].get(p) for p in task['write_paths']},
+            protected_content_identity=protected_content_identity(before['files'], task['write_paths']),
+            protected_file_identities={p: h for p, h in before['files'].items()
+                                       if p not in set(task['write_paths'])},
+            coordinator_context=native, scope_basis=context['scope_basis'],
+            context_paths=task['paths']+task['consulted'])
+        record['preparation_digest'] = preparation_identity(record)
+        event(state, task['task_id'], 'in_progress', 'Prepared for current coordinator; no AI dispatch')
+        atomic_save(path, state)
+        result = projection(root, state)
+        result.update(execution_mode='current_session', task=task)
+        return result
+
+
+def validate_local_gates(gates, state, triage, content, product_required):
+    if not isinstance(gates, dict) or not isinstance(triage, dict):
+        raise ValueError('gate and contributor evidence must be JSON objects')
+    checks = gates.get('checks', [])
+    if not isinstance(checks, list) or any(not isinstance(c, dict) for c in checks):
+        raise ValueError('gate checks must be an array of objects')
+    errors = amr.completion_errors(dict(gates, findings=triage.get('findings')),
+                                  content, product_required=product_required)
+    mapping = next((c for c in checks if c.get('name') == 'mapping'), {})
+    if (gates.get('source_mapping') != 'executed'
+            or len({c.get('name') for c in checks}) != len(checks)
+            or any(c.get('exit_code') != 0 for c in checks)
+            or not isinstance(mapping.get('command'), list)
+            or mapping['command'][1:] != ['docs/tooling/changeguard.py', '--base',
+                                          state['plan']['base'], '--working-tree']
+            or product_required is not (gates.get('product_tests') == 'executed')):
+        errors.append('successful applicable gates and exact base mapping are required')
+    if errors:
+        raise ValueError('; '.join(errors))
+
+
+def local_gate_evidence(root, state, evidence, identity):
+    _, gates = private_evidence(root, evidence.get('gates'))
+    validate_local_gates(gates, state, evidence.get('triage'), identity['content'],
+                         (root/'Kordra.slnx').is_file())
+    return gates
+
+
+def contributor_triage(task, triage, content, previous_findings=()):
+    if (not isinstance(triage, dict) or triage.get('task_id') != task['task_id']
+            or triage.get('content') != content
+            or not isinstance(triage.get('reviewed_by'), str) or not triage['reviewed_by'].strip()
+            or not isinstance(triage.get('rationale'), str) or not triage['rationale'].strip()
+            or not isinstance(triage.get('findings'), list)):
+        raise ValueError('exact-content contributor triage is required')
+    known = task.get('findings', []) + list(previous_findings)
+    if (any(not isinstance(f, dict) or not f.get('id') for f in known)
+            or not {f['id'] for f in known} <= {f.get('id') for f in triage['findings'] if isinstance(f, dict)}):
+        raise ValueError('continuation cannot omit previously reported findings')
+    errors = amr.finding_errors(triage['findings'], content)
+    if errors:
+        raise ValueError('; '.join(errors))
+
+
+def validate_coordinator_record(root, state, task_id):
+    try:
+        _validate_coordinator_record(root, state, task_id)
+    except (KeyError, TypeError, AttributeError) as exc:
+        raise ValueError('incomplete or invalid coordinator completion receipt') from exc
+
+
+def _validate_coordinator_record(root, state, task_id):
+    record = state['tasks'][task_id]
+    task = dispatched_task(state, task_id)
+    local_developer_only(task)
+    receipt = record.get('coordinator_receipt', {})
+    if (record.get('policy_version') != '4' or record.get('execution_mode') != 'current_session'
+            or record.get('attempts') != 0 or record.get('validation_attempts') != 0
+            or any(key in record for key in ('execution', 'task_outcome', 'native_thread_id'))
+            or record.get('preparation_digest') != preparation_identity(record)
+            or record.get('coordinator_receipt_digest') != digest(receipt)
+            or receipt.get('preparation_digest') != record['preparation_digest']
+            or receipt.get('task_digest') != amr.task_identity(task)
+            or receipt.get('content') != record.get('validated_identity', {}).get('content')
+            or receipt.get('native_context', {}).get('observation') != 'turn_context_only_not_terminal_execution'
+            or (receipt['native_context'].get('model'), receipt['native_context'].get('effort')) != amr.PROFILES['ENGINEERING']
+            or receipt['native_context'].get('thread_id') != record['coordinator_context'].get('thread_id')
+            or not isinstance(receipt.get('summary'), str) or not receipt['summary'].strip()):
+        raise ValueError('invalid coordinator completion receipt; native execution is not claimed')
+    content = record['validated_identity']['content']
+    contributor_triage(task, record.get('triage'), content)
+    validate_local_gates(record['gates'], state, record['triage'], content, record['product_required'])
+    outputs = record.get('output_artifacts', {})
+    expected_paths = set(task['paths']+task['consulted']+task['write_paths'])
+    changed = {p: outputs.get(p) for p, old in record['input_file_identities'].items()
+               if outputs.get(p) != old}
+    if (set(outputs) != expected_paths or set(record['input_file_identities']) != set(task['write_paths'])
+            or receipt.get('artifacts') != changed
+            or (task['write_paths'] and not changed and (
+                not isinstance(receipt.get('no_change_reason'), str)
+                or not receipt['no_change_reason'].strip()))):
+        raise ValueError('coordinator artifact evidence is incomplete or outside declared writes')
+
+
+def finish(root, goal_id, task_id, evidence):
+    """Record current-chat work; no native terminal marker or human decision is synthesized."""
+    if not isinstance(evidence, dict):
+        raise ValueError('completion evidence must be a JSON object')
+    with checkpoint(root, goal_id) as path:
+        state = load(root, path); record = state['tasks'][task_id]
+        if record['status'] != 'in_progress' or record.get('execution_mode') != 'current_session':
+            raise ValueError('task is not a prepared current-session task')
+        task = dispatched_task(state, task_id); local_developer_only(task)
+        files = amr.tree_identity(root)['files']; identity = current_identity(root)
+        if (evidence.get('identity') != identity or evidence.get('task_id') != task_id
+                or evidence.get('task_digest') != amr.task_identity(task)
+                or record.get('preparation_digest') != preparation_identity(record)):
+            raise ValueError('stale coordinator evidence or invalid preparation binding')
+        diagnostics = coordinator_diagnostics(root, record, files=files, git=identity['git'])
+        if diagnostics['protected_content_changed']:
+            paths = diagnostics['protected_changes']
+            detail = (', '.join(sorted(paths)) if paths is not None
+                      else 'historical checkpoint has no protected-file manifest')
+            raise ValueError('changes outside prepared task scope: '+detail+'; inspect and reconcile without replay')
+        if diagnostics['git_head_or_branch_changed']:
+            raise ValueError('Git HEAD/branch changed since preparation; inspect and reconcile without replay')
+        native = native_context_evidence(evidence.get('native_context'), current=True)
+        if ((native['model'], native['effort']) != amr.PROFILES['ENGINEERING']
+                or native['thread_id'] != record['coordinator_context']['thread_id']):
+            raise ValueError('coordinator session/model changed; reconcile before completion')
+        changed = {p: files.get(p) for p, old in record['input_file_identities'].items() if files.get(p) != old}
+        if evidence.get('artifacts') != changed:
+            raise ValueError('coordinator artifacts must exactly match observed declared changes')
+        contributor_triage(task, evidence.get('triage'), identity['content'])
+        gates = local_gate_evidence(root, state, evidence, identity)
+        receipt = {'task_digest': amr.task_identity(task), 'content': identity['content'],
+            'preparation_digest': record['preparation_digest'], 'native_context': native,
+            'summary': evidence.get('summary'), 'no_change_reason': evidence.get('no_change_reason'),
+            'artifacts': changed, 'created_at': amr.now()}
+        record.update(completion_kind='coordinator_execution', coordinator_receipt=receipt,
+            coordinator_receipt_digest=digest(receipt), validated_identity=identity,
+            gates=gates, product_required=(root/'Kordra.slnx').is_file(), triage=evidence['triage'],
+            output_artifacts={p: files.get(p) for p in set(task['paths']+task['consulted']+task['write_paths'])})
+        validate_coordinator_record(root, state, task_id)
+        if identity != current_identity(root):
+            raise ValueError('source changed during coordinator completion')
+        event(state, task_id, 'completed', 'Current-session contributor evidence recorded; PR review remains separate')
+        atomic_save(path, state)
+        return projection(root, state)
+
+
+def native_step(root, goal_id, design_review=None):
+    with checkpoint(root, goal_id) as path:
+        state = load(root, path)
+        coordinator_claim(root, goal_id)
         control = ensure_control(state)
         if control['status'] != 'active':
             raise ValueError('goal is '+control['status']+'; explicitly resolve or resume it first')
@@ -997,6 +1266,9 @@ def step(root, goal_id, design_review=None):
         def started(thread_id):
             record['native_thread_id'] = thread_id
             atomic_save(path, state)
+        def turn_started(turn_id):
+            record['native_turn_id'] = turn_id
+            atomic_save(path, state)
         # Informational dispatch facts, constructed only after the checks above
         # while checkpoint() still holds the checkout lock. Never derive proof
         # from objective/decision prose or substitute this summary for receipts.
@@ -1018,7 +1290,8 @@ def step(root, goal_id, design_review=None):
                               'milestone': state['plan']['milestone'],
                               'task_id': task['task_id'], 'depends_on': task['depends_on']},
                 pre_dispatch=pre_dispatch,
-                sandbox='workspace-write' if task['write_paths'] else 'read-only', on_start=started)
+                sandbox='workspace-write' if task['write_paths'] else 'read-only', on_start=started,
+                on_turn_started=turn_started)
             after = amr.tree_identity(root)
             changed = sorted(p for p in before['files'].keys() | after['files'].keys()
                              if before['files'].get(p) != after['files'].get(p))
@@ -1101,13 +1374,37 @@ def accept(root, goal_id, task_id, triage):
 
 
 def reconcile(root, goal_id, task_id, evidence):
+    if not isinstance(evidence, str) or not evidence.strip():
+        raise ValueError('reconciliation requires nonempty contributor evidence')
+    findings = []
+    if evidence.startswith('.amr-local/'):
+        _, value = private_evidence(root, evidence)
+        findings = value.get('findings', [])
+        if (not isinstance(findings, list)
+                or any(not isinstance(f, dict) or not isinstance(f.get('id'), str)
+                       or not f['id'].strip() for f in findings)
+                or len({f['id'] for f in findings}) != len(findings)):
+            raise ValueError('reconciliation findings require unique nonempty IDs')
     with checkpoint(root, goal_id) as path:
         state = load(root, path); record = state['tasks'][task_id]
-        if record['status'] not in {'running', 'unknown'}:
+        if record['status'] not in {'running', 'unknown', 'in_progress'}:
             raise ValueError('only interrupted/unknown execution needs reconciliation')
-        if not isinstance(evidence, str) or not evidence.strip():
-            raise ValueError('reconciliation requires contributor evidence')
-        record['reconciliation'] = {'evidence': evidence, 'identity': current_identity(root)}
+        raw = path.read_bytes()
+        directory = path.parent.parent/'reconciliation'
+        if directory.is_symlink():
+            raise ValueError('reconciliation snapshots cannot traverse symlinks')
+        directory.mkdir(mode=0o700, exist_ok=True); directory.chmod(0o700)
+        snapshot = directory/(identifier(goal_id)+'-before-'+str(uuid.uuid4())+'.json')
+        fd = os.open(snapshot, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+        with os.fdopen(fd, 'wb') as stream:
+            stream.write(raw); stream.flush(); os.fsync(stream.fileno())
+        record['reconciliation'] = {
+            'evidence': evidence, 'identity': current_identity(root),
+            'checkpoint_before': {'path': snapshot.relative_to(root).as_posix(),
+                                  'sha256': hashlib.sha256(raw).hexdigest()},
+            'findings': copy.deepcopy(findings)}
+        if record.get('execution_mode') == 'current_session':
+            record['reconciliation']['diagnostics'] = coordinator_diagnostics(root, record)
         # Do not synthesize success from prose; actual execution receipt is mandatory.
         target = 'validation_failed' if verified_execution(record, record['route']) else 'failed'
         event(state, task_id, target, 'reconciled without replay; new work needs an explicit new task/plan')
@@ -1115,10 +1412,231 @@ def reconcile(root, goal_id, task_id, evidence):
         return projection(root, state)
 
 
+def private_evidence(root, relative):
+    """Read local evidence without following symlinks or arbitrary paths."""
+    if not isinstance(relative, str) or Path(relative).is_absolute():
+        raise ValueError('evidence must be a private repository-relative file')
+    parts = Path(relative).parts
+    if len(parts) < 2 or parts[0] != '.amr-local' or '..' in parts:
+        raise ValueError('evidence must remain inside .amr-local')
+    path = root
+    for part in parts:
+        path = path/part
+        if path.is_symlink():
+            raise ValueError('evidence cannot traverse symlinks')
+    if not path.is_file():
+        raise ValueError('evidence file is missing')
+    value = json.loads(path.read_text())
+    if not isinstance(value, dict):
+        raise ValueError('evidence must be a JSON object')
+    return path, value
+
+
+def native_context_evidence(context, *, current=False):
+    """Observe a real local turn context; never claim terminal task execution."""
+    if not isinstance(context, dict) or not all(
+            isinstance(context.get(k), str) and context[k].strip()
+            for k in ('source', 'thread_id', 'turn_id', 'model', 'effort')):
+        raise ValueError('native turn context identity is required')
+    path = Path(context['source'])
+    sessions = Path(os.environ.get('CODEX_HOME', Path.home()/'.codex'))/'sessions'
+    if not path.is_absolute() or not path.is_relative_to(sessions.absolute()):
+        raise ValueError('native context must be an actual local session log')
+    relative = path.relative_to(sessions.absolute())
+    if (not path.is_absolute() or not path.resolve().is_relative_to(sessions.resolve())
+            or path.suffix != '.jsonl' or not path.is_file()
+            or any((sessions/Path(*relative.parts[:i])).is_symlink()
+                   for i in range(len(relative.parts)+1))):
+        raise ValueError('native context must be an actual local session log')
+    session_matches = False
+    observations = []
+    latest_turn = None
+    with path.open() as stream:
+        for line in stream:
+            try:
+                row = json.loads(line)
+            except ValueError:
+                continue
+            payload = row.get('payload', {})
+            if row.get('type') == 'session_meta' and payload.get('id') == context['thread_id']:
+                session_matches = True
+            if row.get('type') == 'turn_context':
+                latest_turn = payload.get('turn_id')
+            if row.get('type') == 'turn_context' and payload.get('turn_id') == context['turn_id']:
+                observations.append((payload.get('model'), payload.get('effort')))
+    if (current and latest_turn != context['turn_id']):
+        raise ValueError('current coordinator requires the latest native model/effort turn context')
+    if not session_matches or not observations or any(
+            pair != (context['model'], context['effort']) for pair in observations):
+        raise ValueError('native model/effort does not match the referenced thread/turn')
+    return dict(context, observation='turn_context_only_not_terminal_execution')
+
+
+def validate_recovered_record(root, state, task_id):
+    """Separate maintainer evidence adoption from native execution acceptance."""
+    try:
+        _validate_recovered_record(root, state, task_id)
+    except (KeyError, TypeError, AttributeError, OSError) as exc:
+        raise ValueError('incomplete or invalid evidence-recovery checkpoint') from exc
+
+
+def _validate_recovered_record(root, state, task_id):
+    record = state['tasks'][task_id]
+    recovery = record.get('recovery', {})
+    if (not recovery or record.get('recovery_digest') != digest(recovery)
+            or record.get('policy_version') != '4'
+            or record.get('attempts') != 0 or record.get('validation_attempts') != 0
+            or any(k in record for k in ('execution', 'task_outcome', 'native_thread_id'))):
+        raise ValueError('invalid evidence-recovery checkpoint')
+    origin = recovery['origin']
+    path, previous = private_evidence(root, '.amr-local/goals/'+identifier(origin['goal_id'])+'.json')
+    if hashlib.sha256(path.read_bytes()).hexdigest() != origin['checkpoint_sha256']:
+        raise ValueError('recovery origin checkpoint changed')
+    old_record = previous['tasks'][task_id]
+    task = dispatched_task(state, task_id)
+    expected_plan = copy.deepcopy(previous['plan'])
+    expected_plan['goal_id'] = state['plan']['goal_id']
+    if (len(previous['tasks']) != 1 or origin['task_id'] != task_id
+            or state['plan'] != expected_plan
+            or old_record['status'] != 'failed' or old_record.get('policy_version') != '4'
+            or origin['task_digest'] != amr.task_identity(task)
+            or old_record.get('dispatch_task_digest') != amr.task_identity(task)
+            or task['scope'] != 'local-development' or amr.execution_role(task) != 'developer'
+            or set(task.get('signals', [])) & {'production', 'secrets', 'remote-execution'}):
+        raise ValueError('recovery requires one failed v4 local Developer task')
+    content = record['validated_identity']['content']
+    continued = record.get('completion_kind') == 'coordinator_continuation'
+    authorization = recovery.get('authorization', {})
+    if continued:
+        local_developer_only(task)
+        continuation = recovery.get('continuation', {})
+        if (continuation.get('execution_stopped') is not True
+                or continuation.get('effects') != 'repository_files_only'
+                or continuation.get('external_operations') != []
+                or any(not isinstance(continuation.get(k), str) or not continuation[k].strip()
+                       for k in ('scope_basis', 'inspection_evidence'))):
+            raise ValueError('continuation requires stopped execution, approved scope and inspected repository-only effects')
+    # Historical human-authorized recovery keeps its exact original requirements.
+    elif (authorization.get('purpose') != 'checkpoint_recovery'
+            or not valid_human_design_approval(authorization, content, task)):
+        raise ValueError('explicit task/content-bound maintainer recovery approval is required')
+    native = recovery['native_context']
+    if native.get('observation') != 'turn_context_only_not_terminal_execution':
+        raise ValueError('recovery must not claim native terminal execution')
+    if (native.get('model'), native.get('effort')) != amr.PROFILES['ENGINEERING']:
+        if continued:
+            raise ValueError('coordinator continuation requires exact default Developer model/effort')
+        override = authorization.get('model_override', {})
+        if ((override.get('model'), override.get('effort')) != (native.get('model'), native.get('effort'))
+                or not isinstance(override.get('decision_evidence'), str)
+                or not override['decision_evidence'].strip()):
+            raise ValueError('non-default native model requires explicit task-local approval')
+    triage = record['triage']
+    if (triage.get('task_id') != task_id or triage.get('content') != content
+            or not isinstance(triage.get('reviewed_by'), str) or not triage['reviewed_by'].strip()
+            or not isinstance(triage.get('rationale'), str) or not triage['rationale'].strip()):
+        raise ValueError('recovery requires exact-content contributor triage')
+    known = (task.get('findings', []) + old_record.get('triage', {}).get('findings', [])
+             + old_record.get('reconciliation', {}).get('findings', []))
+    if (any(not isinstance(f, dict) or not f.get('id') for f in known)
+            or not {f['id'] for f in known} <= {
+                f.get('id') for f in triage.get('findings', []) if isinstance(f, dict)}):
+        raise ValueError('recovery cannot omit previously reported findings')
+    gates = record['gates']
+    errors = amr.completion_errors(dict(gates, findings=triage.get('findings')), content,
+                                   product_required=record['product_required'])
+    checks = gates.get('checks', [])
+    names = [c.get('name') for c in checks]
+    mapping = next((c for c in checks if c.get('name') == 'mapping'), {})
+    if (gates.get('source_mapping') != 'executed' or len(names) != len(set(names))
+            or any(c.get('exit_code') != 0 for c in checks)
+            or mapping.get('command', [])[1:] != ['docs/tooling/changeguard.py', '--base',
+                                                   state['plan']['base'], '--working-tree']
+            or record['product_required'] is not (gates.get('product_tests') == 'executed')):
+        errors.append('recovery requires successful applicable gates and exact base mapping')
+    expected = set(task['paths']+task['consulted']+(task['write_paths'] if continued else []))
+    artifacts = record.get('output_artifacts', {})
+    if (set(artifacts) != expected or recovery.get('artifacts') != artifacts
+            or any(not (isinstance(value, str) and value)
+                   and not (continued and value is None and name in task['write_paths'])
+                   for name, value in artifacts.items())):
+        errors.append('recovery requires complete task/context artifact hashes')
+    if errors:
+        raise ValueError('; '.join(errors))
+
+
+def recover(root, goal_id, task_id, successor_id, evidence_path, *, coordinator=False):
+    """Adopt current evidence into a new checkpoint; never rewrite/replay failure."""
+    identifier(goal_id); identifier(task_id); identifier(successor_id)
+    if goal_id == successor_id:
+        raise ValueError('recovery requires a new successor goal ID')
+    with checkpoint(root, successor_id) as path:
+        if path.exists():
+            raise ValueError('successor already exists; inspect it instead of repeating recovery')
+        origin_path, _ = private_evidence(root, '.amr-local/goals/'+goal_id+'.json')
+        original = load(root, origin_path)
+        if len(original['tasks']) != 1 or task_id not in original['tasks']:
+            raise ValueError('bounded recovery supports a single-task origin only')
+        task = dispatched_task(original, task_id)
+        _, evidence = private_evidence(root, evidence_path)
+        identity = current_identity(root)
+        expected_origin = dict(goal_id=goal_id, task_id=task_id,
+            checkpoint_sha256=hashlib.sha256(origin_path.read_bytes()).hexdigest(),
+            task_digest=amr.task_identity(task))
+        decision_field = 'continuation' if coordinator else 'authorization'
+        if (evidence.get('schemaVersion') != (2 if coordinator else 1)
+                or not {'origin', 'identity', 'gates', 'artifacts', decision_field, 'triage',
+                        'native_context'} <= evidence.keys()
+                or evidence.get('origin') != expected_origin
+                or evidence.get('identity') != identity):
+            raise ValueError('recovery evidence is stale or bound to another task/checkpoint')
+        _, gates = private_evidence(root, evidence.get('gates'))
+        files = amr.tree_identity(root)['files']
+        expected = set(task['paths']+task['consulted']+(task['write_paths'] if coordinator else []))
+        if (not isinstance(evidence.get('artifacts'), dict)
+                or set(evidence['artifacts']) != expected
+                or any(files.get(name) != value for name, value in evidence['artifacts'].items())):
+            raise ValueError('recovery artifact hashes are missing or stale')
+        plan = copy.deepcopy(original['plan']); plan['goal_id'] = successor_id
+        recovery = dict(origin=expected_origin,
+                        native_context=native_context_evidence(evidence['native_context']),
+                        artifacts=copy.deepcopy(evidence['artifacts']), created_at=amr.now())
+        recovery[decision_field] = copy.deepcopy(evidence[decision_field])
+        record = dict(task_id=task_id, status='completed',
+            completion_kind='coordinator_continuation' if coordinator else 'evidence_recovery',
+            attempts=0, validation_attempts=0, policy_version='4',
+            dispatch_task=copy.deepcopy(task), dispatch_task_digest=amr.task_identity(task),
+            validated_identity=identity, gates=gates, product_required=(root/'Kordra.slnx').is_file(),
+            triage=evidence['triage'], output_artifacts=copy.deepcopy(evidence['artifacts']),
+            recovery=recovery, recovery_digest=digest(recovery))
+        state = dict(schemaVersion=1, plan=plan, plan_digest=digest(plan),
+            objective_hash=original['objective_hash'], created_at=amr.now(),
+            tasks={task_id: record}, events=[dict(at=amr.now(), task_id=task_id,
+            status='completed', detail=('Inspected local coordinator continuation; original failure retained; no AI dispatch'
+                if coordinator else 'Maintainer-authorized evidence recovery; original failure retained; no AI dispatch'))])
+        state['control'] = default_control(state)
+        validate_recovered_record(root, state, task_id)
+        if identity != current_identity(root):
+            raise ValueError('source/Git changed during recovery')
+        atomic_save(path, state)
+        return projection(root, load(root, path))
+
+
 def add_parser(sub):
     parser = sub.add_parser('goal', help='persistent local goal execution')
     commands = parser.add_subparsers(dest='goal_command', required=True)
     p = commands.add_parser('init'); p.add_argument('--plan', required=True, type=Path)
+    p = commands.add_parser('recover', help='adopt approved current evidence into a new checkpoint; no AI dispatch')
+    p.add_argument('--id', required=True)
+    p.add_argument('--task-id', required=True)
+    p.add_argument('--as-goal', required=True)
+    p.add_argument('--evidence', required=True)
+    p = commands.add_parser('continue', help='record inspected local Developer continuation; no replay or new approval')
+    p.add_argument('--id', required=True); p.add_argument('--task-id', required=True)
+    p.add_argument('--as-goal', required=True); p.add_argument('--evidence', required=True)
+    p = commands.add_parser('finish', help='record current-session completion without a native terminal receipt')
+    p.add_argument('--id', required=True); p.add_argument('--task-id', required=True)
+    p.add_argument('--evidence', required=True)
     for command in ('status', 'step', 'validate', 'accept', 'reconcile', 'recommend', 'pause', 'resume'):
         p = commands.add_parser(command); p.add_argument('--id', required=True)
         if command in {'validate', 'accept', 'reconcile'}:
@@ -1127,6 +1645,8 @@ def add_parser(sub):
             p.add_argument('--triage', required=True, type=Path)
         if command == 'step':
             p.add_argument('--design-review', type=Path)
+            p.add_argument('--native-runner', action='store_true', help='explicit optional serial AI session')
+            p.add_argument('--context', help='private native turn context and approved scope basis')
         if command == 'reconcile':
             p.add_argument('--evidence', required=True)
         if command == 'recommend':
@@ -1145,10 +1665,18 @@ def add_parser(sub):
 def main(root, args):
     if args.goal_command == 'init':
         return init(root, json.loads(args.plan.read_text()))
+    if args.goal_command == 'recover':
+        return recover(root, args.id, args.task_id, args.as_goal, args.evidence)
+    if args.goal_command == 'continue':
+        return recover(root, args.id, args.task_id, args.as_goal, args.evidence, coordinator=True)
+    if args.goal_command == 'finish':
+        return finish(root, args.id, args.task_id, private_evidence(root, args.evidence)[1])
     if args.goal_command == 'status':
         return status(root, args.id)
     if args.goal_command == 'step':
-        return step(root, args.id, json.loads(args.design_review.read_text()) if args.design_review else None)
+        return step(root, args.id, json.loads(args.design_review.read_text()) if args.design_review else None,
+                    native_runner=args.native_runner,
+                    context=private_evidence(root, args.context)[1] if args.context else None)
     if args.goal_command == 'validate':
         return validate(root, args.id, args.task_id)
     if args.goal_command == 'accept':
