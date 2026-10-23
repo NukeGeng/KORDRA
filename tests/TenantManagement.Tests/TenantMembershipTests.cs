@@ -191,6 +191,8 @@ public sealed class TenantMembershipTests : IAsyncLifetime
 
     private async Task<(DefinitionWriteResult Role, TenantScope Scope, DateTimeOffset Deadline)> EarlierProvenance(string variant)
     {
+        // Force sub-microsecond input on every OS instead of depending on UtcNow resolution.
+        _clock.Now = _clock.Now.AddTicks(-(_clock.Now.Ticks % 10) + 7);
         var (role, scope, root) = await ProjectCapability(_clock.Now.AddMinutes(5));
         var child = await _service.ExecuteAsync(Assign(role, scope) with { ExpiresAtUtc = _clock.Now.AddMinutes(4) });
         Assert.Equal("success", child.Status);
@@ -206,6 +208,9 @@ public sealed class TenantMembershipTests : IAsyncLifetime
         if (variant == "unbounded-leaf") selected.ExpiresAtUtc = null;
         if (variant == "selected") selected.ExpiresAtUtc = _clock.Now.AddSeconds(30);
         await db.SaveChangesAsync();
+        // Compare against the committed PostgreSQL deadline, not the pre-save 100 ns value.
+        await db.Entry(administrative).ReloadAsync();
+        await db.Entry(selected).ReloadAsync();
         return (role, scope, variant == "selected" ? selected.ExpiresAtUtc!.Value : administrative.ExpiresAtUtc.Value);
     }
 

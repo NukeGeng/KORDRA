@@ -179,3 +179,7 @@ FEAT-TEN-001 / MOD-TEN corrects 4355763873 by returning minimum expiry while val
 ## PR14 P2 offline bind readiness — 2026-10-23
 
 The existing offline policy coordinator now checks status/effective/expiry for fresh binds before staging and before commit. Ten regression failures were reproduced before repair. Known rejection rolls back IAM/PRJ/AUD state; exact committed receipts and inactive disabling publication remain legitimate. No dependency, migration, ADR, permission, provider operation or extra AI review is added. PR14 P1 correction remains intact.
+
+## PR14 deterministic PostgreSQL timestamp fixture — 2026-10-23
+
+FEAT-TEN-001 corrects the new provenance regression fixture after Linux artifact-domain failure 39915294133: use deliberately fractional-microsecond input and reload the stored expiry for expected values. This preserves exact assertions and detects the original P1; no production source, contract, migration, accepted ADR, test count, skip or authority boundary changes.

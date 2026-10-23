@@ -234,3 +234,7 @@ Finding 4355763873 maps to TenantMembershipService's shared provenance/effective
 ## PR14 P2 current policy readiness — 2026-10-23
 
 Finding 4355763870 maps to OfflineResourcePolicyCoordinator and ResourcePolicyIntegrationTests under IAM/PRJ with AUD/INV consumer acknowledgments. Ten pre-fix cases reproduced invalid fresh-bind success, including expiry after actual audit staging. All 19 policy integration cases pass after repair. Tests assert no binding/history/receipt/audit side effects on denial, zero commit attempts on post-stage expiry, retained gate availability, legitimate active bind/inactive publication and exact receipt replay after expiry/current-head change. This is local contributor evidence; provider follow-up and human merge remain separate.
+
+## PR14 artifact-domain timestamp fixture — 2026-10-23
+
+Run 39915294133 failed two TEN provenance assertions on head 4df02bd because expected pre-save .NET timestamps retained fractional microsecond ticks discarded by PostgreSQL. TenantMembershipTests now forces that representation on every OS and derives expected timestamps from persisted rows. Before repair all three variants reproduced the CI mismatch locally; post-repair verification preserves strict deadline equality and boundary denial without altering production code. Hosted follow-up must establish Linux success on the new head.
