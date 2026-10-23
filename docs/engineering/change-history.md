@@ -128,3 +128,7 @@ T06 validation correction — 2026-10-23: updated the Host PE-reference expectat
 ## PR14 P1 effective provenance expiry — 2026-10-23
 
 FEAT-TEN-001 / MOD-TEN corrects 4355763873 by returning minimum expiry while validating all provenance branches. IAM scoped facts and grantor ceilings inherit the result through existing contracts. Failure and unbounded-valid states remain distinct. Synthetic stored-state regressions reproduce and prevent protected handoff after upstream expiry; ordinary grant ceilings and accepted bounded transport remain intact. No new dependency, schema/ADR/permission change, checkpoint replay, real operation or additional AI review. PR14 P2 remains separate and unresolved.
+
+## PR14 P2 offline bind readiness — 2026-10-23
+
+The existing offline policy coordinator now checks status/effective/expiry for fresh binds before staging and before commit. Ten regression failures were reproduced before repair. Known rejection rolls back IAM/PRJ/AUD state; exact committed receipts and inactive disabling publication remain legitimate. No dependency, migration, ADR, permission, provider operation or extra AI review is added. PR14 P1 correction remains intact.

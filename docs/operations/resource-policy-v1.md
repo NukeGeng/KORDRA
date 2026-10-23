@@ -49,3 +49,7 @@ Known pre-commit setup/save failures roll back without closing unrelated admissi
 ## Evidence and escalation
 
 Record installation/target identity, scope, exact manifest/hash, privately approved decision, command result, owner/audit references, checks and any incident. Never include payloads, passwords or private infrastructure details in public evidence. [T06 traceability](../engineering/traceability.md) separates local deterministic proof from hosted CI/Codex review, manual configuration and human merge. NukeGeng owns unresolved commit/configuration issues; no automatic Sol review or extra review round is triggered by this runbook.
+
+### Fresh bind validity and historical replay
+
+A new bind/rebind requires an active, already-effective current policy that has not expired; equality at expiry is denied. The coordinator checks again just before commit. A denied fresh command creates no binding history, receipt or audit record and preserves existing bindings. Publishing an inactive revision to disable a policy remains supported. An exact committed command may still reconcile its original receipt after expiry/deactivation; that replay neither rebinds nor grants read authority. Do not change the manifest/hash merely to bypass a denial.

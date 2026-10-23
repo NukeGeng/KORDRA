@@ -19,8 +19,8 @@ public sealed class ResourcePolicyIntegrationTests : CatalogTestFixture
 {
     private readonly Guid _installation = Guid.NewGuid();
     private readonly PolicyClock _clock = new();
-    private OfflineResourcePolicyCoordinator PolicyCoordinator() => new(_installation, Identity, TenantService,
-        new AuditAppendStore(new PooledDbContextFactory<AuditDbContext>(AuditDbContextFactory.CreateTestOptions(Locator))), Gate, _clock);
+    private OfflineResourcePolicyCoordinator PolicyCoordinator(IOfflinePolicyAuditTransactionFactory? audits = null) => new(_installation, Identity, TenantService,
+        new AuditAppendStore(new PooledDbContextFactory<AuditDbContext>(AuditDbContextFactory.CreateTestOptions(Locator))), Gate, _clock, audits);
     private ResourcePolicyPayload Payload(string scope = "project_without_environment") => new(1, "target.read", scope, "active", _clock.Now.AddMinutes(-1), null,
         scope == "environment" ? [new("Production", "allow"), new("Staging", "allow")] : [new("NoEnvironment", "allow")]);
     private ResourcePolicyManifest Manifest(Guid project, ResourcePolicyPayload? payload, params PolicyBindingChange[] bindings) =>
@@ -77,6 +77,99 @@ public sealed class ResourcePolicyIntegrationTests : CatalogTestFixture
         Assert.Equal("conflict", (await Apply(initial with { Payload = initial.Payload! with { Status = "inactive" } })).Status);
         var stale = update with { ManifestId = Guid.NewGuid() };
         Assert.Equal("conflict", (await Apply(stale)).Status);
+    }
+
+    [Theory]
+    [InlineData("inactive", false)] [InlineData("inactive", true)]
+    [InlineData("expired", false)] [InlineData("expired", true)]
+    [InlineData("expiry-equality", false)] [InlineData("expiry-equality", true)]
+    [InlineData("future", false)] [InlineData("future", true)]
+    public async Task Fresh_bind_refuses_unready_current_policy_without_owner_audit_or_receipt_mutation(string state, bool replace)
+    {
+        var project = await Project();
+        var payload = Payload() with { Status = state == "inactive" ? "inactive" : "active", ExpiresAtUtc = _clock.Now.AddMinutes(1) };
+        var created = await Apply(Manifest(project.Id, payload, replace ? [new(null, "project_without_environment", null, 0)] : []));
+        Assert.Equal("success", created.Status);
+        if (state == "expired") _clock.Now = payload.ExpiresAtUtc!.Value.AddTicks(10);
+        if (state == "expiry-equality") _clock.Now = payload.ExpiresAtUtc!.Value;
+        if (state == "future")
+        {
+            // Synthetic stored head: publication does not allow scheduled activation.
+            var future = payload with { EffectiveFromUtc = _clock.Now.AddSeconds(30) };
+            await using var iam = await Identity.CreateDbContextAsync();
+            var row = await iam.Set<ResourcePolicyRevision>().SingleAsync(x => x.PolicyId == created.PolicyId && x.Revision == 1);
+            row.EffectiveFromUtc = future.EffectiveFromUtc; row.ContentHash = Convert.FromHexString(ResourcePolicies.Hash(future));
+            await iam.SaveChangesAsync();
+        }
+        var binding = created.Bindings!.SingleOrDefault();
+        var bind = Manifest(project.Id, null, new PolicyBindingChange(binding?.BindingId, "project_without_environment", null, replace ? 1 : 0))
+            with { Operation = "bind", PolicyId = created.PolicyId, ExpectedCurrentRevision = 1 };
+        Assert.Equal("denied", (await Apply(bind)).Status);
+        await AssertRejectedBindHasNoEffects(bind, replace);
+    }
+
+    [Fact]
+    public async Task Bind_rechecks_expiry_after_real_audit_staging_and_rolls_back_before_commit()
+    {
+        var project = await Project(); var payload = Payload() with { ExpiresAtUtc = _clock.Now.AddMinutes(1) };
+        var created = await Apply(Manifest(project.Id, payload, new PolicyBindingChange(null, "project_without_environment", null, 0)));
+        Assert.Equal("success", created.Status); var binding = Assert.Single(created.Bindings!);
+        var bind = Manifest(project.Id, null, new PolicyBindingChange(binding.BindingId, "project_without_environment", null, 1))
+            with { Operation = "bind", PolicyId = created.PolicyId, ExpectedCurrentRevision = 1 };
+        var staging = new AdvanceAfterStage(() => _clock.Now = payload.ExpiresAtUtc!.Value);
+        using var lease = new OfflineLease();
+        var result = await PolicyCoordinator(staging).ExecuteAsync(lease, Encoding.UTF8.GetString(bind.CanonicalBytes()), bind.Hash());
+        Assert.Equal("denied", result.Status); Assert.Equal(1, staging.Stages); Assert.Equal(0, staging.Commits);
+        await AssertRejectedBindHasNoEffects(bind, true);
+    }
+
+    [Fact]
+    public async Task Exact_committed_bind_replays_after_expiry_and_inactive_publication_without_rebinding()
+    {
+        var project = await Project(); var payload = Payload() with { ExpiresAtUtc = _clock.Now.AddMinutes(1) };
+        var created = await Apply(Manifest(project.Id, payload)); Assert.Equal("success", created.Status);
+        var bind = Manifest(project.Id, null, new PolicyBindingChange(null, "project_without_environment", null, 0))
+            with { Operation = "bind", PolicyId = created.PolicyId, ExpectedCurrentRevision = 1 };
+        var first = await Apply(bind); Assert.Equal("success", first.Status);
+        _clock.Now = payload.ExpiresAtUtc!.Value;
+        var inactive = Manifest(project.Id, Payload() with { Status = "inactive" })
+            with { Operation = "publish", PolicyId = created.PolicyId, ExpectedCurrentRevision = 1 };
+        Assert.Equal("success", (await Apply(inactive)).Status); // disabling publication remains legitimate
+        var replay = await Apply(bind); Assert.Equal("success", replay.Status);
+        Assert.Equal(Assert.Single(first.Bindings!), Assert.Single(replay.Bindings!));
+        Assert.Equal("conflict", (await Apply(bind with { ExpectedCurrentRevision = 999 })).Status);
+        var fresh = bind with { ManifestId = Guid.NewGuid(), ExpectedCurrentRevision = 2,
+            Bindings = [new(Assert.Single(first.Bindings!).BindingId, "project_without_environment", null, 1)] };
+        Assert.Equal("denied", (await Apply(fresh)).Status);
+        await AssertRejectedBindHasNoEffects(fresh, true);
+    }
+
+    private async Task AssertRejectedBindHasNoEffects(ResourcePolicyManifest bind, bool existing)
+    {
+        await using var prj = await Projects.CreateDbContextAsync();
+        var rows = await prj.Set<PolicyBindingRecord>().Where(x => x.TenantId == Tenant && x.ProjectId == bind.ProjectId).ToArrayAsync();
+        Assert.Equal(existing ? 1 : 0, rows.Length);
+        if (existing) Assert.Equal(1, Assert.Single(rows).BindingRevision);
+        Assert.Equal(existing ? 1 : 0, await prj.Set<PolicyBindingHistoryRecord>().CountAsync(x => x.TenantId == Tenant && x.ProjectId == bind.ProjectId));
+        await using var iam = await Identity.CreateDbContextAsync();
+        Assert.False(await iam.Set<ResourcePolicyCommandReceipt>().AnyAsync(x => x.InstallationId == _installation && x.ManifestId == bind.ManifestId));
+        await using var aud = new AuditDbContext(AuditDbContextFactory.CreateTestOptions(Locator));
+        Assert.False(await aud.Entries.AnyAsync(x => x.IntentId == bind.ManifestId));
+        await using var admission = await Gate.AcquireReadAsync(); // known rollback must not poison admission
+    }
+
+    private sealed class AdvanceAfterStage(Action advance) : IOfflinePolicyAuditTransactionFactory
+    {
+        public int Stages, Commits;
+        public async ValueTask<IOfflinePolicyAuditTransaction> EnlistAsync(System.Data.Common.DbConnection connection, System.Data.Common.DbTransaction transaction, IOfflineAuditLease lease, CancellationToken ct = default)
+            => new Transaction(await new OfflinePolicyAuditTransactionFactory().EnlistAsync(connection, transaction, lease, ct), this, advance);
+        private sealed class Transaction(IOfflinePolicyAuditTransaction real, AdvanceAfterStage owner, Action advance) : IOfflinePolicyAuditTransaction
+        {
+            public async Task<AuditTransactionStageOutcome> StageAsync(AuditIntent intent, CancellationToken ct = default)
+            { var result = await real.StageAsync(intent, ct); if (result.Status == AuditTransactionStageStatus.Staged) { owner.Stages++; advance(); } return result; }
+            public Task<AuditAppendOutcome> CommitAsync(CancellationToken ct = default) { owner.Commits++; return real.CommitAsync(ct); }
+            public ValueTask DisposeAsync() => real.DisposeAsync();
+        }
     }
 
     [Fact]

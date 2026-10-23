@@ -488,3 +488,7 @@ T06 architecture validation: the Host composition now consumes the existing TEN 
 ## PR14 inherited grant expiry — 2026-10-23
 
 P1 finding 4355763873 is corrected in TEN's existing owner resolver, which supplies the effective earliest provenance deadline to IAM. ProtectedReadAdmission already caps U/D by that deadline and rechecks after audit before handoff; its protocol and response semantics are unchanged. The real-TEN/admission regression advances trusted synthetic time to the upstream expiry during U and D audit and asserts zero protected outputs. An accepted transport can still finish within the existing bounded stage; this correction does not claim to retract handed bytes. Same owner DTO shapes, permission/scope and accepted ADR-0012/0014 remain in force. P2 policy-bind validity is a separate unresolved PR14 finding.
+
+## PR14 fresh-bind policy validity — 2026-10-23
+
+P2 finding 4355763870 is corrected in the existing offline coordinator. Fresh bind requires the exact current policy to be active, effective at current trusted time, and not expired (expiry equality denies), both before staging bindings and after real AUD staging before commit. Exact installation/hash/receipt reconciliation still precedes mutable validity and returns only the committed historical result. Inactive publication remains supported to disable a policy. No new permission, owner, schema or ADR is introduced; independent provider follow-up remains pending.

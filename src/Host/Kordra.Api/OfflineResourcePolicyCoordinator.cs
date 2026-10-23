@@ -83,6 +83,7 @@ public sealed class OfflineResourcePolicyCoordinator(Guid installationId, IDbCon
             else policy = await iam.StagePublicationAsync(custody, manifest.TenantId, manifest.ProjectId, manifest.PolicyId,
                 manifest.ExpectedCurrentRevision, manifest.Payload!, now, ct);
             if (policy is null) return new("conflict");
+            if (!PolicyReadyForCommit(policy.Payload, manifest.Operation, now)) return new("denied");
             var bindings = new List<PolicyBinding>();
             foreach (var b in manifest.Bindings)
             {
@@ -107,7 +108,7 @@ public sealed class OfflineResourcePolicyCoordinator(Guid installationId, IDbCon
             if (staged.Status != AuditTransactionStageStatus.Staged) return new("unavailable");
             custody.RequireHeld();
             now = TrustedUtcNow();
-            if (manifest.Operation != "bind" && (policy.Payload.EffectiveFromUtc > now || policy.Payload.Status == "active" && policy.Payload.ExpiresAtUtc <= now)) return new("denied");
+            if (!PolicyReadyForCommit(policy.Payload, manifest.Operation, now)) return new("denied");
             commitAttempted = true;
             var outcome = await auditTransaction.CommitAsync(ct);
             if (outcome.Status == AuditAppendStatus.Unknown) gate.Close();
@@ -118,6 +119,11 @@ public sealed class OfflineResourcePolicyCoordinator(Guid installationId, IDbCon
         catch when (!commitAttempted) { return new("unavailable"); }
         catch { gate.Close(); return new("unknown"); }
     }
+    private static bool PolicyReadyForCommit(ResourcePolicyPayload payload, string operation, DateTimeOffset now) =>
+        payload.EffectiveFromUtc <= now &&
+        (operation != "bind" || payload.Status == "active") &&
+        (payload.Status != "active" || payload.ExpiresAtUtc is null || payload.ExpiresAtUtc > now);
+
     private DateTimeOffset TrustedUtcNow()
     { try { return clock.GetTrustedUtcNow(); } catch { gate.Close(); throw; } }
     private static bool MatchesDatabase(KordraIdentityDbContext db, ResourcePolicyManifest manifest)
