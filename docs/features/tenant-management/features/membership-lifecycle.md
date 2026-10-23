@@ -88,3 +88,7 @@ T04 provides owner handlers and test composition only. HTTP routes remain unregi
 ## PR12 receipt reconciliation correction — 2026-10-23
 
 FEAT-TEN-001 / MOD-TEN; finding 4345647477. ExecuteAsync still requires the current trusted authenticated subject and an active IAM account, then reconciles the subject/content-bound durable receipt before resolving mutable TEN authority. This permits an exact retry after the committed command suspends its own tenant or revokes its own membership/assignment; it does not restore grants. Changed content or another subject cannot claim the same receipt; new commands still require current effective permission and scope. No public schema, permission model, migration or accepted ADR changes. TenantMembershipTests reproduces the previous suspend/membership retry failures and covers all three self-invalidating operations, conflicting content, fresh-key denial, foreign/anonymous subject and disabled account. Existing lost-ACK and audit/atomicity tests remain required.
+
+## T05 shared-owner integration — 2026-10-22
+
+T05 test composition resolves exact PRJ owner scopes through its own Contracts/store and tests real TEN scoped grants for catalog/target operations. TEN source, persistence and permission rules are unchanged; its test lock graph expands transitively through Host. No cookie authority, positive default or production resource adapter was introduced.

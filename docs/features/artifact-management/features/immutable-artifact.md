@@ -82,3 +82,7 @@ T03 adds `Kordra.BuildingBlocks.Security` to the co-owned `Kordra.slnx` for the 
 ## T04 solution co-ownership — 2026-10-22
 
 The shared solution adds IAM Contracts, TEN Contracts/runtime and TEN tests under accepted ADR-0012. Artifact Domain source, dependencies and identity contract are unchanged. Existing 48 Artifact tests and actual assembly isolation checks remain part of Product validation; no Artifact feature expansion is claimed.
+
+## T05 shared-owner integration — 2026-10-22
+
+T05 adds the accepted PRJ catalog Contracts/runtime and scoped integration tests to the co-owned root solution. Artifact source/contract/dependencies are unchanged; its 48 tests and assembly isolation remain required.

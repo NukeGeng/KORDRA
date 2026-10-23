@@ -155,3 +155,13 @@ Fixed the existing AMR plan/dispatch path so a feature can declare exact new or 
 ## PR11 main reconciliation — 2026-10-23
 
 FEAT-AMR-001 keeps merged T03 audit setup/unknown-commit fixes intact and retains historical AMR notes during conflict resolution. Codex findings 4343932365/4343932372 are addressed by deletion-aware continuation artifacts and Markdown-only Architect inputs/outputs/writes, with before/after regressions. No new runtime architecture, routing, dependency or automatic review is introduced; historical checkpoints retain their obligations.
+
+## T05 local PRJ/INV implementation — 2026-10-22
+
+FEAT-PRJ-001 / MOD-PRJ implements catalog ownership/lifecycle, explicit environment classification/policy and association persistence. FEAT-INV-001 / MOD-INV adds target metadata owner persistence and exact matching PRJ association. Host composes both owners and AUD atomically under the common gate; owner preparation never commits independently. Approved EF/Npgsql pins, additive offline migrations, runtime/test role guards, BCL Contracts and source mappings are retained.
+
+28 new targeted PostgreSQL cases and four architecture cases passed; tests include real second-owner save failure, rollback of both owners/audit, unknown outcomes, no implicit grants, explicit absence, cross-tenant/project FKs, current policy and association mismatch. Nested PE type names now include declaring types instead of colliding on compiler-generated short names. T04 snapshots/evidence are preserved for feature-scoped commits. No new ADR decision, route/provider enablement, production migration, real provisioning, AI review or PR side effect. Final gate/publication status follows the dated traceability record.
+
+## PR13 documented PRJ migration locator — 2026-10-23
+
+FEAT-PRJ-001 fixes finding 4345619894 by correcting the environment-variable spelling. The regression reproduces the missing-locator error, then confirms the documented variable reaches target validation without opening a connection. Main/T04/TEN review corrections remain intact during T05 integration; no migration, dependency or architecture change.

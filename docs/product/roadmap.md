@@ -50,8 +50,8 @@ The independent native GPT-6.1 Sol High review of ADR-0009 and its six specs com
 | MOD-IAM | FEAT-IAM-001 / FEAT-IAM-002 | T01–T03 persistence/audit/local authentication merged at main 25bd7e7; T04 role-definition owner implementation is local with targeted tests; T06 protected authorization enforcement remains pending |
 | MOD-TEN | FEAT-TEN-001 | T04 local owner persistence/handlers and targeted PostgreSQL tests; no HTTP routes or real provisioning; T05/T06 wiring pending |
 | MOD-PAD | FEAT-PAD-001 | Not implemented; scoped support/elevation policy open |
-| MOD-PRJ | FEAT-PRJ-001 | Not implemented; trusted tenant ownership prerequisite |
-| MOD-INV | FEAT-INV-001 | I1 local loopback API and inventory contracts implemented/verified; target registration and real Kubernetes/Helm reads remain unimplemented |
+| MOD-PRJ | FEAT-PRJ-001 | T05 local catalog/lifecycle/classification/policy/association owner implementation and PostgreSQL tests; T06 production adapters/HTTP pending |
+| MOD-INV | FEAT-INV-001 | I1 local loopback API and inventory contracts implemented/verified; T05 target metadata/atomic association is locally implemented; real Kubernetes/Helm reads remain unimplemented |
 | MOD-SEC | FEAT-SEC-001 | Not implemented; secret provider binding and access policy open |
 | MOD-ART | FEAT-ART-001 | I1 merged via PR #1 at `2aa156f4`; merge-SHA docs/product CI passed; scoped ADR-0008 accepted; registry-backed registration not implemented |
 | MOD-REL | FEAT-REL-001 | Not implemented; artifact/catalog/approval dependencies unmet |
@@ -149,3 +149,7 @@ IAM definition and TEN membership/exact-scope assignment owner slices are implem
 ### AMR coordination evidence — 2026-10-22
 
 The stopped T03 checkpoint is reconciled as failed with its prior snapshot and findings preserved; it no longer holds an active coordinator claim. T01/T02 remain merged through PR #9. PR #10 contains the six corrective paths at `fcad37f28c468c02805916252f785eec1d559f92`, with exact-tree 246 Product/168 tooling test evidence. This supersedes the earlier pre-publication note above, but not independent PR follow-up, human merge or future feature gates. Publishing AMR tooling neither replays Product work nor completes T03.
+
+## T05 local owner progress — 2026-10-22
+
+PRJ catalog and INV metadata/two-owner association slices are locally implemented under accepted ADR-0012, with 28 targeted PostgreSQL cases and four architecture tests passed. See [T05 traceability](../engineering/traceability.md#t05--prj-catalog-and-inv-target-association--2026-10-22) for exact full-gate/publication evidence and limits. T06 current authorization/policy/workspace composition and U/D HTTP enforcement remain the next dependency. No runtime migration, real provisioning, provider read or Operator Pilot/Beta readiness claim.

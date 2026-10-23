@@ -194,3 +194,21 @@ Finding 4345647477 maps to TenantMembershipService.ExecuteAsync and TenantMember
 ## FEAT-AMR-001 PR11 integration and finding fixes — 2026-10-23
 
 Merge reconciliation preserves main Product runtime/tests and both sides of historical AMR/Product evidence. The existing tooling/contract/feature and `test_goal.py` own the deletion-tombstone and Architect output/write restriction fixes for findings 4343932365/4343932372. Both original failures were reproduced before repair; targeted continuation/Architect tests pass. No Product behavior, accepted ADR, historical checkpoint or provider review state is rewritten by this integration.
+
+## T05 — PRJ catalog and INV target association — 2026-10-22
+
+Continue from the locally verified T04 input on codex/foundation-t04-definitions-tenancy (Git base remains human-merged T03 25bd7e71fbeb5370d19baac1878ab1609c7d72a3). Original T04 source/doc snapshots and SHA-256 manifest are preserved privately under .amr-local/t05-preparation/t04-input/ for future feature-scoped commit separation; historical checkpoints and T04 full-gate evidence are unchanged. No commit/push/PR or AI review was initiated. Model/effort metadata for this resumed turn is unverified; no model substitution or extension of the historical T04-only model exception is claimed.
+
+| Feature / module | Files and behavior | Contracts, authorization and validation |
+|---|---|---|
+| FEAT-PRJ-001 / MOD-PRJ | ProjectEnvironment Contracts/runtime/context/migration/store; project/application/environment lifecycle, monotonic revisions, immutable initial classification/policy and PRJ target association | Accepted ADR-0012; authority/admission v1; project.manage at verified applicable scope; trusted policy association. ProjectCatalogTests and actual graph/PE checks. |
+| FEAT-INV-001 / MOD-INV | Existing INV runtime plus target metadata Contracts/context/migration/store; stable target identity, exact owner binding and Active/Disabled/Deleted lifecycle | target.manage at exact project/environment; current resolved PRJ ownership and matching binding revision. TargetAssociationTests exercises rollback, replay, FK/scope/policy denial and both unknown-commit outcomes. |
+| Shared Host / owner consumers | CatalogMutationCoordinator, typed offline DbMigrator dispatch/locators, solution/lock graphs | No cross-owner table access; one transaction/gate/AUD commit; current subject/policy revalidated. Existing IAM/AUD/TEN/ART feature records acknowledge shared impacts. |
+
+Targeted evidence: 28 new PostgreSQL cases and four architecture tests passed; PRJ and INV model/migration comparisons found no drift. Final validation command is python3 docs/tooling/amr.py gates --base 25bd7e71fbeb5370d19baac1878ab1609c7d72a3 with private isolated-test/read-only probe locators. Its actual stable-content results are retained in .amr-local/t05-preparation/final-gates-output.txt and completion.json; no remote CI or independent PR review result is asserted for this unpublished content.
+
+Remaining boundary: T06 supplies production trusted session/tenant/current-policy/owner adapters, whole-workspace offline composition, guarded endpoints and U/D proof. HTTP inventory/PRJ/TEN ingress remains closed. No runtime migration, real tenant/account/workspace provisioning, provider or credential access occurred. Broader project policy replacement, provider/deployment/worker and full module readiness remain outside this slice. Accepted ADRs are unchanged; no existing debt is closed or hidden as completed integration.
+
+## FEAT-PRJ-001 PR13 locator regression — 2026-10-23
+
+ProjectEnvironmentMigrationCommand and ProjectCatalogTests own finding 4345619894. The documented PRJ locator now reaches the existing strict target guard; a synthetic forbidden target is rejected before connection. The regression failed before repair; final validation/publication evidence is recorded separately. No actual offline migration, new authority, schema change or automatic AI review is implied.

@@ -6,8 +6,8 @@ last_reviewed: 2026-10-20
 module_id: MOD-PRJ
 feature_id: FEAT-PRJ-001
 phase: MVP
-source_paths: []
-test_paths: []
+source_paths: ["Kordra.slnx", "src/Host/Kordra.Api/CatalogMutationCoordinator.cs", "src/Host/Kordra.Api/Kordra.Api.csproj", "src/Host/Kordra.Api/packages.lock.json", "src/Host/Kordra.DbMigrator/Kordra.DbMigrator.csproj", "src/Host/Kordra.DbMigrator/Program.cs", "src/Host/Kordra.DbMigrator/ProjectEnvironmentMigrationCommand.cs", "src/Host/Kordra.DbMigrator/packages.lock.json", "src/Modules/ProjectEnvironment/Contracts/CatalogContracts.cs", "src/Modules/ProjectEnvironment/Contracts/Kordra.Modules.ProjectEnvironment.Contracts.csproj", "src/Modules/ProjectEnvironment/Contracts/packages.lock.json", "src/Modules/ProjectEnvironment/Infrastructure/Migrations/20261022065736_InitialProjectCatalog.Designer.cs", "src/Modules/ProjectEnvironment/Infrastructure/Migrations/20261022065736_InitialProjectCatalog.cs", "src/Modules/ProjectEnvironment/Infrastructure/Migrations/ProjectDbContextModelSnapshot.cs", "src/Modules/ProjectEnvironment/Infrastructure/ProjectDbContext.cs", "src/Modules/ProjectEnvironment/Infrastructure/ProjectDbContextFactory.cs", "src/Modules/ProjectEnvironment/Kordra.Modules.ProjectEnvironment.csproj", "src/Modules/ProjectEnvironment/ProjectCatalogStore.cs", "src/Modules/ProjectEnvironment/packages.lock.json"]
+test_paths: ["tests/InfrastructureInventory.Bootstrap.Tests/ArchitectureTests.cs", "tests/ProjectEnvironment.Tests/CatalogTestFixture.cs", "tests/ProjectEnvironment.Tests/ProjectCatalogTests.cs", "tests/ProjectEnvironment.Tests/ProjectEnvironment.Tests.csproj", "tests/ProjectEnvironment.Tests/TargetAssociationTests.cs", "tests/ProjectEnvironment.Tests/packages.lock.json"]
 ---
 
 # FEAT-PRJ-001 — Create and govern deployment environments
@@ -127,3 +127,21 @@ Future unit/contract/integration cases use synthetic profiles, fake identities/a
 - Test files: **unmapped** (`test_paths: []`).
 - Evidence: `PENDING` — link PR / commit / test report when implemented.
 - Open decisions: `NEEDS-DECISION` for any policy-specific variant not covered by accepted ADR.
+
+## T05 active implementation plan — 2026-10-22
+
+Owner PRJ, actor current trusted User, exact tenant scope. Project mutations require project.manage at catalog scope; target mutations require target.manage at exact project/environment. Required trusted authority and environment-policy ports have no positive runtime default. Planned source: src/Modules/ProjectEnvironment/Contracts/CatalogContracts.cs, src/Modules/ProjectEnvironment/Infrastructure/ProjectDbContext.cs, src/Modules/ProjectEnvironment/ProjectCatalogStore.cs, src/Host/Kordra.Api/CatalogMutationCoordinator.cs. Planned tests: tests/ProjectEnvironment.Tests/ProjectCatalogTests.cs. Implement owner-only persistence with approved EF/Npgsql pins, revision/idempotency/lifecycle checks, same-transaction PRJ/INV binding plus AUD, and negative/rollback/unknown-commit tests. No new HTTP route, provider read, real provisioning or runtime migration. Preserve accepted architecture and T04 evidence.
+
+## T05 PRJ owner implementation — local 2026-10-22
+
+FEAT-PRJ-001 / MOD-PRJ now owns Project/Application/Environment, lifecycle/revisions, explicit classification/policy association and its side of target binding. The context, additive migration/history and BCL-only Contracts are mapped above. Composite tenant/project/environment foreign keys prevent foreign links. Names never supply classification; rename leaves classification/policy unchanged. First-slice commands reject classification/policy replacement, tenant/project moves, client-generated create IDs and stale revisions. Deleted identities are retained and cannot be revived; changing state back still increases the revision.
+
+ProjectCatalogStore prepares/persists only its own rows in a transaction supplied by Host; it never commits independently. CatalogMutationCoordinator acquires the existing shared writer gate, resolves current trusted subject/permission, hashes command+subject for owner receipts, stages AUD, revalidates authority/policy and commits both owners and AUD once. Enlistment/setup failure cannot poison admission; unknown commit closes it. There is no default positive ICatalogAuthority or IEnvironmentPolicyReader implementation/registration. Tests use actual IAM/TEN grants and an explicitly synthetic policy allowlist; no platform fallback or implicit project-to-target rights.
+
+ProjectCatalogTests covers idempotent project/application creation, environment classification/policy, name-based downgrade rejection, current subject/tenant/project owner, stale revision and suspension/deletion, policy/subject loss at AUD staging and database FK denial. TargetAssociationTests co-tests cross-owner atomicity and association correctness. Suspended project management recovery cannot bypass invalid current project authority; production restoration/owner-fact adapters and U/D disclosure remain T06 wiring, not a permissive test authorizer. Owner preparation supports lifecycle transitions only when its caller supplies valid applicable authority.
+
+No PRJ HTTP endpoint or list-disclosure boundary is registered. Whole-workspace offline manifest/resource/grant composition and current policy persistence/adapters are not a delivered CLI here; they must be wired/proven at T06 under accepted contracts before real provisioning. Policy replacement/downgrade needs its own accepted command/approval semantics. Full module and Operator Pilot readiness are not claimed.
+
+## PR13 migrator locator correction — 2026-10-23
+
+FEAT-PRJ-001 / MOD-PRJ; finding 4345619894. The offline migration command reads the documented `KORDRA_PROJECTENVIRONMENT_MIGRATION_CONNECTION_STRING`. A regression supplies a synthetic test identity via that exact variable and verifies the existing offline-target guard rejects it before opening a connection, rather than reporting a missing locator. It fails before the spelling correction and passes after. Target/role validation, migration approval, runtime architecture and schemas are unchanged; no real migration is executed.
