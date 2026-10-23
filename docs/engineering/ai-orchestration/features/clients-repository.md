@@ -5,7 +5,7 @@ module_id: ENG-TOOLING
 status: implemented
 owner: engineering-maintainers
 phase: Foundation
-last_reviewed: 2026-10-20
+last_reviewed: 2026-10-21
 source_paths: [".gitmodules", "clients", "docs/tooling/submodulecheck.py", "docs/tooling/doccheck.py", "docs/tooling/amr.py", "docs/tooling/changeguard.py", ".github/workflows/docs-ci.yml"]
 test_paths: ["docs/tooling/tests/test_submodule_boundary.py"]
 ---
@@ -45,6 +45,8 @@ Reject malformed/extra submodule paths and URLs, non-gitlink entries, unresolved
 ## Source & test traceability
 
 The source/test paths above own the Git topology, deterministic boundary checks, Product discovery and context changes, co-owned with FEAT-AMR-001 where applicable. Clients owns its standalone checker/tests at its pinned commit. Original Product tree history remains in Git and an extraction receipt is retained privately. Validation results are recorded in the operating guide and change history after execution.
+
+Shared-tooling reconciliation, 2026-10-21: the pending `docs/tooling/amr.py` changes implement FEAT-AMR-001's owner-declared output paths and opt-in deterministic gate-evidence reuse. This document records that co-owned file's impact; the indexed Clients gitlink, traversal exclusion and independent working-tree boundary retain their existing semantics. The maintainer authorized this traceability-only update alongside T03 validation. Product's pin check and the existing submodule-boundary regressions verify this boundary without building, testing or modifying Clients/Website.
 
 Clients bootstrap commit: `387c56edc75df8332775e267e8cac50462b781dd`; its [repository-integrity CI](https://github.com/NukeGeng/KORDRA-Clients/actions/runs/39262407727) passed. Only the Git topology/scaffold is implemented. Product integration remains a feature-branch change pending CI/review and human merge; this status does not claim the setup has shipped on Product main or that a frontend application exists.
 

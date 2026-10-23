@@ -70,7 +70,7 @@ class NativeTaskContract(unittest.TestCase):
         with patch('amr_native.Native') as cls:
             native = self.configure(cls)
             result = amr_native.execute_task(Path('.'), self.task(), 'gpt-6.1-sol', 'high')
-            cls.assert_called_once_with(Path('.'), timeout=600)
+            cls.assert_called_once_with(Path('.'), timeout=None)
             native.start.assert_called_once_with('gpt-6.1-sol', 'high', sandbox='read-only',
                 developer_instructions=native.start.call_args.kwargs['developer_instructions'])
             thread, prompt, model, effort = native.turn.call_args.args

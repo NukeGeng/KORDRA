@@ -107,6 +107,27 @@ public sealed class ProjectCatalogTests : CatalogTestFixture
         await Assert.ThrowsAsync<DbUpdateException>(() => db.SaveChangesAsync());
     }
 
+    [Fact]
+    public async Task Documented_PRJ_migration_locator_reaches_exact_target_guard_without_connecting()
+    {
+        const string variable = "KORDRA_PROJECTENVIRONMENT_MIGRATION_CONNECTION_STRING";
+        var previous = System.Environment.GetEnvironmentVariable(variable); var oldError = Console.Error;
+        const string misspelled = "KORDRA_PROJECPRJVIRONMENT_MIGRATION_CONNECTION_STRING";
+        var previousMisspelled = System.Environment.GetEnvironmentVariable(misspelled);
+        using var output = new StringWriter();
+        try
+        {
+            // This exact isolated-test identity must be rejected by the runtime migration guard.
+            System.Environment.SetEnvironmentVariable(misspelled, null);
+            System.Environment.SetEnvironmentVariable(variable, "Host=127.0.0.1;Port=5432;Database=kordra_test;Username=kordra_test");
+            Console.SetError(output);
+            Assert.Equal(2, await Kordra.DbMigrator.ProjectEnvironmentMigrationCommand.RunAsync(["project-environment"]));
+            Assert.Contains("not the approved loopback", output.ToString(), StringComparison.Ordinal);
+            Assert.DoesNotContain("Set the private", output.ToString(), StringComparison.Ordinal);
+        }
+        finally { Console.SetError(oldError); System.Environment.SetEnvironmentVariable(variable, previous); System.Environment.SetEnvironmentVariable(misspelled, previousMisspelled); }
+    }
+
     [Theory]
     [InlineData("Host=127.0.0.1;Port=5432;Database=kordra;Username=kordra_app")]
     [InlineData("Host=localhost;Port=5432;Database=kordra_test;Username=kordra_test")]

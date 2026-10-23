@@ -136,14 +136,16 @@ public sealed class TenantMembershipService(
         if (principal is null || !await definitions.IsActivePrincipalAsync(principal.Value, cancellationToken)) return new("denied");
         await using var db = await contexts.CreateDbContextAsync(cancellationToken);
         await using var tx = await db.Database.BeginTransactionAsync(cancellationToken);
-        var permission = command.Kind is "assign" or "revoke-assignment" ? "membership.assign-role" : "org.manage";
-        var administrative = await ResolveAsync(db, command.TenantId, principal.Value, permission,
-            new TenantScope("organization", command.TenantId), now, cancellationToken);
-        if (administrative is null) return new("denied");
+        // Reconcile an already committed result for the current active subject before
+        // mutable grants: the successful operation itself may have revoked authority.
         var hash = Hash(JsonSerializer.Serialize(new { principal, command }));
         var key = Hash(command.Key);
         var replay = await ReplayAsync(db, key, hash, cancellationToken);
         if (replay is not null) return replay;
+        var permission = command.Kind is "assign" or "revoke-assignment" ? "membership.assign-role" : "org.manage";
+        var administrative = await ResolveAsync(db, command.TenantId, principal.Value, permission,
+            new TenantScope("organization", command.TenantId), now, cancellationToken);
+        if (administrative is null) return new("denied");
         var org = await db.Organizations.SingleAsync(x => x.Id == command.TenantId, cancellationToken);
         Guid resultId; long revision;
         if (command.Kind == "suspend")
