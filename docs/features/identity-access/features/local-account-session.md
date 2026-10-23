@@ -125,3 +125,11 @@ Operational limitation: unresolved commits close authority admission for the lif
 ### PR10-AUDIT-SETUP-001 — bounded setup failure correction
 
 FEAT-IAM-002 / MOD-IAM; affected actor: anonymous login claimant; scope: local authentication/admission, no tenant grant. Finding [4343938059](https://github.com/NukeGeng/KORDRA/pull/10#discussion_r4343938059) distinguishes audit context setup from the commit-capable protocol. Required regression: cancellation at the denial's 100 ms budget, or another setup exception before protocol handoff, returns the safe denial without closing existing/future authority admissions. No commit callback may run in that failure path. Conversely a commit outcome reported Unknown or an exception after handing work to the commit-capable protocol must retain the fail-closed fence. Accepted ADR-0012 and the v1 contract semantics remain unchanged; tests use only the existing isolated PostgreSQL and loopback HTTPS fixture.
+
+## T04 shared-owner integration — 2026-10-22
+
+The existing IAM context/snapshot now includes IAM-owned role-definition revisions for FEAT-IAM-001; its new Contracts dependency exposes the existing trusted UTC method through IAuthorityClock without changing authentication timing/session rules. Shared solution/API/DbMigrator lock graphs include the accepted TEN persistence owner and host-only AUD enlistment adapter. IdentityAccessPersistenceTests includes the additional owned model; original credential/session assertions remain. Runtime migrations/provisioning were not executed. See the T04 owner records in authorize-resource.md and TEN membership-lifecycle.md; authentication success still grants no membership or tenant access.
+
+## T04 shared PostgreSQL fixture scheduling — 2026-10-22
+
+The canonical Product CI and existing amr.py deterministic gate now pass MSBuild -m:1 to the solution test command, so separate Product test projects run sequentially. AUD saturation tests deliberately acquire ACCESS EXCLUSIVE on the shared isolated aud_intents table; running new TEN fixture provisioning concurrently produced legitimate bounded unavailable results. Project serialization preserves every assertion, timeout, failure fixture and test count, and changes no product runtime or AMR routing/review/checkpoint policy. No Website process, service or test is involved.

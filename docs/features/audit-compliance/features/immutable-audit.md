@@ -99,3 +99,7 @@ The first conflict-free hosted run exposed a receipt mismatch on Linux: .NET rec
 ## T03 local-authentication consumer boundary — 2026-10-21
 
 The accepted IAM T03 slice composes AUD through the host adapter in `FEAT-IAM-002`; IAM does not read or write AUD tables. Successful login and account/session mutations stage required AUD records in the same PostgreSQL transaction as IAM state, and uncertain audit/commit outcomes fail closed. AUD’s HTTP history/query surface remains disabled. The health-only API profile does not register AUD persistence; AUD is available only to the explicit local-pilot composition. The exact cross-module project/assembly graph remains covered by `tests/InfrastructureInventory.Bootstrap.Tests/ArchitectureTests.cs`.
+
+## T04 shared-owner integration — 2026-10-22
+
+Shared solution, DbMigrator references/dispatch and API transitive lock files include TEN persistence. TenantAuditTransactionAdapter lives only in Host: setup never commits; staged AUD plus owner mutation/receipt commit atomically, failed pre-commit validation rolls back and unknown commit remains fail-closed. TEN runtime consumes AUD Contracts only. Existing AUD append/schema semantics and immutable records are unchanged. TenantMembershipTests covers rollback, one audit after exact replay and lost-ACK recovery; ArchitectureTests retains graph and compiled forbidden-edge checks. No runtime migration or production operation was executed.

@@ -305,7 +305,8 @@ def gates(root, base=None):
         commands.extend([
             ('product-restore', ['dotnet', 'restore', 'Kordra.slnx', '--locked-mode']),
             ('product-build', ['dotnet', 'build', 'Kordra.slnx', '--configuration', 'Release', '--no-restore']),
-            ('product-test', ['dotnet', 'test', 'Kordra.slnx', '--configuration', 'Release',
+            # Shared PostgreSQL saturation fixtures must not overlap across test projects.
+            ('product-test', ['dotnet', 'test', 'Kordra.slnx', '-m:1', '--configuration', 'Release',
                               '--no-build', '--no-restore', '--logger', 'trx'])])
     if base:
             commands.append(('mapping', [sys.executable, 'docs/tooling/changeguard.py', '--base', base, '--working-tree']))

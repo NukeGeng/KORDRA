@@ -18,14 +18,28 @@
     <Project Path="tests/InfrastructureInventory.Bootstrap.Tests/InfrastructureInventory.Bootstrap.Tests.csproj" />
   </Folder>
   <Folder Name="/src/" />
+  <Folder Name="/src/BuildingBlocks/" />
+  <Folder Name="/src/BuildingBlocks/Security/" />
   <Folder Name="/src/Host/">
     <Project Path="src/Host/Kordra.DbMigrator/Kordra.DbMigrator.csproj" />
   </Folder>
   <Folder Name="/src/Modules/" />
+  <Folder Name="/src/Modules/AuditCompliance/" />
+  <Folder Name="/src/Modules/AuditCompliance/Contracts/" />
   <Folder Name="/src/Modules/IdentityAccess/">
     <Project Path="src/Modules/IdentityAccess/Kordra.Modules.IdentityAccess.csproj" />
   </Folder>
+  <Folder Name="/src/Modules/IdentityAccess/Contracts/">
+    <Project Path="src/Modules/IdentityAccess/Contracts/Kordra.Modules.IdentityAccess.Contracts.csproj" />
+  </Folder>
+  <Folder Name="/src/Modules/TenantManagement/">
+    <Project Path="src/Modules/TenantManagement/Kordra.Modules.TenantManagement.csproj" />
+  </Folder>
+  <Folder Name="/src/Modules/TenantManagement/Contracts/">
+    <Project Path="src/Modules/TenantManagement/Contracts/Kordra.Modules.TenantManagement.Contracts.csproj" />
+  </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/IdentityAccess.Tests/IdentityAccess.Tests.csproj" />
+    <Project Path="tests/TenantManagement.Tests/TenantManagement.Tests.csproj" />
   </Folder>
 </Solution>

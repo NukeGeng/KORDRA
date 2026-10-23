@@ -10,5 +10,10 @@ if (args is ["audit-compliance"])
     return await AuditComplianceMigrationCommand.RunAsync(args);
 }
 
-Console.Error.WriteLine("Usage: Kordra.DbMigrator identity-access|audit-compliance");
+if (args is ["tenant-management"])
+{
+    return await TenantManagementMigrationCommand.RunAsync(args);
+}
+
+Console.Error.WriteLine("Usage: Kordra.DbMigrator identity-access|audit-compliance|tenant-management");
 return 2;

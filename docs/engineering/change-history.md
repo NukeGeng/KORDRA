@@ -105,3 +105,15 @@ Product now tracks a pinned gitlink, validates only the approved submodule path/
 ## PR #9 integration and review corrections — 2026-10-21
 
 Merged current main, preserving both Foundation evidence and the Clients split; the conflicting Clients ADR identifier is now ADR-0013 with historical provenance. FEAT-IAM-002 fixes inherited runtime access to IAM migration history through an additive migration. FEAT-AUD-001 links cleanup to the original deadline and bounds the caller wait while stalled cleanup retains resource ownership. Existing authentication/admission contracts, dependencies and architecture decisions are unchanged. Source fixes and deterministic evidence do not constitute independent follow-up review or human merge approval.
+
+## T04 local implementation — 2026-10-22
+
+FEAT-IAM-001 / MOD-IAM implements versioned exact-current RoleDefinition owner persistence, offline audited publication and BCL Contracts. FEAT-TEN-001 / MOD-TEN implements isolated tenant/member/assignment persistence, explicit founding authority, grantor-ceiling/provenance checks, expiry/revocation/suspension, replay-safe receipts and atomic AUD composition. Common technical admission and existing trusted IAM time remain shared; no session-cookie entitlement or role-name branch is added.
+
+New targeted tests cover the owner boundary and negative/recovery paths; source/test mappings and shared-owner feature records are updated. Accepted ADR-0012, public v1 schemas, product architecture and AMR policy remain unchanged. No AI review, PR trigger, real tenant/account provisioning, runtime database migration, positive TEN/inventory route, provider call or company operation was performed. Full validation evidence follows in the traceability record; future T05/T06 wiring remains explicit.
+
+T04 validation correction: expanded IAM model/table assertions to include role definitions; distinguished required Host references from incidental Debug-only transitive references; serialized shared PostgreSQL test projects in CI and the deterministic gate. Release execution passed 281 Product and 168 tooling tests with zero skips. No test, failure budget or negative assertion was removed. Final acceptance still requires the fresh stable-content gate receipt described in traceability.
+
+## PR12 exact TEN receipt replay — 2026-10-23
+
+FEAT-TEN-001 fixes finding 4345647477: exact subject-bound committed receipts reconcile before mutable TEN permission checks, preserving active trusted IAM subject checks and ordinary authorization for fresh commands. Three regression cases cover self-suspend, self-membership revoke and self-assignment revoke; original failures were reproduced before repair. No product architecture, permission contract, database migration, extra AI review or operational authority changes.

@@ -47,8 +47,8 @@ The independent native GPT-6.1 Sol High review of ADR-0009 and its six specs com
 
 | Module | Feature | Actual product implementation |
 |---|---|---|
-| MOD-IAM | FEAT-IAM-001 / FEAT-IAM-002 | Synthetic I1 policy proof; FEAT-IAM-002 T01 persistence, T02 audit and T03 local authentication/product tests are locally verified; T03 shared-owner documentation is reconciled; AMR completion still needs the pre-existing protected-content discrepancy resolved; authorization enforcement remains unimplemented |
-| MOD-TEN | FEAT-TEN-001 | Not implemented; depends on identity/authorization/audit |
+| MOD-IAM | FEAT-IAM-001 / FEAT-IAM-002 | T01–T03 persistence/audit/local authentication merged at main 25bd7e7; T04 role-definition owner implementation is local with targeted tests; T06 protected authorization enforcement remains pending |
+| MOD-TEN | FEAT-TEN-001 | T04 local owner persistence/handlers and targeted PostgreSQL tests; no HTTP routes or real provisioning; T05/T06 wiring pending |
 | MOD-PAD | FEAT-PAD-001 | Not implemented; scoped support/elevation policy open |
 | MOD-PRJ | FEAT-PRJ-001 | Not implemented; trusted tenant ownership prerequisite |
 | MOD-INV | FEAT-INV-001 | I1 local loopback API and inventory contracts implemented/verified; target registration and real Kubernetes/Helm reads remain unimplemented |
@@ -141,3 +141,7 @@ The [FEAT-IAM-001/I2.7 register](../features/identity-access/features/authorize-
 ### T03 PR #10 corrective work — 2026-10-22
 
 The six findings on reviewed commit `79a6ee72af8f0240c941074e183f0ca1a284309b` have scoped local corrections and regression coverage in FEAT-IAM-002. Initial IAM verification passed 72 cases; final full gates bind the final local source independently. Fixes are not yet published or independently confirmed on a new PR revision. T03 remains pending that boundary and maintainer acceptance; do not advance T04–T07 from a green local test result or the AMR bookkeeping repair alone.
+
+## T04 local owner implementation — 2026-10-22
+
+IAM definition and TEN membership/exact-scope assignment owner slices are implemented locally on codex/foundation-t04-definitions-tenancy from the human-merged T03 baseline 25bd7e7. See [traceability](../engineering/traceability.md#t04--iam-definitions-and-ten-ownership--2026-10-22) for tests and remaining integration/publication status. No new AI review or PR action was initiated. T05 catalog/target ownership comes next; T06 policy/enforcement remains mandatory before positive HTTP ingress. This is Foundation progress, not deployable Operator Pilot or Beta acceptance.
