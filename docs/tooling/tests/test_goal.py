@@ -1676,6 +1676,43 @@ class GoalIntegration(unittest.TestCase):
         path=self.root/'.amr-local/continue.json';path.write_text(json.dumps(e))
         return origin,path,e
 
+    def test_continuation_records_deleted_write_output_without_replaying_origin(self):
+        origin, path, evidence = self.continuation_fixture()
+        original = origin.read_bytes()
+        (self.root/'generated.py').unlink()
+        evidence['identity'] = goal.current_identity(self.root)
+        evidence['triage']['content'] = evidence['identity']['content']
+        evidence['artifacts']['generated.py'] = None
+        gates = json.loads(self.recovery_gates.read_text())
+        gates['content'] = evidence['identity']['content']
+        self.recovery_gates.write_text(json.dumps(gates))
+        path.write_text(json.dumps(evidence))
+        with patch.object(goal, 'execute_task', side_effect=AssertionError('no replay')):
+            result = goal.recover(self.root, 'fixture', 'A', 'continued',
+                                  '.amr-local/continue.json', coordinator=True)
+        self.assertEqual(result['status'], 'completed')
+        self.assertIsNone(self.state('continued')['tasks']['A']['output_artifacts']['generated.py'])
+        self.assertEqual(goal.status(self.root, 'continued')['status'], 'completed')
+        self.assertEqual(origin.read_bytes(), original)
+
+    def test_continuation_rejects_null_for_existing_output_or_context(self):
+        origin, path, evidence = self.continuation_fixture()
+        for name in ('generated.py', 'feature.md'):
+            bad = copy.deepcopy(evidence)
+            bad['artifacts'][name] = None
+            path.write_text(json.dumps(bad))
+            with self.subTest(path=name), self.assertRaisesRegex(ValueError, 'artifact hashes'):
+                goal.recover(self.root, 'fixture', 'A', 'continued',
+                             '.amr-local/continue.json', coordinator=True)
+
+    def test_architect_rejects_source_outputs_and_write_paths_before_dispatch(self):
+        self.architect_task()
+        for field in ('output_paths', 'write_paths'):
+            plan = copy.deepcopy(self.plan)
+            plan['tasks'][0][field] = ['generated.py']
+            with self.subTest(field=field), self.assertRaisesRegex(ValueError, 'Architect'):
+                goal.validate_plan(self.root, plan)
+
     def test_inspected_local_continuation_needs_no_new_maintainer_approval_or_execution(self):
         origin,path,e=self.continuation_fixture();before=origin.read_bytes()
         with patch.object(goal,'execute_task',side_effect=AssertionError('no dispatch')),patch.object(goal,'local_review',side_effect=AssertionError('no review')):

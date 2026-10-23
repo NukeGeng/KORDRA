@@ -906,10 +906,12 @@ public sealed class LocalAuthenticationService
         Func<CancellationToken, Task> saveOwnerMutationAsync,
         CancellationToken cancellationToken)
     {
+        // Enlistment only prepares the audit context: no owner mutation or commit can
+        // have started if setup fails, including cancellation of best-effort denial audit.
+        await using var audit = await _auditTransactions.EnlistAsync(
+            db.Database.GetDbConnection(), transaction.GetDbTransaction(), cancellationToken);
         try
         {
-            await using var audit = await _auditTransactions.EnlistAsync(
-                db.Database.GetDbConnection(), transaction.GetDbTransaction(), cancellationToken);
             var outcome = await audit.CommitWithOwnerMutationAsync(intent, saveOwnerMutationAsync, cancellationToken);
             if (outcome.Status == AuditAppendStatus.Unknown)
             {
@@ -919,7 +921,7 @@ public sealed class LocalAuthenticationService
         }
         catch
         {
-            // An exception/cleanup failure cannot prove rollback or restore the fence.
+            // After protocol handoff an exception cannot establish the commit outcome.
             _admission.Close();
             throw;
         }

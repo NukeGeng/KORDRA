@@ -294,6 +294,10 @@ def validate_plan(root, plan, *, require_inputs=True, legacy_task_ids=None):
                 raise ValueError('expected string array: '+key)
             if len(task[key]) != len(set(task[key])):
                 raise ValueError('duplicate '+key)
+        if (task.get('task_id') not in legacy_task_ids
+                and amr.execution_role(task) == 'architect'
+                and any(Path(p).suffix.lower() != '.md' for p in task['write_paths'])):
+            raise ValueError('Architect write paths must be bounded Markdown design documents')
         allowed_writes = set(task['paths']) | set(task.get('output_paths', []))
         for rel in task['write_paths']:
             if rel not in allowed_writes:
@@ -1553,7 +1557,9 @@ def _validate_recovered_record(root, state, task_id):
     expected = set(task['paths']+task['consulted']+(task['write_paths'] if continued else []))
     artifacts = record.get('output_artifacts', {})
     if (set(artifacts) != expected or recovery.get('artifacts') != artifacts
-            or any(not isinstance(value, str) or not value for value in artifacts.values())):
+            or any(not (isinstance(value, str) and value)
+                   and not (continued and value is None and name in task['write_paths'])
+                   for name, value in artifacts.items())):
         errors.append('recovery requires complete task/context artifact hashes')
     if errors:
         raise ValueError('; '.join(errors))

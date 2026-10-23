@@ -158,7 +158,8 @@ def validate_task(task, root, *, require_inputs=True, legacy_policy=False):
             raise ValueError('execution_role cannot downgrade an Architect or required debugger route')
         if role not in {'architect', 'developer', 'debugger'}:
             raise ValueError('execution_role must be architect, developer or debugger')
-        if role == 'architect' and any(Path(p).suffix.lower() != '.md' for p in task['paths']):
+        if role == 'architect' and any(Path(p).suffix.lower() != '.md'
+                for p in task['paths'] + task.get('output_paths', [])):
             raise ValueError('Architect tasks are bounded design documents; source implementation belongs to Developer')
     if not legacy_policy and role == 'debugger':
         defect = task.get('reported_defect')
