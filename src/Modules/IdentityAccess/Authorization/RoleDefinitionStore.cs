@@ -16,7 +16,7 @@ public sealed record DefinitionWriteResult(string Status, Guid DefinitionId = de
 public sealed class RoleDefinitionStore(
     IDbContextFactory<KordraIdentityDbContext> contexts,
     FairAsyncReaderWriterAdmissionGate gate,
-    IIdentityAuditTransactionFactory audits) : IRoleDefinitionReader
+    IIdentityAuditTransactionFactory audits, LocalAuthenticationConfiguration? configuration = null, IAuthorityClock? clock = null) : IRoleDefinitionReader
 {
     public async Task<RoleDefinitionSnapshot?> GetCurrentAsync(Guid definitionId, long exactRevision, CancellationToken cancellationToken = default)
     {
@@ -68,13 +68,17 @@ public sealed class RoleDefinitionStore(
         db.RoleDefinitions.Add(row);
         var intent = new AuditIntent(1, manifestId, manifestId, AuditIntentStage.Mutation, null, null, null,
             "iam.role-definition", "instance", row.DefinitionId, row.Revision, row.Revision,
-            retire ? "definition-retired" : "definition-published", DateTimeOffset.UtcNow, manifestId);
+            retire ? "definition-retired" : "definition-published", clock?.GetTrustedUtcNow() ?? DateTimeOffset.UtcNow, manifestId);
         // Setup-only enlistment failure cannot leave an attempted commit.
         await using var audit = await audits.EnlistAsync(db.Database.GetDbConnection(), tx.GetDbTransaction(), cancellationToken);
         try
         {
             offline.RequireHeld();
-            var result = await audit.CommitWithOwnerMutationAsync(intent, async ct => { offline.RequireHeld(); await db.SaveChangesAsync(ct); }, cancellationToken);
+            var result = await audit.CommitWithOwnerMutationAsync(intent, async ct =>
+            {
+                offline.RequireHeld(); await db.SaveChangesAsync(ct);
+                if (configuration is not null && clock is not null) await AuthorityClockFloorStore.StageAsync(db, configuration.InstallationId, clock.GetTrustedUtcNow(), ct);
+            }, cancellationToken);
             if (result.Status == AuditAppendStatus.Unknown) gate.Close();
             return result.Status == AuditAppendStatus.Durable ? new("success", row.DefinitionId, row.Revision) : new("unavailable");
         }

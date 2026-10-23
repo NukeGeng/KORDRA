@@ -24,6 +24,10 @@ last_reviewed: 2026-10-15
 
 API returns stable machine code + safe user message + correlation ID. Never return credentials, stack trace, raw remote output or cross-tenant resource existence in public error messages.
 
+## T06 environment-create v2 reuse
+
+The accepted Resource Policy v1 environment-create route reuses `INVALID_REQUEST` (400), `SESSION_INVALID` (401), opaque `REQUEST_REJECTED` (403, including grant/scope or antiforgery denial), `REQUEST_CONFLICT` (409), and `AUTHORITY_UNAVAILABLE` (503) in its schemaVersion 2 safe error envelope. This does not adopt the unrelated proposed catalog above or disclose whether a foreign resource exists. The shared Host/Origin/deadline guard can reject before endpoint dispatch with the existing security envelope. See [fixtures](fixtures/resource-policy-v1.http.json) and [OpenAPI](openapi/resource-policy-v1.openapi.json).
+
 ## Accepted local-authentication-v1 HTTP additions
 
 These entries apply to the accepted `/api/v1/auth/*` contract. The catalog remains `proposed` for other product areas; these rows do not adopt its unrelated error codes.

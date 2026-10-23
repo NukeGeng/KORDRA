@@ -2,7 +2,7 @@
 id: ENG-HISTORY
 status: proposed
 owner: unassigned
-last_reviewed: 2026-10-19
+last_reviewed: 2026-10-22
 ---
 
 # Feature change log and release-note discipline
@@ -15,6 +15,9 @@ Sol clarification is tracked by FEAT-AMR-001 (ENG-TOOLING); existing router/conf
 
 | Date | Change ID | Module / Feature | Source PR/Commit | ADR / contract | Migration impact | Owner |
 |---|---|---|---|---|---|---|
+| 2026-10-23 | T06-RESOURCE-POLICY-RUNTIME | IAM-001 / IAM-002; PRJ / INV / TEN / AUD | Local implementation; source/test mapping and private T06 evidence | Accepted ADR-0012 / ADR-0014, resource-policy-v1 and admission-v1 | Fixed current policy/head, unique explicit binding/history, clock floor, owner facts, bounded audited U/D/actual HTTP, offline policy CLI/recovery and environment v2. Additive migrations tested only on isolated synthetic storage; no real provisioning/provider/merge. Wider workspace/list capability remains pending | NukeGeng |
+| 2026-10-22 | T06-RESOURCE-POLICY-ACCEPTED | FEAT-IAM-001 / MOD-IAM; PRJ/INV/AUD consumers | Explicit maintainer approval; unchanged proposal hashes verified | ADR-0014 and Resource Policy v1 accepted for exact T06 scope | Design gate resolved; synthetic-test implementation approved. No product source, real migration, provider access, checkpoint completion or merge; historical proposal snapshots retained | NukeGeng / maintainer |
+| 2026-10-22 | T06-RESOURCE-POLICY-DESIGN | FEAT-IAM-001 / MOD-IAM; PRJ/INV/AUD consumers | Local bounded design; no source commit/PR | Proposed ADR-0014 and Resource Policy v1 | Exact IAM policy/head, PRJ binding/history, fixed rules, atomic offline publication, U/D evidence and legacy-data/consumer migration specified; planned tests only, exact acceptance pending | NukeGeng |
 | 2026-10-22 | PR10-AUDIT-SETUP-001 | MOD-IAM / FEAT-IAM-002 | PR #10 round-2 correction | Existing ADR-0012 and authority/admission-v1 | Enlistment setup/cancellation does not close admission before commit-protocol handoff. Two regressions reproduced the denial-triggered outage before correction; eight focused setup/budget/unknown-commit cases now pass, including an exception after actual commit. No schema/dependency/production change | NukeGeng |
 | 2026-10-22 | PR10-IAM-CORRECTIONS | MOD-IAM / FEAT-IAM-002 | Local scoped review fixes; not published | Accepted ADR-0012 and existing authentication/admission v1 contracts | Correct exact command replay, fail-closed unknown commits, 16-reader admission, monotonic activity, 100 ms best-effort denial recording and installed TLS validation. Focused IAM tests passed; full gates tracked separately. No new schema/dependency, AI review or production operation | NukeGeng |
 | 2026-10-21 | FEAT-IAM-002-T03-LOCAL-AUTH | MOD-IAM / FEAT-IAM-002; AUD and host consumers | This feature commit / PR | Accepted ADR-0012, local-authentication-v1, authority-admission-v1 | Explicit HTTPS loopback authentication, offline account operations, boot-scoped sessions, transactional IAM/AUD writes and additive IAM command migration. Local product tests 224/224, zero skips; exact PR-commit validation reported separately. Default health-only profile and denied inventory retained. Private checkpoint remains in_progress with original evidence; no production migration or merge authority | NukeGeng |
@@ -119,3 +122,5 @@ T04 validation correction: expanded IAM model/table assertions to include role d
 FEAT-PRJ-001 / MOD-PRJ implements catalog ownership/lifecycle, explicit environment classification/policy and association persistence. FEAT-INV-001 / MOD-INV adds target metadata owner persistence and exact matching PRJ association. Host composes both owners and AUD atomically under the common gate; owner preparation never commits independently. Approved EF/Npgsql pins, additive offline migrations, runtime/test role guards, BCL Contracts and source mappings are retained.
 
 28 new targeted PostgreSQL cases and four architecture cases passed; tests include real second-owner save failure, rollback of both owners/audit, unknown outcomes, no implicit grants, explicit absence, cross-tenant/project FKs, current policy and association mismatch. Nested PE type names now include declaring types instead of colliding on compiler-generated short names. T04 snapshots/evidence are preserved for feature-scoped commits. No new ADR decision, route/provider enablement, production migration, real provisioning, AI review or PR side effect. Final gate/publication status follows the dated traceability record.
+
+T06 validation correction — 2026-10-23: updated the Host PE-reference expectation to include the existing TEN Contracts used by accepted owner-port composition. The exact Host dependency assertion and all module isolation/cycle checks remain active; no product runtime reference or accepted architecture was changed by this correction.

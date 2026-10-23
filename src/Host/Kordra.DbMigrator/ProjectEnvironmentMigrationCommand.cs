@@ -6,7 +6,7 @@ namespace Kordra.DbMigrator;
 /// <summary>Offline entry point for the PRJ-owned migration set only.</summary>
 public static class ProjectEnvironmentMigrationCommand
 {
-    public const string ConnectionEnvironmentVariable = "KORDRA_PROJECPRJVIRONMENT_MIGRATION_CONNECTION_STRING";
+    public const string ConnectionEnvironmentVariable = "KORDRA_PROJECTENVIRONMENT_MIGRATION_CONNECTION_STRING";
 
     public static async Task<int> RunAsync(string[] args, CancellationToken cancellationToken = default)
     {

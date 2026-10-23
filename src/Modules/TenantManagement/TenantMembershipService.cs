@@ -15,9 +15,12 @@ namespace Kordra.Modules.TenantManagement;
 public sealed class TenantMembershipService(
     IDbContextFactory<TenantDbContext> contexts, IRoleDefinitionReader definitions,
     ITenantSubjectReader subjects, ITenantScopeOwner resources, ITenantAuditTransactionFactory audits,
-    FairAsyncReaderWriterAdmissionGate gate, IAuthorityClock clock)
+    FairAsyncReaderWriterAdmissionGate gate, IAuthorityClock clock) : IScopedGrantReader, IPolicyTenantAuthority
 {
     private sealed record Source(Guid Id, long Revision);
+
+    public Task<bool> IsActiveTenantUnderAdmissionAsync(Guid tenantId, CancellationToken ct = default) =>
+        new TenantOrganizationAuthority(contexts).IsActiveTenantUnderAdmissionAsync(tenantId, ct);
 
     public async Task<TenantCommandResult> InitializeOfflineAsync(IOfflineProvisioningLease offline,
         Guid manifestId, Guid principalId, string name, Guid definitionId, long definitionRevision,
@@ -123,6 +126,20 @@ public sealed class TenantMembershipService(
         return await ResolveAsync(db, tenantId, principalId, permission, scope, clock.GetTrustedUtcNow(), cancellationToken);
     }
 
+    /// <summary>Current TEN facts for IAM under an already-held common admission; never acquires another gate.</summary>
+    public async Task<ScopedGrant?> ReadCurrentGrantUnderAdmissionAsync(Guid principal, Guid tenant, string permission,
+        string scopeKind, Guid scopeId, CancellationToken ct = default)
+    {
+        await using var db = await contexts.CreateDbContextAsync(ct);
+        var effective = await ResolveAsync(db, tenant, principal, permission, new(scopeKind, scopeId), clock.GetTrustedUtcNow(), ct);
+        if (effective is null) return null;
+        var member = await db.Memberships.AsNoTracking().SingleOrDefaultAsync(x => x.TenantId == tenant && x.PrincipalId == principal && x.Status == "active", ct);
+        var organization = await db.Organizations.AsNoTracking().SingleOrDefaultAsync(x => x.Id == tenant && x.Status == "active", ct);
+        return member is null || organization is null ? null : new(principal, tenant, member.Id, organization.Revision,
+            member.Revision, effective.AssignmentId, effective.Revision, effective.DefinitionId, effective.DefinitionRevision,
+            permission, scopeKind, scopeId, effective.ExpiresAtUtc);
+    }
+
     public async Task<TenantCommandResult> ExecuteAsync(TenantCommand command, CancellationToken cancellationToken = default)
     {
         if (command is null || command.TenantId == Guid.Empty || command.ExpectedRevision <= 0 ||
@@ -136,14 +153,16 @@ public sealed class TenantMembershipService(
         if (principal is null || !await definitions.IsActivePrincipalAsync(principal.Value, cancellationToken)) return new("denied");
         await using var db = await contexts.CreateDbContextAsync(cancellationToken);
         await using var tx = await db.Database.BeginTransactionAsync(cancellationToken);
-        var permission = command.Kind is "assign" or "revoke-assignment" ? "membership.assign-role" : "org.manage";
-        var administrative = await ResolveAsync(db, command.TenantId, principal.Value, permission,
-            new TenantScope("organization", command.TenantId), now, cancellationToken);
-        if (administrative is null) return new("denied");
+        // Receipt reconciliation is an authenticated subject/body-bound lookup, not new authority.
+        // A committed suspend/self-revoke must remain recoverable after its own invalidation.
         var hash = Hash(JsonSerializer.Serialize(new { principal, command }));
         var key = Hash(command.Key);
         var replay = await ReplayAsync(db, key, hash, cancellationToken);
         if (replay is not null) return replay;
+        var permission = command.Kind is "assign" or "revoke-assignment" ? "membership.assign-role" : "org.manage";
+        var administrative = await ResolveAsync(db, command.TenantId, principal.Value, permission,
+            new TenantScope("organization", command.TenantId), now, cancellationToken);
+        if (administrative is null) return new("denied");
         var org = await db.Organizations.SingleAsync(x => x.Id == command.TenantId, cancellationToken);
         Guid resultId; long revision;
         if (command.Kind == "suspend")

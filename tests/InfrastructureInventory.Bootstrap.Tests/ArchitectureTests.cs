@@ -173,7 +173,7 @@ public sealed class ArchitectureTests
         Assert.Empty(AssemblyViolations(contracts, core));
         Assert.Empty(AssemblyViolations(inventory, core.Concat(persistencePackages).Concat([contracts.Name, projectContracts.Name])));
         Assert.Empty(AssemblyViolations(host, core.Concat(web).Concat(persistencePackages).Concat(
-            [contracts.Name, inventory.Name, identity.Name, identityContracts.Name, tenant.Name, auditContracts.Name, audit.Name, project.Name, projectContracts.Name, security.Name])));
+            [contracts.Name, inventory.Name, identity.Name, identityContracts.Name, tenant.Name, tenantContracts.Name, auditContracts.Name, audit.Name, project.Name, projectContracts.Name, security.Name])));
         Assert.Empty(AssemblyViolations(projectContracts, core));
         Assert.Empty(AssemblyViolations(project, core.Concat(persistencePackages).Append(projectContracts.Name)));
         Assert.Equal(new[] { projectContracts.Name }, project.References.Where(x => x.StartsWith("Kordra.", StringComparison.Ordinal)));
@@ -194,9 +194,9 @@ public sealed class ArchitectureTests
         Assert.Contains(inventory.Name, host.References);
         Assert.Contains(contracts.Name, host.References);
         var hostProductReferences = host.References.Where(reference => new[]
-            { contracts.Name, inventory.Name, identity.Name, tenant.Name, auditContracts.Name, audit.Name, project.Name, projectContracts.Name, security.Name, identityContracts.Name }
+            { contracts.Name, inventory.Name, identity.Name, tenant.Name, tenantContracts.Name, auditContracts.Name, audit.Name, project.Name, projectContracts.Name, security.Name, identityContracts.Name }
             .Contains(reference, StringComparer.Ordinal)).Order(StringComparer.Ordinal);
-        Assert.Equal(new[] { contracts.Name, inventory.Name, identity.Name, tenant.Name, auditContracts.Name, audit.Name, project.Name, projectContracts.Name, security.Name, identityContracts.Name }
+        Assert.Equal(new[] { contracts.Name, inventory.Name, identity.Name, tenant.Name, tenantContracts.Name, auditContracts.Name, audit.Name, project.Name, projectContracts.Name, security.Name, identityContracts.Name }
             .Order(StringComparer.Ordinal), hostProductReferences);
         Assert.Equal(new[] { auditContracts.Name, security.Name }.Order(StringComparer.Ordinal),
             identity.References.Where(reference => reference == auditContracts.Name || reference == security.Name)

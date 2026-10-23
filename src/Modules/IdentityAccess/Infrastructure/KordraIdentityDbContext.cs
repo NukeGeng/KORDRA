@@ -12,12 +12,15 @@ public sealed class KordraIdentityDbContext(DbContextOptions<KordraIdentityDbCon
     public DbSet<KordraSession> Sessions => Set<KordraSession>();
     public DbSet<KordraAuthenticationCommand> AuthenticationCommands => Set<KordraAuthenticationCommand>();
 
+    public DbSet<KordraAuthorityClockFloor> AuthorityClockFloors => Set<KordraAuthorityClockFloor>();
+
     public DbSet<KordraRoleDefinition> RoleDefinitions => Set<KordraRoleDefinition>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);
         modelBuilder.HasDefaultSchema(SchemaName);
+        ResourcePolicyModel.Configure(modelBuilder);
 
         var principals = modelBuilder.Entity<KordraIdentityUser>();
         principals.ToTable("iam_principals", table =>
@@ -114,6 +117,10 @@ public sealed class KordraIdentityDbContext(DbContextOptions<KordraIdentityDbCon
             .HasForeignKey(command => command.PrincipalId)
             .OnDelete(DeleteBehavior.Restrict)
             .HasConstraintName("fk_iam_authentication_commands_iam_principals_principal_id");
+        var floor = modelBuilder.Entity<KordraAuthorityClockFloor>();
+        floor.ToTable("iam_authority_clock_floors"); floor.HasKey(x => x.InstallationId);
+        floor.Property(x => x.InstallationId).HasColumnName("installation_id").ValueGeneratedNever();
+        floor.Property(x => x.AdmittedUtc).HasColumnName("admitted_utc").IsRequired();
         var definitions = modelBuilder.Entity<KordraRoleDefinition>();
         definitions.ToTable("iam_role_definitions", table => table.HasCheckConstraint("ck_iam_role_definition_revision", "revision > 0"));
         definitions.HasKey(x => new { x.DefinitionId, x.Revision });

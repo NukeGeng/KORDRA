@@ -78,6 +78,8 @@ public static class LocalAuthenticationEndpoints
     public static Func<HttpContext, RequestDelegate, Task> RequestGuard(string authority) => async (context, next) =>
     {
         var path = context.Request.Path;
+        var businessRequest = path.StartsWithSegments("/api/v1/targets", StringComparison.OrdinalIgnoreCase) ||
+            path.StartsWithSegments("/api/v2", StringComparison.OrdinalIgnoreCase);
         if (path.StartsWithSegments("/api/v1/auth", StringComparison.OrdinalIgnoreCase))
         {
             context.Response.Headers.CacheControl = "no-store";
@@ -101,7 +103,7 @@ public static class LocalAuthenticationEndpoints
             return;
         }
 
-        if (context.Request.ContentLength is > MaximumBodyBytes)
+        if (context.Request.ContentLength > (businessRequest ? 128 * 1024 : MaximumBodyBytes))
         {
             await WriteErrorAsync(context, StatusCodes.Status400BadRequest, "INVALID_REQUEST", "Request is invalid.");
             return;
@@ -125,7 +127,7 @@ public static class LocalAuthenticationEndpoints
 
         var clientDisconnected = context.RequestAborted;
         using var deadline = CancellationTokenSource.CreateLinkedTokenSource(clientDisconnected);
-        deadline.CancelAfter(RequestDeadline);
+        deadline.CancelAfter(businessRequest ? TimeSpan.FromSeconds(10) : RequestDeadline);
         context.RequestAborted = deadline.Token;
         try
         {
@@ -133,6 +135,7 @@ public static class LocalAuthenticationEndpoints
         }
         catch (OperationCanceledException) when (deadline.IsCancellationRequested && !clientDisconnected.IsCancellationRequested)
         {
+            if (context.Response.HasStarted) { context.Abort(); return; }
             await WriteErrorAsync(context, StatusCodes.Status503ServiceUnavailable,
                 "AUTHORITY_UNAVAILABLE", "Authentication authority is unavailable.", CancellationToken.None);
         }
@@ -511,6 +514,10 @@ public static class LocalAuthenticationEndpoints
         result = new LocalIdentityResult(LocalAuthenticationStatus.SessionInvalid);
         return context.User.Identity?.IsAuthenticated == true;
     }
+
+    public static Kordra.Modules.IdentityAccess.Contracts.SessionSelection? CurrentSessionSelection(HttpContext context) =>
+        context.User.Identity?.IsAuthenticated == true && TryGetIdentityClaims(context, out var principal, out var reference, out var boot)
+            ? new(principal, reference, boot) : null;
 
     private static bool TryGetIdentityClaims(
         HttpContext context,

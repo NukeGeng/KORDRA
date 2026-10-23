@@ -9,6 +9,11 @@ namespace Kordra.Modules.InfrastructureInventory;
 /// <summary>INV-owned preparation only; Host enlists PRJ association and AUD before the single commit.</summary>
 public sealed class TargetRegistryStore(InventoryDbContext db, IProjectOwnershipReader projects)
 {
+    public async Task<(string Status, string ResultJson)?> ReadCommandReplayUnderAdmissionAsync(string keyHash, string contentHash, CancellationToken ct = default)
+    {
+        var row = await db.Commands.AsNoTracking().SingleOrDefaultAsync(x => x.KeyHash == keyHash, ct);
+        return row is null ? null : (row.ContentHash == contentHash ? "success" : "conflict", row.ResultJson);
+    }
     public async Task<PreparedTargetChange> PrepareAsync(TargetCommand command, string keyHash, string contentHash, CancellationToken ct = default)
     {
         if (command.TenantId == Guid.Empty || command.ProjectId == Guid.Empty || command.EnvironmentId == Guid.Empty ||
@@ -62,12 +67,21 @@ public sealed class TargetRegistryStore(InventoryDbContext db, IProjectOwnership
             !AssociationMatches(target, await projects.ReadAssociationAsync(tenantId, targetId, ct))) return null;
         return Fact(target);
     }
+    /// <summary>Resolve an untrusted target reference into its owner-selected tenant. Not disclosure authorization.</summary>
+    public async Task<TargetMetadata?> ReadSelectionUnderAdmissionAsync(Guid targetId, CancellationToken ct = default)
+    {
+        var tenant = await db.Targets.AsNoTracking().Where(x => x.Id == targetId).Select(x => (Guid?)x.TenantId).SingleOrDefaultAsync(ct);
+        return tenant is null ? null : await ReadCurrentAsync(tenant.Value, targetId, ct);
+    }
+
     public Task PersistAsync(CancellationToken ct = default) => db.SaveChangesAsync(ct);
     private static bool ValidName(string? name) => !string.IsNullOrWhiteSpace(name) && name.Length <= 128 && !name.Any(char.IsControl);
     private static bool Matches(ProjectOwnership? p, Guid tenant, Guid project, Guid? environment) => p is not null &&
         p.TenantId == tenant && p.ProjectId == project && p.ProjectRevision > 0 && p.EnvironmentId == environment &&
         (environment is null ? p.Selection == EnvironmentSelection.ResolvedAbsent && p.EnvironmentRevision is null && p.Classification is null && p.PolicyRevision is null :
-            p.Selection == EnvironmentSelection.ResolvedPresent && p.EnvironmentRevision > 0 && p.PolicyRevision > 0 && p.Classification is "Development" or "Test" or "Staging" or "Production");
+            p.Selection == EnvironmentSelection.ResolvedPresent && p.EnvironmentRevision > 0 &&
+            (p.PolicyRevision > 0 || p.PolicyBinding is { PolicyRevision: > 0, BindingRevision: > 0 } b && b.TenantId == tenant && b.ProjectId == project && b.EnvironmentId == environment && b.PolicyId != Guid.Empty && b.BindingId != Guid.Empty) &&
+            p.Classification is "Development" or "Test" or "Staging" or "Production");
     private static bool AssociationMatches(TargetRecord t, TargetAssociation? a) => a is not null && a.TargetId == t.Id &&
         a.TenantId == t.TenantId && a.ProjectId == t.ProjectId && a.EnvironmentId == t.EnvironmentId && a.Revision == t.AssociationRevision;
     private static TargetMetadata Fact(TargetRecord t) => new(t.Id, t.TenantId, t.ProjectId, t.EnvironmentId, t.Name, t.Kind, t.Status, t.Revision, t.AssociationRevision);

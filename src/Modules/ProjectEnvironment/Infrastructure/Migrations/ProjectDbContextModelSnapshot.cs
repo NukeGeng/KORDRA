@@ -88,7 +88,7 @@ namespace Kordra.Modules.ProjectEnvironment.Infrastructure.Migrations
                         .HasColumnType("character varying(128)")
                         .HasColumnName("name");
 
-                    b.Property<long>("PolicyRevision")
+                    b.Property<long?>("PolicyRevision")
                         .HasColumnType("bigint")
                         .HasColumnName("policy_revision");
 
@@ -118,6 +118,138 @@ namespace Kordra.Modules.ProjectEnvironment.Infrastructure.Migrations
                             t.HasCheckConstraint("ck_prj_environments_status", "status IN ('active','suspended','deleted')");
 
                             t.HasCheckConstraint("ck_prj_policy_revision", "policy_revision > 0");
+                        });
+                });
+
+            modelBuilder.Entity("Kordra.Modules.ProjectEnvironment.Infrastructure.PolicyBindingHistoryRecord", b =>
+                {
+                    b.Property<Guid>("BindingId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("binding_id");
+
+                    b.Property<long>("BindingRevision")
+                        .HasColumnType("bigint")
+                        .HasColumnName("binding_revision");
+
+                    b.Property<string>("Action")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)")
+                        .HasColumnName("action");
+
+                    b.Property<byte[]>("ContentHash")
+                        .IsRequired()
+                        .HasColumnType("bytea")
+                        .HasColumnName("content_hash");
+
+                    b.Property<Guid?>("EnvironmentId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("environment_id");
+
+                    b.Property<Guid>("ManifestId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("manifest_id");
+
+                    b.Property<Guid>("PolicyId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("policy_id");
+
+                    b.Property<long>("PolicyRevision")
+                        .HasColumnType("bigint")
+                        .HasColumnName("policy_revision");
+
+                    b.Property<Guid>("ProjectId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("project_id");
+
+                    b.Property<Guid>("ScopeId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("scope_id");
+
+                    b.Property<string>("ScopeKind")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)")
+                        .HasColumnName("scope_kind");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("tenant_id");
+
+                    b.HasKey("BindingId", "BindingRevision");
+
+                    b.HasIndex("BindingId", "TenantId", "ProjectId", "ScopeKind", "ScopeId", "Action");
+
+                    b.ToTable("prj_policy_binding_history", "app", t =>
+                        {
+                            t.HasCheckConstraint("ck_prj_policy_binding_history", "binding_revision > 0 AND policy_revision > 0 AND octet_length(content_hash) = 32 AND action = 'target.read' AND ((scope_kind = 'environment' AND environment_id IS NOT NULL) OR (scope_kind = 'project_without_environment' AND environment_id IS NULL))");
+
+                            t.HasCheckConstraint("ck_prj_policy_binding_history_scope_identity", "scope_id = COALESCE(environment_id, project_id)");
+                        });
+                });
+
+            modelBuilder.Entity("Kordra.Modules.ProjectEnvironment.Infrastructure.PolicyBindingRecord", b =>
+                {
+                    b.Property<Guid>("BindingId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("binding_id");
+
+                    b.Property<string>("Action")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)")
+                        .HasColumnName("action");
+
+                    b.Property<long>("BindingRevision")
+                        .IsConcurrencyToken()
+                        .HasColumnType("bigint")
+                        .HasColumnName("binding_revision");
+
+                    b.Property<Guid?>("EnvironmentId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("environment_id");
+
+                    b.Property<Guid>("PolicyId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("policy_id");
+
+                    b.Property<long>("PolicyRevision")
+                        .HasColumnType("bigint")
+                        .HasColumnName("policy_revision");
+
+                    b.Property<Guid>("ProjectId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("project_id");
+
+                    b.Property<Guid>("ScopeId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("scope_id");
+
+                    b.Property<string>("ScopeKind")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)")
+                        .HasColumnName("scope_kind");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("tenant_id");
+
+                    b.HasKey("BindingId");
+
+                    b.HasIndex("TenantId", "ProjectId", "Action")
+                        .IsUnique()
+                        .HasFilter("scope_kind = 'project_without_environment'");
+
+                    b.HasIndex("TenantId", "ProjectId", "EnvironmentId", "Action")
+                        .IsUnique()
+                        .HasFilter("scope_kind = 'environment'");
+
+                    b.ToTable("prj_policy_bindings", "app", t =>
+                        {
+                            t.HasCheckConstraint("ck_prj_policy_binding", "binding_revision > 0 AND policy_revision > 0 AND action = 'target.read' AND policy_id <> '00000000-0000-0000-0000-000000000000' AND ((scope_kind = 'environment' AND environment_id IS NOT NULL) OR (scope_kind = 'project_without_environment' AND environment_id IS NULL))");
+
+                            t.HasCheckConstraint("ck_prj_policy_binding_scope_identity", "scope_id = COALESCE(environment_id, project_id)");
                         });
                 });
 
@@ -231,6 +363,31 @@ namespace Kordra.Modules.ProjectEnvironment.Infrastructure.Migrations
                         .HasForeignKey("TenantId", "ProjectId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
+                });
+
+            modelBuilder.Entity("Kordra.Modules.ProjectEnvironment.Infrastructure.PolicyBindingHistoryRecord", b =>
+                {
+                    b.HasOne("Kordra.Modules.ProjectEnvironment.Infrastructure.PolicyBindingRecord", null)
+                        .WithMany()
+                        .HasForeignKey("BindingId", "TenantId", "ProjectId", "ScopeKind", "ScopeId", "Action")
+                        .HasPrincipalKey("BindingId", "TenantId", "ProjectId", "ScopeKind", "ScopeId", "Action")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Kordra.Modules.ProjectEnvironment.Infrastructure.PolicyBindingRecord", b =>
+                {
+                    b.HasOne("Kordra.Modules.ProjectEnvironment.Infrastructure.ProjectRecord", null)
+                        .WithMany()
+                        .HasForeignKey("TenantId", "ProjectId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Kordra.Modules.ProjectEnvironment.Infrastructure.EnvironmentRecord", null)
+                        .WithMany()
+                        .HasForeignKey("TenantId", "ProjectId", "EnvironmentId")
+                        .HasPrincipalKey("TenantId", "ProjectId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict);
                 });
 
             modelBuilder.Entity("Kordra.Modules.ProjectEnvironment.Infrastructure.ProjectTargetAssociation", b =>

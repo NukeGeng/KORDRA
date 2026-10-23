@@ -58,6 +58,15 @@ public sealed class ProjectDbContextFactory : IDesignTimeDbContextFactory<Projec
             postgres => postgres.MigrationsHistoryTable(ProjectDbContext.HistoryTable, "app").CommandTimeout(2)).Options;
     }
 
+    public static DbContextOptions<ProjectDbContext> CreateOfflineEnlistedOptions(System.Data.Common.DbConnection connection)
+    {
+        var parsed = new NpgsqlConnectionStringBuilder(connection.ConnectionString);
+        if (parsed.Database == "kordra_test") ValidateTarget(connection.ConnectionString, "kordra_test", "kordra_test");
+        else ValidateTarget(connection.ConnectionString, "kordra", "kordra_admin");
+        return new DbContextOptionsBuilder<ProjectDbContext>().UseNpgsql(connection,
+            postgres => postgres.MigrationsHistoryTable(ProjectDbContext.HistoryTable, "app").CommandTimeout(2)).Options;
+    }
+
     private static void ValidateTarget(string connectionString, string expectedDatabase, string expectedUser)
     {
         if (string.IsNullOrWhiteSpace(connectionString))

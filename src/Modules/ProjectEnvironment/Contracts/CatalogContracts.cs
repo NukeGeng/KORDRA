@@ -12,7 +12,7 @@ public sealed record PreparedCatalogChange(string Status, CatalogFact? Resource 
 public enum EnvironmentSelection { ResolvedAbsent, ResolvedPresent }
 public sealed record ProjectOwnership(Guid TenantId, Guid ProjectId, long ProjectRevision,
     EnvironmentSelection Selection, Guid? EnvironmentId, long? EnvironmentRevision,
-    string? Classification, long? PolicyRevision);
+    string? Classification, long? PolicyRevision, PolicyBinding? PolicyBinding = null);
 public sealed record TargetAssociation(Guid TargetId, Guid TenantId, Guid ProjectId, Guid? EnvironmentId, long Revision);
 
 /// <summary>Authoritative owner reads under the common admission gate; null is not environment absence.</summary>
@@ -26,6 +26,10 @@ public interface IProjectOwnershipReader
 public interface ICatalogAuthority
 {
     Task<Guid?> ResolvePrincipalAsync(Guid tenantId, Guid projectId, Guid? environmentId, string permission, CancellationToken cancellationToken = default);
+}
+public interface IAuthenticatedCatalogSubjectReader
+{
+    Task<Guid?> CurrentPrincipalUnderAdmissionAsync(CancellationToken ct = default);
 }
 
 /// <summary>Trusted policy owner validates an exact applicable association, never an arbitrary positive integer.</summary>

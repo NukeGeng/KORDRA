@@ -7,6 +7,10 @@ last_reviewed: 2026-10-20
 
 # Delivery roadmap & architecture maturity
 
+## T06 local policy/admission increment — 2026-10-23
+
+The current local T06 branch implements accepted ADR-0014 resource policy plus existing admission v1: exact current owner/grant/policy evidence, unique explicit bindings/history, persisted clock floor, durable U/D with bounded actual HTTP handoff, offline policy inspect/apply/reconciliation and two scoped HTTPS routes (metadata GET and environment-create v2). See [traceability](../engineering/traceability.md#t06-scoped-runtime-implementation--2026-10-23) and [runbook](../operations/resource-policy-v1.md) for exact scope. Local deterministic evidence is separate from hosted CI/PR review and real installation configuration; this note does not assert current remote PR/merge state. The historical delivery statements below remain historical. Wider workspace provisioning, list/history/other catalog routes and T07–T09 provider/credential capability are not completed by this slice, and the full Foundation/native GOAL is not marked complete.
+
 ## Active delivery direction and design handoff — 2026-10-20
 
 The maintainer approved the comprehensive product direction: management foundation → useful OP-P0 → frozen release/approval → independently hosted sandbox deployment/verification/rollback → release qualification. The [Control Plane delivery design](../architecture/control-plane-delivery-design.md) maps that direction to this existing roadmap, and the [Luna implementation handoff](../engineering/luna-implementation-handoff.md) supplies tasks T00–T14 with dependencies, feature acceptance and exact adoption gates. This is not a replacement GOAL/checkpoint system.

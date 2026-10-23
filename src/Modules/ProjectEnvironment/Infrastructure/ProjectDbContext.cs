@@ -26,7 +26,7 @@ public sealed class EnvironmentRecord
     public Guid ProjectId { get; set; }
     public string Name { get; set; } = "";
     public string Classification { get; set; } = "";
-    public long PolicyRevision { get; set; }
+    public long? PolicyRevision { get; set; }
     public string Status { get; set; } = "active";
     public long Revision { get; set; } = 1;
 }
@@ -55,6 +55,7 @@ public sealed class ProjectDbContext(DbContextOptions<ProjectDbContext> options)
     protected override void OnModelCreating(ModelBuilder model)
     {
         model.HasDefaultSchema("app");
+        PolicyBindingModel.Configure(model);
         var project = model.Entity<ProjectRecord>(); project.ToTable("prj_projects"); project.HasKey(x => new { x.TenantId, x.Id });
         var app = model.Entity<ApplicationRecord>(); app.ToTable("prj_applications"); app.HasKey(x => new { x.TenantId, x.Id });
         app.HasOne<ProjectRecord>().WithMany().HasForeignKey(x => new { x.TenantId, x.ProjectId }).OnDelete(DeleteBehavior.Restrict);

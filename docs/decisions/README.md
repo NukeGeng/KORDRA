@@ -2,7 +2,7 @@
 id: ADR-INDEX
 status: proposed
 owner: unassigned
-last_reviewed: 2026-10-20
+last_reviewed: 2026-10-22
 ---
 
 # Architecture Decision Records (ADRs)
@@ -27,3 +27,4 @@ ADR tracks **why** a design was chosen; status initially `proposed`, so not a fi
 | [0012](0012-operator-pilot-runtime-foundation.md) | Accepted exact Foundation T01–T07 scope: Identity, EF/Npgsql, owner-specific identity/authority/audit persistence, local sessions and single-process protected admission; no provider, distributed worker or production access |
 
 | [0013](0013-clients-git-submodule.md) | Accepted narrow independent Clients repository/submodule at the original root path; no UI stack or broader ADR-0009 acceptance |
+| [0014](0014-resource-policy-v1.md) | Accepted exact T06 resource-policy supplement on 2026-10-22: IAM immutable policy/head, exact PRJ binding, fixed target.read eligibility and U/D compatibility; implementation evidence pending |

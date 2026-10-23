@@ -30,6 +30,7 @@ public sealed class LocalAuthenticationTestHost : IAsyncDisposable
     public const string ValidPassword = "Synthetic-Operator-Passphrase-123!";
     private const string DeniedPassword = "Synthetic-Common-Password-Only-For-Tests";
     private readonly string _connectionString;
+    private readonly Guid _installationId = Guid.NewGuid();
     private readonly X509Certificate2 _certificate;
     private readonly LocalPasswordPolicy _passwordPolicy;
     private readonly string _privateFixtureDirectory;
@@ -42,6 +43,7 @@ public sealed class LocalAuthenticationTestHost : IAsyncDisposable
     private WebApplication? _app;
     private bool _schemaReady;
     private bool _disposed;
+    private bool _resourceAuthority;
 
     private LocalAuthenticationTestHost(
         string connectionString,
@@ -67,13 +69,15 @@ public sealed class LocalAuthenticationTestHost : IAsyncDisposable
         (_app ?? throw new InvalidOperationException("Test host is stopped.")).Services.GetRequiredService<LocalAuthenticationService>();
 
     public ManualTimeProvider Clock => _timeProvider;
+    public IServiceProvider Services => (_app ?? throw new InvalidOperationException("Test host is stopped.")).Services;
 
     public static async Task<LocalAuthenticationTestHost> StartAsync(
         IIdentityAuditTransactionFactory? auditFactory = null,
         bool initializeBoot = true,
         ManualTimeProvider? timeProvider = null,
         Func<HttpContext, RequestDelegate, Task>? afterAuthentication = null,
-        DbCommandInterceptor? commandInterceptor = null)
+        DbCommandInterceptor? commandInterceptor = null,
+        bool resourceAuthority = false)
     {
         var connectionString = TestDatabaseConfiguration.TryGetConnectionString()
             ?? throw new InvalidOperationException(
@@ -99,6 +103,7 @@ public sealed class LocalAuthenticationTestHost : IAsyncDisposable
             initializeBoot,
             afterAuthentication);
         host._commandInterceptor = commandInterceptor;
+        host._resourceAuthority = resourceAuthority;
         try
         {
             await host.EnsureSchemaAsync();
@@ -314,11 +319,20 @@ public sealed class LocalAuthenticationTestHost : IAsyncDisposable
         }
 
         _schemaReady = true;
+        if (_resourceAuthority)
+        {
+            await using var tenant = new Kordra.Modules.TenantManagement.Infrastructure.TenantDbContext(Kordra.Modules.TenantManagement.Infrastructure.TenantDbContextFactory.CreateTestOptions(_connectionString));
+            await tenant.Database.MigrateAsync();
+            await using var projects = new Kordra.Modules.ProjectEnvironment.Infrastructure.ProjectDbContext(Kordra.Modules.ProjectEnvironment.Infrastructure.ProjectDbContextFactory.CreateTestOptions(_connectionString));
+            await projects.Database.MigrateAsync();
+            await using var inventory = new Kordra.Modules.InfrastructureInventory.Infrastructure.InventoryDbContext(Kordra.Modules.InfrastructureInventory.Infrastructure.InventoryDbContextFactory.CreateTestOptions(_connectionString));
+            await inventory.Database.MigrateAsync();
+        }
     }
 
     private async Task StartInstanceAsync()
     {
-        var configuration = new LocalAuthenticationConfiguration(Guid.NewGuid(), Guid.NewGuid());
+        var configuration = new LocalAuthenticationConfiguration(_installationId, Guid.NewGuid());
         var builder = WebApplication.CreateEmptyBuilder(new WebApplicationOptions
         {
             Args = [],
@@ -357,6 +371,16 @@ public sealed class LocalAuthenticationTestHost : IAsyncDisposable
         builder.Services.AddSingleton<IIdentityAuditTransactionFactory>(_auditFactory);
         builder.Services.AddSingleton<LocalAuthenticationService>();
         LocalAuthenticationEndpoints.AddServices(builder.Services);
+        if (_resourceAuthority)
+        {
+            builder.Services.AddSingleton<IDbContextFactory<Kordra.Modules.TenantManagement.Infrastructure.TenantDbContext>>(
+                new Microsoft.EntityFrameworkCore.Infrastructure.PooledDbContextFactory<Kordra.Modules.TenantManagement.Infrastructure.TenantDbContext>(Kordra.Modules.TenantManagement.Infrastructure.TenantDbContextFactory.CreateTestOptions(_connectionString)));
+            builder.Services.AddSingleton<IDbContextFactory<Kordra.Modules.ProjectEnvironment.Infrastructure.ProjectDbContext>>(
+                new Microsoft.EntityFrameworkCore.Infrastructure.PooledDbContextFactory<Kordra.Modules.ProjectEnvironment.Infrastructure.ProjectDbContext>(Kordra.Modules.ProjectEnvironment.Infrastructure.ProjectDbContextFactory.CreateTestOptions(_connectionString)));
+            builder.Services.AddSingleton<IDbContextFactory<Kordra.Modules.InfrastructureInventory.Infrastructure.InventoryDbContext>>(
+                new Microsoft.EntityFrameworkCore.Infrastructure.PooledDbContextFactory<Kordra.Modules.InfrastructureInventory.Infrastructure.InventoryDbContext>(Kordra.Modules.InfrastructureInventory.Infrastructure.InventoryDbContextFactory.CreateTestOptions(_connectionString)));
+            builder.Services.AddResourceAuthorityOwnerServices();
+        }
 
         _app = builder.Build();
         _app.Use(LocalAuthenticationEndpoints.RequestGuard("localhost:5128"));
@@ -378,6 +402,7 @@ public sealed class LocalAuthenticationTestHost : IAsyncDisposable
         }
 
         LocalAuthenticationEndpoints.Map(_app);
+        if (_resourceAuthority) { ProtectedMetadataEndpoints.Map(_app); EnvironmentV2Endpoints.Map(_app); }
         _app.MapGet("/health/live", () => Results.Text("alive\n", "text/plain; charset=utf-8"));
         if (_initializeBoot || _auditFactory is IdentityAccessAuditTransactionAdapter)
         {
@@ -494,6 +519,11 @@ public sealed class LocalAuthenticationTestHost : IAsyncDisposable
                 _utcNow += by;
                 _timestamp += by.Ticks;
             }
+        }
+
+        public void StepUtcWithoutAdvancingMonotonicTime(TimeSpan by)
+        {
+            lock (_sync) _utcNow += by;
         }
     }
 }

@@ -2,7 +2,7 @@
 id: ENG-LUNA-IMPLEMENTATION-HANDOFF
 status: proposed
 owner: NukeGeng
-last_reviewed: 2026-10-20
+last_reviewed: 2026-10-22
 ---
 
 # Luna Max implementation handoff — approved direction, decision-gated execution
@@ -71,6 +71,20 @@ Bounded Architect author checks on the complete documentation package: `python3 
 These checks prove documentation structure/mapping only. No account, database migration, HTTP authentication, provider, concurrency protocol or new package was executed/validated by the design session. No routine Product suites, `amr.py gates`, independent AI review or GitHub PR review were run here; full applicable deterministic gates belong to Luna at implementation/PR boundaries under the Architect role separation. Do not reuse historical 133-product-test evidence as proof of the new design.
 
 ## Developer resume instruction
+
+### Current T06 local runtime slice — 2026-10-23
+
+The accepted policy design is implemented in the current `codex/foundation-t06-authorization-admission` worktree. Current owner specs and [traceability](traceability.md#t06-scoped-runtime-implementation--2026-10-23) map the policy/head/binding, floor, actor/grant/resource ports, U/D proof, guarded metadata/environment-v2 routes and offline policy CLI. Use the exact final `.amr-local/t06-preparation/` receipt/source identity; do not replay old checkpoints or reuse T03/T05 counts as T06 validation. Native model/effort is unverified; no extra AI/PR review was initiated. Existing unrelated `dotnet-tools.json` remains uncommitted and Clients/Website are untouched.
+
+This delivers the scoped policy/admission increment, not all Foundation management capability. Whole-workspace symbolic resource/grant provisioning, list/audit-history disclosure and other catalog HTTP routes still need their accepted owner composition/proof. T07–T09 provider/credential gates remain separate; policy scope closure does not authorize live migration, actual CLI apply, provider access, merge or marking the entire GOAL completed. Preserve the narrower acceptance instead of claiming or inventing a broader delivered baseline.
+
+### T06 resource-policy addition accepted — 2026-10-22
+
+[ADR-0014](../decisions/0014-resource-policy-v1.md) and [Resource Policy v1](../contracts/resource-policy-v1.md) supply the bounded missing policy design, including the four requested clarifications. The maintainer accepted both exact documents for T06 on 2026-10-22. Follow contract section 10's IAM, PRJ, offline Host and U/D integration slices; preserve completed T01–T05 evidence and keep unresolved policy denied. The existing admission/session/clock protocol is not redesigned. Planned implementation remains in existing IdentityAccess/ProjectEnvironment owner contexts and Contracts, Host API/DbMigrator and corresponding owner tests; update INV/AUD consumers through ports, not new services or cross-owner tables. The contract lists actual current DTO consumers, legacy nullability migration, fixed rules/current head, explicit bindings and future versioned Product fixtures. Planned acceptance is not passing test evidence. No Sol PR action, extra AI review, provider access or operational migration is authorized by this handoff.
+
+Design-only author validation: strict doccheck passed with 228 Markdown files, 210 IDs, 21 modules and zero errors/warnings; scopecheck passed with 39 unique LAB cases; whitespace checks and the JSON example parse passed. These establish documentation integrity only. No Product suite, database migration, AI review or PR operation was run for this bounded design task. Exact candidate hashes/snapshots are retained privately under `.amr-local/designs/t06-resource-policy-v1/`; acceptance is recorded separately in the ADR and private approval receipt.
+
+### Existing Foundation resume baseline
 
 Read GOAL/roadmap and this handoff in the existing Product worktree. Verify native gpt-6-luna/max for this turn. Preserve completed checkpoints, dirty design changes and accepted ADR scopes. ADR-0012, local-authentication-v1, authority-admission-v1 and Foundation T01–T07 were explicitly accepted by the maintainer on 2026-10-20; do not ask for that approval again. Reconcile the existing AMR plan/checkpoints and execute T01–T07 in dependency order, preserving per-owner scopes and all test/database safety boundaries. Do not auto-launch Sol or local AI review, change accepted architecture, operate live infrastructure, edit clients/Website, or merge.
 

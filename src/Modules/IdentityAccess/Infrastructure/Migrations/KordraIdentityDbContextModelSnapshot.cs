@@ -66,6 +66,21 @@ namespace Kordra.Modules.IdentityAccess.Infrastructure.Migrations
                         });
                 });
 
+            modelBuilder.Entity("Kordra.Modules.IdentityAccess.Infrastructure.KordraAuthorityClockFloor", b =>
+                {
+                    b.Property<Guid>("InstallationId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("installation_id");
+
+                    b.Property<DateTimeOffset>("AdmittedUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("admitted_utc");
+
+                    b.HasKey("InstallationId");
+
+                    b.ToTable("iam_authority_clock_floors", "app");
+                });
+
             modelBuilder.Entity("Kordra.Modules.IdentityAccess.Infrastructure.KordraIdentityUser", b =>
                 {
                     b.Property<Guid>("Id")
@@ -260,6 +275,173 @@ namespace Kordra.Modules.IdentityAccess.Infrastructure.Migrations
                         });
                 });
 
+            modelBuilder.Entity("Kordra.Modules.IdentityAccess.Infrastructure.ResourcePolicyCommandReceipt", b =>
+                {
+                    b.Property<Guid>("InstallationId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("installation_id");
+
+                    b.Property<Guid>("ManifestId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("manifest_id");
+
+                    b.Property<string>("AuditIntentHash")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("audit_intent_hash");
+
+                    b.Property<Guid>("AuditIntentId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("audit_intent_id");
+
+                    b.Property<byte[]>("ContentHash")
+                        .IsRequired()
+                        .HasColumnType("bytea")
+                        .HasColumnName("content_hash");
+
+                    b.Property<string>("ResultJson")
+                        .IsRequired()
+                        .HasColumnType("jsonb")
+                        .HasColumnName("result_json");
+
+                    b.HasKey("InstallationId", "ManifestId");
+
+                    b.ToTable("iam_resource_policy_commands", "app", t =>
+                        {
+                            t.HasCheckConstraint("ck_iam_resource_policy_receipt", "octet_length(content_hash) = 32 AND length(audit_intent_hash) = 64");
+                        });
+                });
+
+            modelBuilder.Entity("Kordra.Modules.IdentityAccess.Infrastructure.ResourcePolicyHead", b =>
+                {
+                    b.Property<Guid>("PolicyId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("policy_id");
+
+                    b.Property<long>("CurrentRevision")
+                        .IsConcurrencyToken()
+                        .HasColumnType("bigint")
+                        .HasColumnName("current_revision");
+
+                    b.HasKey("PolicyId");
+
+                    b.HasIndex("PolicyId", "CurrentRevision");
+
+                    b.ToTable("iam_resource_policy_heads", "app", t =>
+                        {
+                            t.HasCheckConstraint("ck_iam_resource_policy_head", "current_revision > 0");
+                        });
+                });
+
+            modelBuilder.Entity("Kordra.Modules.IdentityAccess.Infrastructure.ResourcePolicyIdentity", b =>
+                {
+                    b.Property<Guid>("PolicyId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("policy_id");
+
+                    b.Property<Guid>("ProjectId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("project_id");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("tenant_id");
+
+                    b.HasKey("PolicyId");
+
+                    b.HasAlternateKey("TenantId", "ProjectId", "PolicyId");
+
+                    b.ToTable("iam_resource_policies", "app", t =>
+                        {
+                            t.HasCheckConstraint("ck_iam_resource_policy_identity", "policy_id <> '00000000-0000-0000-0000-000000000000' AND tenant_id <> '00000000-0000-0000-0000-000000000000' AND project_id <> '00000000-0000-0000-0000-000000000000'");
+                        });
+                });
+
+            modelBuilder.Entity("Kordra.Modules.IdentityAccess.Infrastructure.ResourcePolicyRevision", b =>
+                {
+                    b.Property<Guid>("PolicyId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("policy_id");
+
+                    b.Property<long>("Revision")
+                        .HasColumnType("bigint")
+                        .HasColumnName("revision");
+
+                    b.Property<string>("Action")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)")
+                        .HasColumnName("action");
+
+                    b.Property<byte[]>("ContentHash")
+                        .IsRequired()
+                        .HasColumnType("bytea")
+                        .HasColumnName("content_hash");
+
+                    b.Property<DateTimeOffset>("EffectiveFromUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("effective_from_utc");
+
+                    b.Property<DateTimeOffset?>("ExpiresAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("expires_at_utc");
+
+                    b.Property<DateTimeOffset>("PublishedAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("published_at_utc");
+
+                    b.Property<int>("SchemaVersion")
+                        .HasColumnType("integer")
+                        .HasColumnName("schema_version");
+
+                    b.Property<string>("ScopeKind")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)")
+                        .HasColumnName("scope_kind");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)")
+                        .HasColumnName("status");
+
+                    b.HasKey("PolicyId", "Revision");
+
+                    b.ToTable("iam_resource_policy_revisions", "app", t =>
+                        {
+                            t.HasCheckConstraint("ck_iam_resource_policy_payload", "revision > 0 AND schema_version = 1 AND action = 'target.read' AND scope_kind IN ('environment','project_without_environment') AND status IN ('active','inactive') AND octet_length(content_hash) = 32 AND isfinite(effective_from_utc) AND isfinite(published_at_utc) AND (expires_at_utc IS NULL OR (isfinite(expires_at_utc) AND expires_at_utc > effective_from_utc))");
+                        });
+                });
+
+            modelBuilder.Entity("Kordra.Modules.IdentityAccess.Infrastructure.ResourcePolicyRule", b =>
+                {
+                    b.Property<Guid>("PolicyId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("policy_id");
+
+                    b.Property<long>("Revision")
+                        .HasColumnType("bigint")
+                        .HasColumnName("revision");
+
+                    b.Property<string>("Case")
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)")
+                        .HasColumnName("rule_case");
+
+                    b.Property<string>("Effect")
+                        .HasMaxLength(8)
+                        .HasColumnType("character varying(8)")
+                        .HasColumnName("effect");
+
+                    b.HasKey("PolicyId", "Revision", "Case", "Effect");
+
+                    b.ToTable("iam_resource_policy_rules", "app", t =>
+                        {
+                            t.HasCheckConstraint("ck_iam_resource_policy_rule", "revision > 0 AND rule_case IN ('Development','Test','Staging','Production','NoEnvironment') AND effect IN ('allow','deny')");
+                        });
+                });
+
             modelBuilder.Entity("Kordra.Modules.IdentityAccess.Infrastructure.KordraAuthenticationCommand", b =>
                 {
                     b.HasOne("Kordra.Modules.IdentityAccess.Infrastructure.KordraIdentityUser", null)
@@ -280,6 +462,33 @@ namespace Kordra.Modules.IdentityAccess.Infrastructure.Migrations
                         .HasConstraintName("fk_iam_sessions_iam_principals_principal_id");
 
                     b.Navigation("Principal");
+                });
+
+            modelBuilder.Entity("Kordra.Modules.IdentityAccess.Infrastructure.ResourcePolicyHead", b =>
+                {
+                    b.HasOne("Kordra.Modules.IdentityAccess.Infrastructure.ResourcePolicyRevision", null)
+                        .WithMany()
+                        .HasForeignKey("PolicyId", "CurrentRevision")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Kordra.Modules.IdentityAccess.Infrastructure.ResourcePolicyRevision", b =>
+                {
+                    b.HasOne("Kordra.Modules.IdentityAccess.Infrastructure.ResourcePolicyIdentity", null)
+                        .WithMany()
+                        .HasForeignKey("PolicyId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Kordra.Modules.IdentityAccess.Infrastructure.ResourcePolicyRule", b =>
+                {
+                    b.HasOne("Kordra.Modules.IdentityAccess.Infrastructure.ResourcePolicyRevision", null)
+                        .WithMany()
+                        .HasForeignKey("PolicyId", "Revision")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
                 });
 #pragma warning restore 612, 618
         }

@@ -2,12 +2,12 @@
 id: FEAT-TEN-001
 status: proposed
 owner: NukeGeng
-last_reviewed: 2026-10-22
+last_reviewed: 2026-10-23
 module_id: MOD-TEN
 feature_id: FEAT-TEN-001
 phase: MVP
-source_paths: ["Kordra.slnx", "src/Host/Kordra.Api/TenantAuditTransactionAdapter.cs", "src/Host/Kordra.DbMigrator/TenantManagementMigrationCommand.cs", "src/Modules/TenantManagement/Contracts/Kordra.Modules.TenantManagement.Contracts.csproj", "src/Modules/TenantManagement/Contracts/TenantAuthority.cs", "src/Modules/TenantManagement/Contracts/packages.lock.json", "src/Modules/TenantManagement/Infrastructure/Migrations/20261022041945_InitialTenantPersistence.Designer.cs", "src/Modules/TenantManagement/Infrastructure/Migrations/20261022041945_InitialTenantPersistence.cs", "src/Modules/TenantManagement/Infrastructure/Migrations/TenantDbContextModelSnapshot.cs", "src/Modules/TenantManagement/Infrastructure/TenantDbContext.cs", "src/Modules/TenantManagement/Infrastructure/TenantDbContextFactory.cs", "src/Modules/TenantManagement/Kordra.Modules.TenantManagement.csproj", "src/Modules/TenantManagement/TenantMembershipService.cs", "src/Modules/TenantManagement/packages.lock.json"]
-test_paths: ["tests/InfrastructureInventory.Bootstrap.Tests/ArchitectureTests.cs", "tests/TenantManagement.Tests/TenantManagement.Tests.csproj", "tests/TenantManagement.Tests/TenantMembershipTests.cs", "tests/TenantManagement.Tests/packages.lock.json"]
+source_paths: ["Kordra.slnx", "src/Host/Kordra.Api/TenantAuditTransactionAdapter.cs", "src/Host/Kordra.DbMigrator/TenantManagementMigrationCommand.cs", "src/Modules/TenantManagement/Contracts/Kordra.Modules.TenantManagement.Contracts.csproj", "src/Modules/TenantManagement/Contracts/TenantAuthority.cs", "src/Modules/TenantManagement/Contracts/packages.lock.json", "src/Modules/TenantManagement/Infrastructure/Migrations/20261022041945_InitialTenantPersistence.Designer.cs", "src/Modules/TenantManagement/Infrastructure/Migrations/20261022041945_InitialTenantPersistence.cs", "src/Modules/TenantManagement/Infrastructure/Migrations/TenantDbContextModelSnapshot.cs", "src/Modules/TenantManagement/Infrastructure/TenantDbContext.cs", "src/Modules/TenantManagement/Infrastructure/TenantDbContextFactory.cs", "src/Modules/TenantManagement/Kordra.Modules.TenantManagement.csproj", "src/Modules/TenantManagement/TenantMembershipService.cs", "src/Modules/TenantManagement/TenantOrganizationAuthority.cs", "src/Modules/TenantManagement/packages.lock.json"]
+test_paths: ["tests/IdentityAccess.Tests/CurrentAuthorityHttpTests.cs", "tests/InfrastructureInventory.Bootstrap.Tests/ArchitectureTests.cs", "tests/TenantManagement.Tests/TenantManagement.Tests.csproj", "tests/TenantManagement.Tests/TenantMembershipTests.cs", "tests/TenantManagement.Tests/packages.lock.json"]
 planned_source_paths: ["src/Modules/TenantManagement/Kordra.Modules.TenantManagement.csproj", "src/Modules/TenantManagement/Contracts/Kordra.Modules.TenantManagement.Contracts.csproj", "src/Modules/TenantManagement/Contracts/TenantAuthority.cs", "src/Modules/TenantManagement/Infrastructure/TenantDbContext.cs", "src/Modules/TenantManagement/Infrastructure/TenantDbContextFactory.cs", "src/Modules/TenantManagement/TenantMembershipService.cs"]
 planned_test_paths: ["tests/TenantManagement.Tests/TenantManagement.Tests.csproj", "tests/TenantManagement.Tests/TenantMembershipTests.cs"]
 ---
@@ -88,3 +88,7 @@ T04 provides owner handlers and test composition only. HTTP routes remain unregi
 ## T05 shared-owner integration — 2026-10-22
 
 T05 test composition resolves exact PRJ owner scopes through its own Contracts/store and tests real TEN scoped grants for catalog/target operations. TEN source, persistence and permission rules are unchanged; its test lock graph expands transitively through Host. No cookie authority, positive default or production resource adapter was introduced.
+
+## T06 implementation evidence — 2026-10-23
+
+T06 consumes current detailed scoped-grant and active-organization owner facts under already-held admission; no nested gate or cross-owner table read is introduced. Shared production composition enlists the IAM clock floor with TEN state/AUD. The previously observed self-suspend/self-revoke command-replay defect is corrected locally: current trusted active subject and exact subject/body receipt are checked before mutable grant authority; replay cannot mint a new operation. Two additional TEN regressions retain invalidated state and deny changed-body/new-command/anonymous attempts. Real current TEN grants feed the HTTPS metadata/v2 tests; these do not open a TEN management HTTP API or claim remote review findings resolved on old PR heads.

@@ -1,0 +1,52 @@
+{
+  "contractId": "CTR-RESOURCE-POLICY-V1",
+  "origin": "https://localhost:5128",
+  "secretValues": "omitted",
+  "routes": [
+    {
+      "method": "GET",
+      "path": "/api/v1/targets/{target}",
+      "permission": "target.read",
+      "scope": "exact environment or explicit project without environment",
+      "success": {
+        "status": 200,
+        "schemaVersion": 1,
+        "bodyFields": ["schemaVersion", "targetId", "projectId", "environmentId", "kind", "status", "revision"],
+        "cacheControl": "no-store"
+      },
+      "failureStatuses": [400, 401, 403, 503],
+      "providerAccess": false,
+      "disclosure": "distinct durable U/D intents, complete current binding, exact result digest and caller-bound bounded handoff"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v2/projects/{project}/environments",
+      "permission": "project.manage",
+      "headers": ["Origin", "X-Kordra-CSRF", "Idempotency-Key"],
+      "request": {
+        "schemaVersion": 2,
+        "correlationId": "11111111-1111-1111-1111-111111111111",
+        "name": "Synthetic Production",
+        "classification": "Production",
+        "resourcePolicy": {"policyId": "22222222-2222-2222-2222-222222222222", "revision": 1}
+      },
+      "unknownOrDuplicateFields": "reject",
+      "success": {
+        "status": 201,
+        "bodyFields": ["schemaVersion", "correlationId", "environment", "policyBinding"],
+        "environmentFields": ["id", "projectId", "name", "classification", "status", "revision"],
+        "bindingFields": ["bindingId", "bindingRevision", "policyId", "policyRevision"],
+        "etag": "quoted environment revision"
+      },
+      "error": {
+        "schemaVersion": 2,
+        "bodyFields": ["schemaVersion", "correlationId", "error"],
+        "errorFields": ["code", "message"],
+        "statuses": {"400": "INVALID_REQUEST", "401": "SESSION_INVALID", "403": "REQUEST_REJECTED", "409": "REQUEST_CONFLICT", "503": "AUTHORITY_UNAVAILABLE"},
+        "infrastructureGuard": "existing same-origin/Host/deadline guard may return the adopted authentication security error before endpoint dispatch"
+      },
+      "legacyIntegerOnlyCreate": "unregistered",
+      "policyPublicationOrReplacement": "offline only"
+    }
+  ]
+}

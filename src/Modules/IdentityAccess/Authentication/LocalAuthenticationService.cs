@@ -13,7 +13,7 @@ using Microsoft.Extensions.Options;
 namespace Kordra.Modules.IdentityAccess.Authentication;
 
 /// <summary>IAM-owned local authentication and self-session behavior for the operator pilot.</summary>
-public sealed class LocalAuthenticationService : Kordra.Modules.IdentityAccess.Contracts.IAuthorityClock
+public sealed partial class LocalAuthenticationService : Kordra.Modules.IdentityAccess.Contracts.IAuthorityClock, Kordra.Modules.IdentityAccess.Contracts.ICurrentSubjectReader, Kordra.Modules.IdentityAccess.Contracts.IAuthorityCommitter
 {
     private static readonly TimeSpan RequestDeadline = TimeSpan.FromSeconds(5);
     private static readonly TimeSpan LockoutDuration = TimeSpan.FromMinutes(15);
@@ -68,8 +68,14 @@ public sealed class LocalAuthenticationService : Kordra.Modules.IdentityAccess.C
     public async Task InitializeBootAsync(CancellationToken cancellationToken = default)
     {
         await using var lease = await _admission.AcquireWriteAsync(cancellationToken);
-        var now = GetTrustedUtcNow();
         await using var db = await _contexts.CreateDbContextAsync(cancellationToken);
+        var persistedFloor = await db.AuthorityClockFloors.AsNoTracking().SingleOrDefaultAsync(x => x.InstallationId == _configuration.InstallationId, cancellationToken);
+        if (persistedFloor is not null)
+        {
+            try { _clock.AdoptPersistedFloor(persistedFloor.AdmittedUtc); }
+            catch { _admission.Close(); throw; }
+        }
+        var now = GetTrustedUtcNow();
         await using var transaction = await db.Database.BeginTransactionAsync(cancellationToken);
         var intent = CreateIntent(
             AuditIntentStage.Mutation,
@@ -904,15 +910,20 @@ public sealed class LocalAuthenticationService : Kordra.Modules.IdentityAccess.C
         IDbContextTransaction transaction,
         AuditIntent intent,
         Func<CancellationToken, Task> saveOwnerMutationAsync,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken, Action? protocolStarted = null)
     {
         // Enlistment only prepares the audit context: no owner mutation or commit can
         // have started if setup fails, including cancellation of best-effort denial audit.
         await using var audit = await _auditTransactions.EnlistAsync(
             db.Database.GetDbConnection(), transaction.GetDbTransaction(), cancellationToken);
+        protocolStarted?.Invoke();
         try
         {
-            var outcome = await audit.CommitWithOwnerMutationAsync(intent, saveOwnerMutationAsync, cancellationToken);
+            var outcome = await audit.CommitWithOwnerMutationAsync(intent, async token =>
+            {
+                await saveOwnerMutationAsync(token);
+                await PersistClockFloorAsync(db, GetTrustedUtcNow(), token);
+            }, cancellationToken);
             if (outcome.Status == AuditAppendStatus.Unknown)
             {
                 _admission.Close();
@@ -958,7 +969,11 @@ public sealed class LocalAuthenticationService : Kordra.Modules.IdentityAccess.C
             ActionOutcome: actionOutcome);
     }
 
-    public DateTimeOffset GetTrustedUtcNow() => _clock.GetUtcNow();
+    public DateTimeOffset GetTrustedUtcNow()
+    {
+        try { return _clock.GetUtcNow(); }
+        catch { _admission.Close(); throw; }
+    }
 
     private static CancellationTokenSource CreateRequestDeadline(CancellationToken cancellationToken)
     {
@@ -1114,6 +1129,13 @@ public sealed class LocalAuthenticationService : Kordra.Modules.IdentityAccess.C
         private readonly object _sync = new();
         private DateTimeOffset? _lastUtc;
         private long _lastTimestamp;
+
+        public void AdoptPersistedFloor(DateTimeOffset floor)
+        {
+            var current = GetUtcNow();
+            if (floor > current + TimeSpan.FromSeconds(1)) throw new ClockTrustException();
+            lock (_sync) { if (floor > _lastUtc) _lastUtc = floor; }
+        }
 
         public DateTimeOffset GetUtcNow()
         {

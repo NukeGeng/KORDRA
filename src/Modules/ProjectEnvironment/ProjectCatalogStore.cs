@@ -8,6 +8,37 @@ namespace Kordra.Modules.ProjectEnvironment;
 /// <summary>Owner-only preparation in a caller-enlisted transaction under common writer admission. Never commits.</summary>
 public sealed class ProjectCatalogStore(ProjectDbContext db, IEnvironmentPolicyReader policies) : IProjectOwnershipReader
 {
+    public async Task<(string Status, string ResultJson)?> ReadCommandReplayUnderAdmissionAsync(string keyHash, string contentHash, CancellationToken ct = default)
+    {
+        var row = await db.Commands.AsNoTracking().SingleOrDefaultAsync(x => x.KeyHash == keyHash, ct);
+        return row is null ? null : (row.ContentHash == contentHash ? "success" : "conflict", row.ResultJson);
+    }
+    public async Task<EnvironmentCreationV2Result> PrepareEnvironmentV2Async(EnvironmentCreateV2Command command,
+        string keyHash, string contentHash, CancellationToken ct = default)
+    {
+        if (db.Database.CurrentTransaction is null) throw new InvalidOperationException("Environment creation requires the enlisted owner transaction.");
+        var replay = await db.Commands.AsNoTracking().SingleOrDefaultAsync(x => x.KeyHash == keyHash, ct);
+        if (replay is not null) return replay.ContentHash == contentHash
+            ? JsonSerializer.Deserialize<EnvironmentCreationV2Result>(replay.ResultJson) ?? new("unavailable") : new("conflict");
+        if (command.TenantId == Guid.Empty || command.ProjectId == Guid.Empty || command.CorrelationId == Guid.Empty || !ValidName(command.Name) ||
+            command.Classification is not ("Development" or "Test" or "Staging" or "Production") ||
+            command.ResourcePolicy is null || command.ResourcePolicy.PolicyId == Guid.Empty || command.ResourcePolicy.Revision <= 0 ||
+            policies is not IExactEnvironmentPolicyReader exact || !await exact.IsApplicableUnderAdmissionAsync(command.TenantId, command.ProjectId, command.Classification, command.ResourcePolicy, ct)) return new("denied");
+        var project = await db.Projects.SingleOrDefaultAsync(x => x.TenantId == command.TenantId && x.Id == command.ProjectId && x.Status == "active", ct);
+        if (project is null) return new("denied");
+        var environment = new EnvironmentRecord { Id = Guid.NewGuid(), TenantId = command.TenantId, ProjectId = command.ProjectId,
+            Name = command.Name, Classification = command.Classification, PolicyRevision = null };
+        db.Environments.Add(environment); project.Revision++;
+        // Persist only inside the caller's uncommitted transaction so the binding owner can verify this new row.
+        await db.SaveChangesAsync(ct);
+        var mutation = Guid.NewGuid();
+        var binding = await new PolicyBindingStore(db).StageAsync(command.TenantId, command.ProjectId,
+            new(null, "environment", environment.Id, 0), command.ResourcePolicy, mutation, allowReplacement: false, ct);
+        if (binding is null) return new("denied");
+        var result = new EnvironmentCreationV2Result("success", Fact(environment), binding, mutation);
+        db.Commands.Add(new() { KeyHash = keyHash, ContentHash = contentHash, ResultJson = JsonSerializer.Serialize(result) });
+        return result;
+    }
     public async Task<PreparedCatalogChange> PrepareAsync(CatalogCommand command, string keyHash, string contentHash, CancellationToken ct = default)
     {
         if (command.TenantId == Guid.Empty || command.Kind is not ("project" or "application" or "environment") ||
@@ -71,7 +102,7 @@ public sealed class ProjectCatalogStore(ProjectDbContext db, IEnvironmentPolicyR
         if (project is null) return null;
         if (environmentId is null) return new(tenantId, projectId, project.Revision, EnvironmentSelection.ResolvedAbsent, null, null, null, null);
         var env = await db.Environments.AsNoTracking().SingleOrDefaultAsync(x => x.TenantId == tenantId && x.ProjectId == projectId && x.Id == environmentId && x.Status == "active", cancellationToken);
-        if (env is null || !await policies.IsApplicableAsync(tenantId, projectId, env.Classification, env.PolicyRevision, cancellationToken)) return null;
+        if (env is null || env.PolicyRevision is not { } legacy || !await policies.IsApplicableAsync(tenantId, projectId, env.Classification, legacy, cancellationToken)) return null;
         return new(tenantId, projectId, project.Revision, EnvironmentSelection.ResolvedPresent, env.Id, env.Revision, env.Classification, env.PolicyRevision);
     }
 

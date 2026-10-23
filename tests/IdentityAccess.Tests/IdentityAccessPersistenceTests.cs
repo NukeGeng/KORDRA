@@ -106,7 +106,7 @@ public sealed class IdentityAccessPersistenceTests
 
         var entityTypes = dbContext.Model.GetEntityTypes().ToArray();
         Assert.Equal(
-            [typeof(KordraAuthenticationCommand), typeof(KordraIdentityUser), typeof(KordraRoleDefinition), typeof(KordraSession)],
+            [typeof(KordraAuthenticationCommand), typeof(KordraAuthorityClockFloor), typeof(KordraIdentityUser), typeof(KordraRoleDefinition), typeof(KordraSession), typeof(ResourcePolicyCommandReceipt), typeof(ResourcePolicyHead), typeof(ResourcePolicyIdentity), typeof(ResourcePolicyRevision), typeof(ResourcePolicyRule)],
             entityTypes.Select(entity => entity.ClrType).OrderBy(type => type.FullName, StringComparer.Ordinal));
 
         var definition = Assert.Single(entityTypes, entity => entity.ClrType == typeof(KordraRoleDefinition));
@@ -191,11 +191,11 @@ public sealed class IdentityAccessPersistenceTests
 
         var entityTypes = dbContext.Model.GetEntityTypes().ToArray();
         Assert.Equal(
-            ["iam_authentication_commands", "iam_principals", "iam_role_definitions", "iam_sessions"],
+            ["iam_authentication_commands", "iam_authority_clock_floors", "iam_principals", "iam_resource_policies", "iam_resource_policy_commands", "iam_resource_policy_heads", "iam_resource_policy_revisions", "iam_resource_policy_rules", "iam_role_definitions", "iam_sessions"],
             entityTypes.Select(entity => entity.GetTableName()).Order(StringComparer.Ordinal));
         Assert.All(entityTypes, entity => Assert.Equal("app", entity.GetSchema()));
         Assert.DoesNotContain(
-            entityTypes.SelectMany(entity => entity.GetProperties()),
+            entityTypes.Where(entity => entity.ClrType != typeof(ResourcePolicyIdentity)).SelectMany(entity => entity.GetProperties()),
             property => string.Equals(property.Name, "TenantId", StringComparison.OrdinalIgnoreCase));
 
         await using var transaction = await dbContext.Database.BeginTransactionAsync();
