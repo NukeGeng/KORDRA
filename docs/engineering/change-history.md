@@ -2,7 +2,7 @@
 id: ENG-HISTORY
 status: proposed
 owner: unassigned
-last_reviewed: 2026-10-19
+last_reviewed: 2026-10-22
 ---
 
 # Feature change log and release-note discipline
@@ -25,6 +25,10 @@ Sol clarification is tracked by FEAT-AMR-001 (ENG-TOOLING); existing router/conf
 | 2026-10-20 | FEAT-IAM-001-T06-RECONCILIATION | MOD-IAM / FEAT-IAM-001 | Post-acceptance documentation crosswalk; no commit/PR | Accepted ADR-0012, `local-authentication-v1`, `authority-admission-v1`; no new decision | Clarifies that the accepted single-process owner/U-D/audit protocol supersedes pre-ADR I2.7 open-decision wording for T01–T07 only. Keeps T06 dependent on T02/T04/T05 and inventory denied until real concurrency/HTTP handoff proof; no runtime changed | Luna implementation / product owner |
 | 2026-10-20 | IAM-I2.7-BEHAVIOR-APPROVED | MOD-IAM / FEAT-IAM-001; TEN/PRJ/INV/AUD handoff notes | Local exact-content task acceptance under explicit conditional maintainer authorization | Bounded behavioral baseline only; reviewed hash and attribution in I2.7g; no ADR or concrete runtime contract adoption | Audit evidence wording and AMR v4 handoff corrected; custody/progress docs reconciled; source/tests unchanged | NukeGeng via conditional authorization; coordinator assessment |
 | 2026-10-20 | IAM-I2.7-CUSTODIANS | MOD-IAM / FEAT-IAM-001 | Local GOAL checkpoint `KORDRA-OP-P0-IAM-CUSTODIANS-001` | NukeGeng assigned as human custodian for all eight decision areas; exact-content proposal review remains pending | No formal module-owner assignment, contract acceptance, source/test, runtime, permission, ADR, inventory or infrastructure change | NukeGeng (custodian; decisions pending) |
+
+| 2026-10-23 | T06-RESOURCE-POLICY-RUNTIME | IAM-001 / IAM-002; PRJ / INV / TEN / AUD | Local implementation; source/test mapping and private T06 evidence | Accepted ADR-0012 / ADR-0014, resource-policy-v1 and admission-v1 | Fixed current policy/head, unique explicit binding/history, clock floor, owner facts, bounded audited U/D/actual HTTP, offline policy CLI/recovery and environment v2. Additive migrations tested only on isolated synthetic storage; no real provisioning/provider/merge. Wider workspace/list capability remains pending | NukeGeng |
+| 2026-10-22 | T06-RESOURCE-POLICY-ACCEPTED | FEAT-IAM-001 / MOD-IAM; PRJ/INV/AUD consumers | Explicit maintainer approval; unchanged proposal hashes verified | ADR-0014 and Resource Policy v1 accepted for exact T06 scope | Design gate resolved; synthetic-test implementation approved. No product source, real migration, provider access, checkpoint completion or merge; historical proposal snapshots retained | NukeGeng / maintainer |
+| 2026-10-22 | T06-RESOURCE-POLICY-DESIGN | FEAT-IAM-001 / MOD-IAM; PRJ/INV/AUD consumers | Local bounded design; no source commit/PR | Proposed ADR-0014 and Resource Policy v1 | Exact IAM policy/head, PRJ binding/history, fixed rules, atomic offline publication, U/D evidence and legacy-data/consumer migration specified; planned tests only, exact acceptance pending | NukeGeng |
 | 2026-10-22 | PR10-AUDIT-SETUP-001 | MOD-IAM / FEAT-IAM-002 | PR #10 round-2 correction | Existing ADR-0012 and authority/admission-v1 | Enlistment setup/cancellation does not close admission before commit-protocol handoff. Two regressions reproduced the denial-triggered outage before correction; eight focused setup/budget/unknown-commit cases now pass, including an exception after actual commit. No schema/dependency/production change | NukeGeng |
 | 2026-10-22 | PR10-IAM-CORRECTIONS | MOD-IAM / FEAT-IAM-002 | Local scoped review fixes; not published | Accepted ADR-0012 and existing authentication/admission v1 contracts | Correct exact command replay, fail-closed unknown commits, 16-reader admission, monotonic activity, 100 ms best-effort denial recording and installed TLS validation. Focused IAM tests passed; full gates tracked separately. No new schema/dependency, AI review or production operation | NukeGeng |
 | 2026-10-21 | FEAT-IAM-002-T03-LOCAL-AUTH | MOD-IAM / FEAT-IAM-002; AUD and host consumers | This feature commit / PR | Accepted ADR-0012, local-authentication-v1, authority-admission-v1 | Explicit HTTPS loopback authentication, offline account operations, boot-scoped sessions, transactional IAM/AUD writes and additive IAM command migration. Local product tests 224/224, zero skips; exact PR-commit validation reported separately. Default health-only profile and denied inventory retained. Private checkpoint remains in_progress with original evidence; no production migration or merge authority | NukeGeng |
@@ -165,3 +169,17 @@ FEAT-PRJ-001 / MOD-PRJ implements catalog ownership/lifecycle, explicit environm
 ## PR13 documented PRJ migration locator — 2026-10-23
 
 FEAT-PRJ-001 fixes finding 4345619894 by correcting the environment-variable spelling. The regression reproduces the missing-locator error, then confirms the documented variable reaches target validation without opening a connection. Main/T04/TEN review corrections remain intact during T05 integration; no migration, dependency or architecture change.
+
+T06 validation correction — 2026-10-23: updated the Host PE-reference expectation to include the existing TEN Contracts used by accepted owner-port composition. The exact Host dependency assertion and all module isolation/cycle checks remain active; no product runtime reference or accepted architecture was changed by this correction.
+
+## PR14 P1 effective provenance expiry — 2026-10-23
+
+FEAT-TEN-001 / MOD-TEN corrects 4355763873 by returning minimum expiry while validating all provenance branches. IAM scoped facts and grantor ceilings inherit the result through existing contracts. Failure and unbounded-valid states remain distinct. Synthetic stored-state regressions reproduce and prevent protected handoff after upstream expiry; ordinary grant ceilings and accepted bounded transport remain intact. No new dependency, schema/ADR/permission change, checkpoint replay, real operation or additional AI review. PR14 P2 remains separate and unresolved.
+
+## PR14 P2 offline bind readiness — 2026-10-23
+
+The existing offline policy coordinator now checks status/effective/expiry for fresh binds before staging and before commit. Ten regression failures were reproduced before repair. Known rejection rolls back IAM/PRJ/AUD state; exact committed receipts and inactive disabling publication remain legitimate. No dependency, migration, ADR, permission, provider operation or extra AI review is added. PR14 P1 correction remains intact.
+
+## PR14 deterministic PostgreSQL timestamp fixture — 2026-10-23
+
+FEAT-TEN-001 corrects the new provenance regression fixture after Linux artifact-domain failure 39915294133: use deliberately fractional-microsecond input and reload the stored expiry for expected values. This preserves exact assertions and detects the original P1; no production source, contract, migration, accepted ADR, test count, skip or authority boundary changes.

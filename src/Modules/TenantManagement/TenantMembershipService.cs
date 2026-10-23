@@ -15,9 +15,13 @@ namespace Kordra.Modules.TenantManagement;
 public sealed class TenantMembershipService(
     IDbContextFactory<TenantDbContext> contexts, IRoleDefinitionReader definitions,
     ITenantSubjectReader subjects, ITenantScopeOwner resources, ITenantAuditTransactionFactory audits,
-    FairAsyncReaderWriterAdmissionGate gate, IAuthorityClock clock)
+    FairAsyncReaderWriterAdmissionGate gate, IAuthorityClock clock) : IScopedGrantReader, IPolicyTenantAuthority
 {
     private sealed record Source(Guid Id, long Revision);
+    private sealed record ProvenanceValidity(DateTimeOffset? ExpiresAtUtc);
+
+    public Task<bool> IsActiveTenantUnderAdmissionAsync(Guid tenantId, CancellationToken ct = default) =>
+        new TenantOrganizationAuthority(contexts).IsActiveTenantUnderAdmissionAsync(tenantId, ct);
 
     public async Task<TenantCommandResult> InitializeOfflineAsync(IOfflineProvisioningLease offline,
         Guid manifestId, Guid principalId, string name, Guid definitionId, long definitionRevision,
@@ -121,6 +125,20 @@ public sealed class TenantMembershipService(
     {
         await using var db = await contexts.CreateDbContextAsync(cancellationToken);
         return await ResolveAsync(db, tenantId, principalId, permission, scope, clock.GetTrustedUtcNow(), cancellationToken);
+    }
+
+    /// <summary>Current TEN facts for IAM under an already-held common admission; never acquires another gate.</summary>
+    public async Task<ScopedGrant?> ReadCurrentGrantUnderAdmissionAsync(Guid principal, Guid tenant, string permission,
+        string scopeKind, Guid scopeId, CancellationToken ct = default)
+    {
+        await using var db = await contexts.CreateDbContextAsync(ct);
+        var effective = await ResolveAsync(db, tenant, principal, permission, new(scopeKind, scopeId), clock.GetTrustedUtcNow(), ct);
+        if (effective is null) return null;
+        var member = await db.Memberships.AsNoTracking().SingleOrDefaultAsync(x => x.TenantId == tenant && x.PrincipalId == principal && x.Status == "active", ct);
+        var organization = await db.Organizations.AsNoTracking().SingleOrDefaultAsync(x => x.Id == tenant && x.Status == "active", ct);
+        return member is null || organization is null ? null : new(principal, tenant, member.Id, organization.Revision,
+            member.Revision, effective.AssignmentId, effective.Revision, effective.DefinitionId, effective.DefinitionRevision,
+            permission, scopeKind, scopeId, effective.ExpiresAtUtc);
     }
 
     public async Task<TenantCommandResult> ExecuteAsync(TenantCommand command, CancellationToken cancellationToken = default)
@@ -229,42 +247,52 @@ public sealed class TenantMembershipService(
         var assignments = await db.Assignments.AsNoTracking().Where(x => x.TenantId == tenant && x.MembershipId == member.Id &&
             x.ScopeKind == scope.Kind && x.ScopeId == scope.Id && x.Status == "active" && (x.ExpiresAtUtc == null || x.ExpiresAtUtc > now)).Take(33).ToArrayAsync(ct);
         if (assignments.Length > 32) return null;
-        var matches = new List<TenantAssignment>();
+        var matches = new List<EffectiveAssignment>();
         foreach (var assignment in assignments)
         {
             var definition = await definitions.GetCurrentAsync(assignment.DefinitionId, assignment.DefinitionRevision, ct);
-            if (definition is null || !await ValidProvenanceAsync(db, assignment, now, [], ct)) return null;
+            if (definition is null) return null;
+            var provenance = await ResolveProvenanceAsync(db, assignment, now, [], ct);
+            if (provenance is null) return null;
             if (definition.Rules.Any(x => x.Permission == permission && x.ScopeKind == scope.Kind && x.Effect == "deny")) return null;
-            if (FoundationPermissions.Allows(definition, permission, scope.Kind)) matches.Add(assignment);
+            if (FoundationPermissions.Allows(definition, permission, scope.Kind))
+                matches.Add(new(assignment.Id, assignment.Revision, assignment.DefinitionId,
+                    assignment.DefinitionRevision, provenance.ExpiresAtUtc));
         }
         if (matches.Count != 1) return null;
-        var selected = matches[0];
-        return new(selected.Id, selected.Revision, selected.DefinitionId, selected.DefinitionRevision, selected.ExpiresAtUtc);
+        return matches[0];
     }
 
-    private async Task<bool> ValidProvenanceAsync(TenantDbContext db, TenantAssignment assignment,
+    private async Task<ProvenanceValidity?> ResolveProvenanceAsync(TenantDbContext db, TenantAssignment assignment,
         DateTimeOffset now, HashSet<Guid> visited, CancellationToken ct)
     {
-        if (visited.Count >= 32 || !visited.Add(assignment.Id)) return false;
+        if (visited.Count >= 32 || !visited.Add(assignment.Id)) return null;
         if (assignment.Status != "active" || assignment.ExpiresAtUtc <= now ||
-            await definitions.GetCurrentAsync(assignment.DefinitionId, assignment.DefinitionRevision, ct) is null) return false;
+            await definitions.GetCurrentAsync(assignment.DefinitionId, assignment.DefinitionRevision, ct) is null) return null;
         var member = await db.Memberships.AsNoTracking().SingleOrDefaultAsync(x => x.TenantId == assignment.TenantId && x.Id == assignment.MembershipId && x.Status == "active", ct);
-        if (member is null || !await definitions.IsActivePrincipalAsync(member.PrincipalId, ct)) return false;
+        if (member is null || !await definitions.IsActivePrincipalAsync(member.PrincipalId, ct)) return null;
         Source[]? sources;
         try { sources = JsonSerializer.Deserialize<Source[]>(assignment.ProvenanceJson); }
-        catch (JsonException) { return false; }
-        if (sources is null || sources.Length > 32) return false;
-        if (assignment.IsFounding) return sources.Length == 0 && assignment.GrantorPrincipalId == member.PrincipalId && await ScopeOwnedAsync(assignment.TenantId, new TenantScope(assignment.ScopeKind, assignment.ScopeId), ct);
-        if (sources.Length == 0) return false;
+        catch (JsonException) { return null; }
+        if (sources is null || sources.Length > 32) return null;
+        if (assignment.IsFounding)
+            return sources.Length == 0 && assignment.GrantorPrincipalId == member.PrincipalId &&
+                await ScopeOwnedAsync(assignment.TenantId, new TenantScope(assignment.ScopeKind, assignment.ScopeId), ct)
+                ? new(assignment.ExpiresAtUtc) : null;
+        if (sources.Length == 0) return null;
+        var earliest = assignment.ExpiresAtUtc;
         foreach (var source in sources)
         {
             var parent = await db.Assignments.AsNoTracking().SingleOrDefaultAsync(x => x.TenantId == assignment.TenantId && x.Id == source.Id, ct);
-            if (parent is null || parent.Revision != source.Revision) return false;
+            if (parent is null || parent.Revision != source.Revision) return null;
             var grantor = await db.Memberships.AsNoTracking().SingleOrDefaultAsync(x => x.TenantId == assignment.TenantId && x.Id == parent.MembershipId, ct);
-            if (grantor?.PrincipalId != assignment.GrantorPrincipalId ||
-                !await ValidProvenanceAsync(db, parent, now, new HashSet<Guid>(visited), ct)) return false;
+            if (grantor?.PrincipalId != assignment.GrantorPrincipalId) return null;
+            var provenance = await ResolveProvenanceAsync(db, parent, now, new HashSet<Guid>(visited), ct);
+            if (provenance is null) return null;
+            // Null means unbounded only for a valid chain; null result above means invalid.
+            if (provenance.ExpiresAtUtc is { } expiry && (earliest is null || expiry < earliest)) earliest = expiry;
         }
-        return true;
+        return new(earliest);
     }
 
     private async Task<TenantCommandResult> CommitAsync(TenantDbContext db, IDbContextTransaction tx,

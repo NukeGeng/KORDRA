@@ -114,6 +114,138 @@ public sealed class TenantMembershipTests : IAsyncLifetime
         Assert.Equal(1, await db.Assignments.CountAsync(x => x.TenantId == _tenant && x.MembershipId == _recipientMember));
     }
 
+    [Theory]
+    [InlineData("ancestor")]
+    [InlineData("selected")]
+    [InlineData("unbounded-leaf")]
+    public async Task Current_grant_deadline_is_minimum_of_selected_and_every_provenance_branch(string variant)
+    {
+        var (role, scope, deadline) = await EarlierProvenance(variant);
+        var effective = await Effective(_recipient, "target.read", scope);
+        Assert.NotNull(effective); Assert.Equal(deadline, effective.ExpiresAtUtc);
+        await using (var admission = await _gate.AcquireReadAsync())
+        {
+            var grant = await _service.ReadCurrentGrantUnderAdmissionAsync(_recipient, _tenant, "target.read", scope.Kind, scope.Id);
+            Assert.NotNull(grant); Assert.Equal(deadline, grant.ExpiresAtUtc);
+        }
+        _clock.Now = deadline; // equality is expired, without a writer
+        Assert.Null(await Effective(_recipient, "target.read", scope));
+    }
+
+    [Theory]
+    [InlineData("use-audit")]
+    [InlineData("disclosure-audit")]
+    [InlineData("accepted-transport")]
+    [InlineData("no-expiry")]
+    public async Task Real_TEN_provenance_deadline_caps_admission_before_U_and_D_handoff(string phase)
+    {
+        var (role, scope, deadline) = await EarlierProvenance("ancestor");
+        var boundary = new ReadBoundary(_recipient, _tenant, scope.Id, _clock,
+            (stage) => { if (phase == "use-audit" && stage == AuthorityStage.Use || phase == "disclosure-audit" && stage == AuthorityStage.Disclosure) _clock.Now = deadline; },
+            () => { if (phase == "accepted-transport") _clock.Now = deadline; });
+        var enforcer = new ProtectedReadAdmission(_gate, boundary, _service, _roles, boundary, boundary, boundary, _clock);
+        var status = await enforcer.ExecuteAsync(boundary.Selection, boundary.TargetId, boundary, boundary);
+        var rejected = phase is "use-audit" or "disclosure-audit";
+        Assert.Equal(rejected ? ProtectedReadStatus.Unavailable : ProtectedReadStatus.Completed, status);
+        Assert.Equal(phase == "use-audit" ? 0 : 1, boundary.Reads);
+        Assert.Equal(rejected ? 0 : 1, boundary.Outputs);
+        Assert.Equal(phase == "use-audit" ? new[] { AuthorityStage.Use } : new[] { AuthorityStage.Use, AuthorityStage.Disclosure }, boundary.Stages);
+        // Expiry before D refuses disclosure. Already accepted bounded transport retains its existing semantics.
+    }
+
+    [Theory]
+    [InlineData("cycle")]
+    [InlineData("stale")]
+    [InlineData("missing")]
+    [InlineData("expired")]
+    public async Task Invalid_provenance_is_not_reinterpreted_as_valid_unbounded_authority(string fault)
+    {
+        var (_, scope, _) = await EarlierProvenance("ancestor");
+        await using (var db = await _ten.CreateDbContextAsync())
+        {
+            var root = await db.Assignments.SingleAsync(x => x.TenantId == _tenant && x.MembershipId == _founderMember && x.ScopeKind == "project");
+            var admin = await db.Assignments.SingleAsync(x => x.TenantId == _tenant && x.MembershipId == _founderMember && x.ScopeKind == "organization");
+            if (fault == "cycle")
+            {
+                admin.IsFounding = false;
+                admin.ProvenanceJson = System.Text.Json.JsonSerializer.Serialize(new[] { new { Id = root.Id, root.Revision } });
+            }
+            if (fault == "stale") admin.Revision++;
+            if (fault == "missing") root.ProvenanceJson = System.Text.Json.JsonSerializer.Serialize(new[] { new { Id = Guid.NewGuid(), Revision = 1L } });
+            if (fault == "expired") admin.ExpiresAtUtc = _clock.Now;
+            await db.SaveChangesAsync();
+        }
+        await using var admission = await _gate.AcquireReadAsync();
+        Assert.Null(await _service.ReadCurrentGrantUnderAdmissionAsync(_recipient, _tenant, "target.read", scope.Kind, scope.Id));
+    }
+
+    [Fact]
+    public async Task Valid_unbounded_provenance_retains_unbounded_deadline()
+    {
+        var (role, scope, _) = await ProjectCapability();
+        Assert.Equal("success", (await _service.ExecuteAsync(Assign(role, scope))).Status);
+        await using var admission = await _gate.AcquireReadAsync();
+        var grant = await _service.ReadCurrentGrantUnderAdmissionAsync(_recipient, _tenant, "target.read", scope.Kind, scope.Id);
+        Assert.NotNull(grant); Assert.Null(grant.ExpiresAtUtc);
+    }
+
+    private async Task<(DefinitionWriteResult Role, TenantScope Scope, DateTimeOffset Deadline)> EarlierProvenance(string variant)
+    {
+        // Force sub-microsecond input on every OS instead of depending on UtcNow resolution.
+        _clock.Now = _clock.Now.AddTicks(-(_clock.Now.Ticks % 10) + 7);
+        var (role, scope, root) = await ProjectCapability(_clock.Now.AddMinutes(5));
+        var child = await _service.ExecuteAsync(Assign(role, scope) with { ExpiresAtUtc = _clock.Now.AddMinutes(4) });
+        Assert.Equal("success", child.Status);
+        await using var db = await _ten.CreateDbContextAsync();
+        var administrative = await db.Assignments.SingleAsync(x => x.TenantId == _tenant && x.MembershipId == _founderMember && x.ScopeKind == "organization");
+        var project = await db.Assignments.SingleAsync(x => x.Id == root.ResourceId && x.TenantId == _tenant);
+        var selected = await db.Assignments.SingleAsync(x => x.Id == child.ResourceId && x.TenantId == _tenant);
+        // Synthetic stored-state fixture, not a claim that public grant creation permits an overlong child.
+        // The earlier source is both a direct branch and an ancestor of the project grant (a shared DAG node).
+        administrative.ExpiresAtUtc = _clock.Now.AddMinutes(1);
+        project.IsFounding = false;
+        project.ProvenanceJson = System.Text.Json.JsonSerializer.Serialize(new[] { new { Id = administrative.Id, administrative.Revision } });
+        if (variant == "unbounded-leaf") selected.ExpiresAtUtc = null;
+        if (variant == "selected") selected.ExpiresAtUtc = _clock.Now.AddSeconds(30);
+        await db.SaveChangesAsync();
+        // Compare against the committed PostgreSQL deadline, not the pre-save 100 ns value.
+        await db.Entry(administrative).ReloadAsync();
+        await db.Entry(selected).ReloadAsync();
+        return (role, scope, variant == "selected" ? selected.ExpiresAtUtc!.Value : administrative.ExpiresAtUtc.Value);
+    }
+
+    private sealed class ReadBoundary : ICurrentSubjectReader, ITargetAuthorityReader, IResourcePolicyReader,
+        IAuthorityCommitter, IProtectedTargetRead, ICallerBoundResponseCommitter
+    {
+        private readonly CurrentSubject _subject;
+        private readonly TargetAuthority _target;
+        private readonly ResourcePolicyAuthority _policy;
+        private readonly Action<AuthorityStage> _audit;
+        private readonly Action _write;
+        public SessionSelection Selection { get; }
+        public Guid TargetId => _target.TargetId;
+        public int Reads, Outputs;
+        public readonly List<AuthorityStage> Stages = [];
+        public ReadBoundary(Guid principal, Guid tenant, Guid project, Clock clock, Action<AuthorityStage> audit, Action write)
+        {
+            var boot = Guid.NewGuid(); Selection = new(principal, "synthetic-reference", boot);
+            _subject = new(principal, Guid.NewGuid(), boot, 1, clock.Now.AddHours(1), clock.Now.AddMinutes(30));
+            _target = new(Guid.NewGuid(), tenant, project, 1, 1, 1, null, null, null);
+            _policy = new(tenant, project, null, "target.read", 1, Guid.NewGuid(), Guid.NewGuid(), 1, new string('a', 64), clock.Now.AddMinutes(-1), null, ResourceEligibility.Allow);
+            _audit = audit; _write = write;
+        }
+        public Task<CurrentSubject?> ReadCurrentUnderAdmissionAsync(SessionSelection selection, CancellationToken ct = default) => Task.FromResult<CurrentSubject?>(_subject);
+        public Task<TargetAuthority?> ReadTargetUnderAdmissionAsync(Guid target, CancellationToken ct = default) => Task.FromResult<TargetAuthority?>(_target);
+        public Task<ResourcePolicyAuthority?> ReadPolicyUnderAdmissionAsync(TargetAuthority target, string permission, CancellationToken ct = default) => Task.FromResult<ResourcePolicyAuthority?>(_policy);
+        public Task<AuthorityCommitStatus> CommitUnderAdmissionAsync(AuthorityCommitment commitment, CancellationToken ct = default)
+        { Stages.Add(commitment.Stage); _audit(commitment.Stage); return Task.FromResult(AuthorityCommitStatus.Durable); }
+        public Task<PrivateReadBuffer> Admit(TypedReadSelection selection, CancellationToken ct)
+        { Reads++; return Task.FromResult(new PrivateReadBuffer("[]"u8, 0)); }
+        public Task CommitAsync(TypedReadSelection selection, ReadOnlyMemory<byte> bytes, CancellationToken ct)
+        { Outputs++; _write(); return Task.CompletedTask; }
+        public void Abort() { }
+    }
+
     [Fact]
     public async Task Grant_expiry_cannot_outlive_grantor_and_is_rechecked_at_commit()
     {

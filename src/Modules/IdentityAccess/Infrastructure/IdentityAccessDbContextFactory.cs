@@ -31,6 +31,13 @@ public sealed class IdentityAccessDbContextFactory : IDesignTimeDbContextFactory
     public static void ValidateOfflineMigrationTarget(string connectionString) =>
         ValidateTarget(connectionString, "kordra", "kordra_admin");
 
+    public static void ValidateRuntimeOrTestTransactionTarget(string connectionString)
+    {
+        var parsed = new NpgsqlConnectionStringBuilder(connectionString);
+        if (parsed.Database == "kordra_test") ValidateTarget(connectionString, "kordra_test", "kordra_test");
+        else ValidateTarget(connectionString, "kordra", "kordra_app");
+    }
+
     private static DbContextOptions<KordraIdentityDbContext> CreateOptions(string connectionString)
     {
         var options = new DbContextOptionsBuilder<KordraIdentityDbContext>();

@@ -2,18 +2,22 @@
 id: FEAT-AUD-001
 status: proposed
 owner: NukeGeng
-last_reviewed: 2026-10-21
+last_reviewed: 2026-10-23
 module_id: MOD-AUD
 feature_id: FEAT-AUD-001
 phase: MVP
 source_paths: [".github/workflows/product-ci.yml", "Kordra.slnx", "src/Host/Kordra.DbMigrator/", "src/Modules/AuditCompliance/"]
-test_paths: ["tests/AuditCompliance.Tests/", "tests/InfrastructureInventory.Bootstrap.Tests/ArchitectureTests.cs"]
+test_paths: ["tests/AuditCompliance.Tests/", "tests/IdentityAccess.Tests/CurrentAuthorityHttpTests.cs", "tests/IdentityAccess.Tests/ProtectedReadHttpTests.cs", "tests/InfrastructureInventory.Bootstrap.Tests/ArchitectureTests.cs", "tests/ProjectEnvironment.Tests/ResourcePolicyIntegrationTests.cs"]
 planned_source_paths: ["Kordra.slnx", "src/Modules/AuditCompliance/Contracts/Kordra.Modules.AuditCompliance.Contracts.csproj", "src/Modules/AuditCompliance/Contracts/packages.lock.json", "src/Modules/AuditCompliance/Contracts/AuditIntent.cs", "src/Modules/AuditCompliance/Contracts/AuditAppendOutcome.cs", "src/Modules/AuditCompliance/Contracts/AuditReceipt.cs", "src/Modules/AuditCompliance/Contracts/IAuditAppendPort.cs", "src/Modules/AuditCompliance/Kordra.Modules.AuditCompliance.csproj", "src/Modules/AuditCompliance/packages.lock.json", "src/Modules/AuditCompliance/Infrastructure/AuditDbContext.cs", "src/Modules/AuditCompliance/Infrastructure/AuditEntry.cs", "src/Modules/AuditCompliance/Infrastructure/AuditIntentCanonicalizer.cs", "src/Modules/AuditCompliance/Infrastructure/AuditAppendStore.cs", "src/Modules/AuditCompliance/Infrastructure/AuditDbContextFactory.cs", "src/Modules/AuditCompliance/Infrastructure/AuditTransactionContext.cs", "src/Modules/AuditCompliance/Infrastructure/Migrations/InitialAuditPersistence.cs", "src/Modules/AuditCompliance/Infrastructure/Migrations/KordraAuditDbContextModelSnapshot.cs", "src/Host/Kordra.DbMigrator/Kordra.DbMigrator.csproj", "src/Host/Kordra.DbMigrator/packages.lock.json", "src/Host/Kordra.DbMigrator/Program.cs", "src/Host/Kordra.DbMigrator/AuditComplianceMigrationCommand.cs"]
 planned_test_paths: ["tests/AuditCompliance.Tests/AuditCompliance.Tests.csproj", "tests/AuditCompliance.Tests/packages.lock.json", "tests/AuditCompliance.Tests/TestDatabaseConfiguration.cs", "tests/AuditCompliance.Tests/AuditCompliancePersistenceTests.cs", "tests/AuditCompliance.Tests/AuditTransactionEnlistmentTests.cs", "tests/AuditCompliance.Tests/AuditIntentCanonicalizerTests.cs", "tests/InfrastructureInventory.Bootstrap.Tests/ArchitectureTests.cs"]
 planned_doc_paths: ["docs/features/audit-compliance/features/immutable-audit.md", "docs/features/audit-compliance/module.md", "docs/features/artifact-management/features/immutable-artifact.md", "docs/features/infrastructure-inventory/features/register-target.md", "docs/features/identity-access/features/local-account-session.md", "docs/engineering/traceability.md", "docs/engineering/change-history.md", "docs/product/roadmap.md", "src/Modules/AuditCompliance/README.md", "src/Host/Kordra.DbMigrator/README.md"]
 ---
 
 # FEAT-AUD-001 — Tamper-evident privileged action audit trail
+
+## T06 accepted resource-policy audit consumer design — 2026-10-22
+
+[Resource Policy v1](../../../contracts/resource-policy-v1.md) / [ADR-0014](../../../decisions/0014-resource-policy-v1.md) specifies the maintainer-accepted exact policy/binding facts in the existing nonsecret canonical intent binding, one enlisted IAM/PRJ/AUD transaction for offline publication/rebinding, and distinct existing U/D stages. No AUD schema/history reinterpretation, policy payload disclosure or new audit-query authority is approved here. Unknown commits retain admission v1 fencing/reconciliation; setup-only failure remains distinct. Exact T06 design approval was recorded on 2026-10-22; transaction/output test evidence remains pending.
 
 ## Foundation implementation slice — approved for implementation 2026-10-20
 
@@ -107,3 +111,9 @@ Shared solution, DbMigrator references/dispatch and API transitive lock files in
 ## T05 shared-owner integration — 2026-10-22
 
 T05 Host CatalogMutationCoordinator enlists owner PRJ/INV contexts and AUD in one transaction. AUD storage/append contracts are unchanged. TargetAssociationTests checks one audit on replay, rollback after first owner save, and lost-ACK reconciliation. Shared solution/DbMigrator/API lock graphs add only the approved owner persistence dependencies.
+
+## T06 implementation evidence — 2026-10-23
+
+T06 preserves schemaVersion 1 historical intents and current append-only AUD grants. Offline policy composition uses an explicit IOfflineAuditLease and exact admin/test transaction role guard; the existing runtime transaction path still rejects admin. Custody is checked at staging/commit. Owner state, policy head, selected binding/history, receipt and IAM clock floor enlist with AUD in one commit. U/D use distinct result-bound receipts and nonsecret canonical binding digests, with actual HTTP ordering/partial failure proof. New fault tests distinguish setup-only rollback from lost ACK after real commit, fence unknown outcome and reconcile without repeating publication. No AUD query API, policy payload storage/disclosure, retention purge or real production operation is added.
+
+PR14 P2 co-owner acknowledgment (2026-10-23): the offline policy coordinator rechecks bind validity after actual AUD staging and before invoking commit. The expiry-during-stage regression asserts zero commit calls and rollback of staged AUD/PRJ/IAM state; exact committed receipt recovery still uses the original AUD hash. No AUD schema, canonicalization, protocol or unknown-commit semantics change.

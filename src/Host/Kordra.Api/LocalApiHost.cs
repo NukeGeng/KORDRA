@@ -78,6 +78,7 @@ public static class LocalApiHost
     public static WebApplication CreateLocalPilot(LocalPilotHostOptions options)
     {
         ArgumentNullException.ThrowIfNull(options);
+        options.RequireRuntimeCustody();
         if (!options.Certificate.HasPrivateKey)
         {
             throw new InvalidOperationException("The local-pilot TLS certificate must include its private key.");
@@ -111,6 +112,7 @@ public static class LocalApiHost
             options.Authentication,
             options.PasswordPolicy);
         LocalAuthenticationEndpoints.AddServices(builder.Services);
+        builder.Services.AddLocalResourceAuthority(options.RuntimeConnectionString);
 
         var app = builder.Build();
         app.Use(LocalAuthenticationEndpoints.RequestGuard("localhost:5128"));
@@ -132,6 +134,8 @@ public static class LocalApiHost
             return context.Response.WriteAsync("alive\n", context.RequestAborted);
         }));
         LocalAuthenticationEndpoints.Map(app);
+        ProtectedMetadataEndpoints.Map(app);
+        EnvironmentV2Endpoints.Map(app);
         app.MapFallback((RequestDelegate)(context =>
         {
             context.Response.StatusCode = StatusCodes.Status404NotFound;

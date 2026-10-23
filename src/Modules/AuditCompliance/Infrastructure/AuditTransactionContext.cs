@@ -46,6 +46,23 @@ public sealed class AuditTransactionContext : IAsyncDisposable
         _deadlineTimestamp = Stopwatch.GetTimestamp() + Stopwatch.Frequency;
     }
 
+    private IOfflineAuditLease? _offlineLease;
+
+    public static async Task<AuditTransactionContext> CreateOfflineAsync(DbConnection connection, DbTransaction transaction,
+        IOfflineAuditLease lease, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(lease); lease.RequireHeld();
+        if (!ReferenceEquals(transaction.Connection, connection) || connection.State != System.Data.ConnectionState.Open)
+            throw new InvalidOperationException("Offline AUD requires the open enlisted transaction.");
+        var context = new AuditDbContext(AuditDbContextFactory.CreateOfflineTransactionOptions(connection));
+        try
+        {
+            await context.Database.UseTransactionAsync(transaction, cancellationToken);
+            return new AuditTransactionContext(transaction, context, cancellationToken, TimeProvider.System) { _offlineLease = lease };
+        }
+        catch { await context.DisposeAsync(); throw; }
+    }
+
     public static async Task<AuditTransactionContext> CreateAsync(
         DbConnection connection,
         DbTransaction transaction,
@@ -77,6 +94,7 @@ public sealed class AuditTransactionContext : IAsyncDisposable
         AuditIntent intent,
         CancellationToken cancellationToken = default)
     {
+        _offlineLease?.RequireHeld();
         using var budget = CreateBudget(cancellationToken);
         cancellationToken = budget.Token;
         if (_completed || _entry is not null)
@@ -130,6 +148,7 @@ public sealed class AuditTransactionContext : IAsyncDisposable
     /// <summary>Commits the enlisted owner state and AUD row; only a confirmed commit returns Durable.</summary>
     public async Task<AuditAppendOutcome> CommitAsync(CancellationToken cancellationToken = default)
     {
+        _offlineLease?.RequireHeld();
         using var budget = CreateBudget(cancellationToken);
         cancellationToken = budget.Token;
         if (_completed || _entry is null)

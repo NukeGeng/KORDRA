@@ -119,6 +119,8 @@ public abstract class CatalogTestFixture : IAsyncLifetime
         await using var inv = await Inventory.CreateDbContextAsync();
         await inv.Commands.Where(x => _keys.Contains(x.KeyHash)).ExecuteDeleteAsync(); await inv.Targets.Where(x => _tenantIds.Contains(x.TenantId)).ExecuteDeleteAsync();
         await using var prj = await Projects.CreateDbContextAsync();
+        await prj.Set<PolicyBindingHistoryRecord>().Where(x => _tenantIds.Contains(x.TenantId)).ExecuteDeleteAsync();
+        await prj.Set<PolicyBindingRecord>().Where(x => _tenantIds.Contains(x.TenantId)).ExecuteDeleteAsync();
         await prj.Commands.Where(x => _keys.Contains(x.KeyHash)).ExecuteDeleteAsync(); await prj.Associations.Where(x => _tenantIds.Contains(x.TenantId)).ExecuteDeleteAsync();
         await prj.Environments.Where(x => _tenantIds.Contains(x.TenantId)).ExecuteDeleteAsync(); await prj.Applications.Where(x => _tenantIds.Contains(x.TenantId)).ExecuteDeleteAsync();
         await prj.Projects.Where(x => _tenantIds.Contains(x.TenantId)).ExecuteDeleteAsync();
@@ -126,6 +128,11 @@ public abstract class CatalogTestFixture : IAsyncLifetime
         await ten.Commands.Where(x => _tenantIds.Contains(x.TenantId)).ExecuteDeleteAsync(); await ten.Assignments.Where(x => _tenantIds.Contains(x.TenantId)).ExecuteDeleteAsync();
         await ten.Memberships.Where(x => _tenantIds.Contains(x.TenantId)).ExecuteDeleteAsync(); await ten.Organizations.Where(x => _tenantIds.Contains(x.Id)).ExecuteDeleteAsync();
         await using var iam = await Identity.CreateDbContextAsync();
+        var policyIds = await iam.Set<ResourcePolicyIdentity>().Where(x => _tenantIds.Contains(x.TenantId)).Select(x => x.PolicyId).ToArrayAsync();
+        await iam.Set<ResourcePolicyHead>().Where(x => policyIds.Contains(x.PolicyId)).ExecuteDeleteAsync();
+        await iam.Set<ResourcePolicyRule>().Where(x => policyIds.Contains(x.PolicyId)).ExecuteDeleteAsync();
+        await iam.Set<ResourcePolicyRevision>().Where(x => policyIds.Contains(x.PolicyId)).ExecuteDeleteAsync();
+        await iam.Set<ResourcePolicyIdentity>().Where(x => policyIds.Contains(x.PolicyId)).ExecuteDeleteAsync();
         await iam.RoleDefinitions.Where(x => _definitions.Contains(x.DefinitionId)).ExecuteDeleteAsync(); await iam.Principals.Where(x => _principalIds.Contains(x.Id)).ExecuteDeleteAsync();
         _offline.Dispose(); // immutable audit evidence is retained
     }
@@ -160,7 +167,7 @@ public abstract class CatalogTestFixture : IAsyncLifetime
         }
     }
     private sealed class Clock : IAuthorityClock { public DateTimeOffset GetTrustedUtcNow() => DateTimeOffset.UtcNow; }
-    private sealed class OfflineLease : IOfflineProvisioningLease, IDisposable
+    protected sealed class OfflineLease : IOfflineProvisioningLease, IDisposable
     {
         private readonly string _path = Path.Combine(Path.GetTempPath(), "kordra-t05-" + Guid.NewGuid().ToString("N"));
         private readonly FileStream _file; private bool _disposed;

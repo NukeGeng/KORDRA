@@ -2,12 +2,26 @@
 id: ENG-TRACE
 status: proposed
 owner: unassigned
-last_reviewed: 2026-10-19
+last_reviewed: 2026-10-22
 ---
 
 # Requirements ↔ Module ↔ Feature ↔ Code ↔ Tests
 
+## T06 scoped runtime implementation — 2026-10-23
+
+FEAT-IAM-001 / MOD-IAM, FEAT-PRJ-001 / MOD-PRJ and INV/TEN/AUD consumers implement accepted ADR-0014/resource-policy-v1 in the existing owner paths. Concrete source/test mappings are in all six owning specs. The local slice supplies current exact owner facts and grant/policy evaluation, immutable policy/head plus unique binding/history, persisted UTC floor, shared bounded U/D and actual HTTPS handoff, typed offline policy impact/apply/recovery, one metadata GET and environment-create v2. Canonical installation custody also excludes simultaneous runtime/offline/migration processes. No new dependency or runtime architecture is selected.
+
+Tests exercise real PostgreSQL IAM/TEN/PRJ/INV/AUD with real cookie/session/HTTPS, reject invalid current owner state, compare full policy/binding identities/revisions/hash between U/D, hold D through bounded write/flush, abort actual partial output without retry, retain writer ordering and capacity, reject clock rollback across restart, and distinguish setup rollback from lost commit ACK. Shared policy changes update only explicitly listed bindings; exact receipt replay does not republish/regrant. Runtime grants and PRJ scope/history FK/nullable uniqueness are checked in isolated `kordra_test`. The [HTTP fixture](../contracts/fixtures/resource-policy-v1.http.json) and [OpenAPI snapshot](../contracts/openapi/resource-policy-v1.openapi.json) are checked against actual response fields and source hashes.
+
+The final deterministic receipt/source digest is stored under `.amr-local/t06-preparation/` separately from historical checkpoints and approval receipts. Native profile remains unverified for this continuation; no native/local AI review, PR trigger, hosted CI claim, real `kordra` migration/provisioning or company/provider operation is made. The broader whole-workspace resource/grant provisioning composition and unproved list/history/other catalog routes remain pending; this bounded slice does not mark the entire Foundation milestone or native GOAL completed. See the [operator runbook](../operations/resource-policy-v1.md).
+
 ## Coverage rules
+
+### T06 resource-policy bounded design accepted — 2026-10-22
+
+FEAT-IAM-001 / MOD-IAM and FEAT-PRJ-001 / MOD-PRJ link the maintainer-accepted [ADR-0014](../decisions/0014-resource-policy-v1.md) and [Resource Policy v1](../contracts/resource-policy-v1.md). They specify exact policy/current-head and binding identities, fixed evaluation/applicability, same-transaction IAM/PRJ/AUD publication, compatibility and planned acceptance. INV remains the target fact owner and AUD keeps existing append contracts. The maintainer explicitly approved the exact design on 2026-10-22; the ADR records pre-acceptance hashes and the private receipt preserves the decision. This is accepted design evidence, not new mapped source, executed tests or T06 completion. Existing implementation/checkpoint evidence is preserved. Implementation paths/consumer list and ordered owner slices are in contract sections 8–10.
+
+### General coverage rules
 `UseCase → feature_id → module_id → contract_ids → source_paths → test_paths → evidence/PR`.
 - `source_paths: []` = not mapped yet, **not implemented**.
 - Mỗi implemented/verified feature phải có ≥1 source, ≥1 test và evidence; manual exceptions require owner approval.
@@ -212,3 +226,15 @@ Remaining boundary: T06 supplies production trusted session/tenant/current-polic
 ## FEAT-PRJ-001 PR13 locator regression — 2026-10-23
 
 ProjectEnvironmentMigrationCommand and ProjectCatalogTests own finding 4345619894. The documented PRJ locator now reaches the existing strict target guard; a synthetic forbidden target is rejected before connection. The regression failed before repair; final validation/publication evidence is recorded separately. No actual offline migration, new authority, schema change or automatic AI review is implied.
+
+## FEAT-TEN-001 / IAM-001 PR14 earliest provenance deadline — 2026-10-23
+
+Finding 4355763873 maps to TenantMembershipService's shared provenance/effective assignment resolution and TenantMembershipTests. Stored-chain tests cover all-branch minimum (nested/shared ancestor, finite or unbounded leaf), equality expiry, invalid chains and valid unbounded authority. The real TEN reader is wired into ProtectedReadAdmission with instrumented other ports to reproduce expiry inside U/D audit; this is protocol/handoff proof with synthetic data, not a new real-provider or HTTPS claim. Before repair four assertions failed, including D incorrectly returning Completed; after repair no protected bytes are handed off after that upstream deadline. Existing grant creation ceilings and accepted in-flight transport remain tested. Provider follow-up and human merge are separate from local correction evidence.
+
+## PR14 P2 current policy readiness — 2026-10-23
+
+Finding 4355763870 maps to OfflineResourcePolicyCoordinator and ResourcePolicyIntegrationTests under IAM/PRJ with AUD/INV consumer acknowledgments. Ten pre-fix cases reproduced invalid fresh-bind success, including expiry after actual audit staging. All 19 policy integration cases pass after repair. Tests assert no binding/history/receipt/audit side effects on denial, zero commit attempts on post-stage expiry, retained gate availability, legitimate active bind/inactive publication and exact receipt replay after expiry/current-head change. This is local contributor evidence; provider follow-up and human merge remain separate.
+
+## PR14 artifact-domain timestamp fixture — 2026-10-23
+
+Run 39915294133 failed two TEN provenance assertions on head 4df02bd because expected pre-save .NET timestamps retained fractional microsecond ticks discarded by PostgreSQL. TenantMembershipTests now forces that representation on every OS and derives expected timestamps from persisted rows. Before repair all three variants reproduced the CI mismatch locally; post-repair verification preserves strict deadline equality and boundary denial without altering production code. Hosted follow-up must establish Linux success on the new head.

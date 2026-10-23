@@ -10,6 +10,29 @@ namespace Kordra.Api;
 public sealed class LocalPilotHostOptions : IDisposable
 {
     private readonly LocalInstallationProcessLock _processLock;
+    private int _custodyMode;
+
+    internal void RequireRuntimeCustody()
+    {
+        _processLock.RequireHeld();
+        if (Interlocked.CompareExchange(ref _custodyMode, 1, 0) != 0)
+            throw new InvalidOperationException("Installation custody cannot be reused for another runtime or offline operation.");
+    }
+    internal Kordra.Modules.IdentityAccess.Contracts.IOfflineProvisioningLease ClaimOfflineCustody()
+    {
+        _processLock.RequireHeld();
+        var previous = Interlocked.CompareExchange(ref _custodyMode, 2, 0);
+        if (previous is not (0 or 2)) throw new InvalidOperationException("Runtime installation custody cannot authorize offline work.");
+        return new OfflineCustody(this);
+    }
+    private sealed class OfflineCustody(LocalPilotHostOptions options) : Kordra.Modules.IdentityAccess.Contracts.IOfflineProvisioningLease
+    {
+        public void RequireHeld()
+        {
+            options._processLock.RequireHeld();
+            if (Volatile.Read(ref options._custodyMode) != 2) throw new InvalidOperationException("Offline installation custody was released.");
+        }
+    }
 
     internal LocalPilotHostOptions(
         string runtimeConnectionString,
@@ -127,7 +150,7 @@ public sealed class LocalPilotHostOptions : IDisposable
         _processLock.Dispose();
     }
 
-    private static string RequirePrivateFile(string path)
+    internal static string RequirePrivateFile(string path)
     {
         var fullPath = Path.GetFullPath(path);
         var info = new FileInfo(fullPath);
@@ -190,6 +213,7 @@ public sealed class LocalPilotHostOptions : IDisposable
 internal sealed class LocalInstallationProcessLock : IDisposable
 {
     private readonly FileStream _stream;
+    private int _disposed;
 
     private LocalInstallationProcessLock(FileStream stream) => _stream = stream;
 
@@ -228,5 +252,8 @@ internal sealed class LocalInstallationProcessLock : IDisposable
         }
     }
 
-    public void Dispose() => _stream.Dispose();
+    internal void RequireHeld()
+    { if (Volatile.Read(ref _disposed) != 0 || _stream.SafeFileHandle.IsClosed) throw new InvalidOperationException("The installation process lock was released."); }
+    public void Dispose()
+    { if (Interlocked.Exchange(ref _disposed, 1) == 0) _stream.Dispose(); }
 }

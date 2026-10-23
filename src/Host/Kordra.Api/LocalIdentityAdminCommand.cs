@@ -10,6 +10,7 @@ public static class LocalIdentityAdminCommand
     public static async Task<int> RunAsync(string operation, LocalPilotHostOptions options)
     {
         ArgumentNullException.ThrowIfNull(options);
+        options.ClaimOfflineCustody().RequireHeld();
         if (operation is not ("enroll-user" or "recover-user" or "disable-user"))
         {
             Console.Error.WriteLine("Usage: Kordra.Api identity enroll-user|recover-user|disable-user");

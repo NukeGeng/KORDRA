@@ -16,4 +16,5 @@ Runbook phải có: **trigger**, blast radius, preflight, safe actions, verifica
 - [Incident response](incident-runbook.md)
 - [Backup / restore](backup-restore-runbook.md)
 - [Credential rotation](credential-rotation-runbook.md)
+- [Local Resource Policy v1](resource-policy-v1.md) — T06 offline manifest/impact/apply/recovery and guarded metadata/environment routes; real operations need separate authorization.
 - [Local PostgreSQL setup and role access](local-postgresql-setup.md)

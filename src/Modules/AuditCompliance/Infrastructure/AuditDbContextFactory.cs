@@ -72,6 +72,15 @@ public sealed class AuditDbContextFactory : IDesignTimeDbContextFactory<AuditDbC
         }
     }
 
+    internal static DbContextOptions<AuditDbContext> CreateOfflineTransactionOptions(System.Data.Common.DbConnection connection)
+    {
+        var parsed = new NpgsqlConnectionStringBuilder(connection.ConnectionString);
+        if (parsed.Host != "127.0.0.1" || parsed.Port != 5432 ||
+            !(parsed.Database == "kordra" && parsed.Username == "kordra_admin" || parsed.Database == "kordra_test" && parsed.Username == "kordra_test"))
+            throw new InvalidOperationException("The offline AUD transaction target or role is not permitted.");
+        return CreateOptions(connection);
+    }
+
     private static DbContextOptions<AuditDbContext> CreateOptions(string connectionString)
     {
         var options = new DbContextOptionsBuilder<AuditDbContext>();

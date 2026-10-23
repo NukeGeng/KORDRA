@@ -29,7 +29,13 @@ public static class Program
                 return await LocalIdentityAdminCommand.RunAsync(args[1], options);
             }
 
-            Console.Error.WriteLine("Usage: Kordra.Api [--profile local-pilot | identity enroll-user|recover-user|disable-user]");
+            if (args is ["policy", "inspect", _, _] || args is ["policy", "apply", _, _, _])
+            {
+                using var options = LocalPilotHostOptions.LoadInstalled();
+                return await LocalResourcePolicyCommand.RunAsync(args[1..], options);
+            }
+
+            Console.Error.WriteLine("Usage: Kordra.Api [--profile local-pilot | identity enroll-user|recover-user|disable-user | policy inspect <private-manifest> <private-admin-locator> | policy apply <private-manifest> <private-admin-locator> <approved-sha256>]");
             return 2;
         }
         catch

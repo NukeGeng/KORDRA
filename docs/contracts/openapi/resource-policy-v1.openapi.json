@@ -1,0 +1,490 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Kordra T06 Resource Policy and Metadata",
+    "version": "1.0.0",
+    "description": "Accepted ADR-0014 scoped surface. Maintained owner snapshot with checked working-tree source hashes; no provider, list/history or policy mutation HTTP API."
+  },
+  "servers": [
+    {
+      "url": "https://localhost:5128"
+    }
+  ],
+  "security": [
+    {
+      "LocalSession": []
+    }
+  ],
+  "paths": {
+    "/api/v1/targets/{target}": {
+      "get": {
+        "operationId": "ReadProtectedTargetMetadata",
+        "summary": "One current-authorized bounded target metadata response; no provider access",
+        "parameters": [
+          {
+            "name": "target",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "not": {
+                "const": "00000000-0000-0000-0000-000000000000"
+              }
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Distinct durable U/D followed by bounded caller-bound handoff",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TargetMetadataV1"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Opaque failure; no protected metadata. Security guard may return the existing security error envelope."
+          },
+          "401": {
+            "description": "Opaque failure; no protected metadata. Security guard may return the existing security error envelope."
+          },
+          "403": {
+            "description": "Opaque failure; no protected metadata. Security guard may return the existing security error envelope."
+          },
+          "503": {
+            "description": "Opaque failure; no protected metadata. Security guard may return the existing security error envelope."
+          }
+        },
+        "x-no-query-or-request-body": true,
+        "x-no-streaming-or-automatic-retry": true
+      }
+    },
+    "/api/v2/projects/{project}/environments": {
+      "post": {
+        "operationId": "CreateEnvironmentWithExplicitPolicyV2",
+        "summary": "Create an environment and initial binding under project.manage; no policy publication",
+        "parameters": [
+          {
+            "name": "project",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "not": {
+                "const": "00000000-0000-0000-0000-000000000000"
+              }
+            }
+          },
+          {
+            "name": "Origin",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "const": "https://localhost:5128"
+            }
+          },
+          {
+            "name": "X-Kordra-CSRF",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 16,
+              "maxLength": 128,
+              "pattern": "^[A-Za-z0-9._~-]{16,128}$"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EnvironmentCreateV2"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "State, binding, clock floor and audit committed; exact authenticated command replay preserves IDs",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EnvironmentCreatedV2"
+                }
+              }
+            },
+            "headers": {
+              "ETag": {
+                "description": "Quoted environment revision",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Safe error; pre-dispatch Host/Origin/deadline guard may return existing security envelope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorV2"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Safe error; pre-dispatch Host/Origin/deadline guard may return existing security envelope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorV2"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Safe error; pre-dispatch Host/Origin/deadline guard may return existing security envelope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorV2"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Safe error; pre-dispatch Host/Origin/deadline guard may return existing security envelope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorV2"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Safe error; pre-dispatch Host/Origin/deadline guard may return existing security envelope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorV2"
+                }
+              }
+            }
+          }
+        },
+        "x-max-request-bytes": 131072,
+        "x-reject-unknown-and-duplicate-fields": true,
+        "x-permission": "project.manage"
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "LocalSession": {
+        "type": "apiKey",
+        "in": "cookie",
+        "name": "__Host-kordra.session"
+      }
+    },
+    "schemas": {
+      "PolicyReference": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "policyId",
+          "revision"
+        ],
+        "properties": {
+          "policyId": {
+            "type": "string",
+            "format": "uuid",
+            "not": {
+              "const": "00000000-0000-0000-0000-000000000000"
+            }
+          },
+          "revision": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1
+          }
+        }
+      },
+      "EnvironmentCreateV2": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "schemaVersion",
+          "correlationId",
+          "name",
+          "classification",
+          "resourcePolicy"
+        ],
+        "properties": {
+          "schemaVersion": {
+            "const": 2
+          },
+          "correlationId": {
+            "type": "string",
+            "format": "uuid",
+            "not": {
+              "const": "00000000-0000-0000-0000-000000000000"
+            }
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "classification": {
+            "type": "string",
+            "enum": [
+              "Development",
+              "Test",
+              "Staging",
+              "Production"
+            ]
+          },
+          "resourcePolicy": {
+            "$ref": "#/components/schemas/PolicyReference"
+          }
+        }
+      },
+      "Environment": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "projectId",
+          "name",
+          "classification",
+          "status",
+          "revision"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "not": {
+              "const": "00000000-0000-0000-0000-000000000000"
+            }
+          },
+          "projectId": {
+            "type": "string",
+            "format": "uuid",
+            "not": {
+              "const": "00000000-0000-0000-0000-000000000000"
+            }
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "classification": {
+            "type": "string",
+            "enum": [
+              "Development",
+              "Test",
+              "Staging",
+              "Production"
+            ]
+          },
+          "status": {
+            "const": "active"
+          },
+          "revision": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1
+          }
+        }
+      },
+      "PolicyBinding": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "bindingId",
+          "bindingRevision",
+          "policyId",
+          "policyRevision"
+        ],
+        "properties": {
+          "bindingId": {
+            "type": "string",
+            "format": "uuid",
+            "not": {
+              "const": "00000000-0000-0000-0000-000000000000"
+            }
+          },
+          "bindingRevision": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1
+          },
+          "policyId": {
+            "type": "string",
+            "format": "uuid",
+            "not": {
+              "const": "00000000-0000-0000-0000-000000000000"
+            }
+          },
+          "policyRevision": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1
+          }
+        }
+      },
+      "EnvironmentCreatedV2": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "schemaVersion",
+          "correlationId",
+          "environment",
+          "policyBinding"
+        ],
+        "properties": {
+          "schemaVersion": {
+            "const": 2
+          },
+          "correlationId": {
+            "type": "string",
+            "format": "uuid",
+            "not": {
+              "const": "00000000-0000-0000-0000-000000000000"
+            }
+          },
+          "environment": {
+            "$ref": "#/components/schemas/Environment"
+          },
+          "policyBinding": {
+            "$ref": "#/components/schemas/PolicyBinding"
+          }
+        }
+      },
+      "ErrorV2": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "schemaVersion",
+          "correlationId",
+          "error"
+        ],
+        "properties": {
+          "schemaVersion": {
+            "const": 2
+          },
+          "correlationId": {
+            "type": "string",
+            "format": "uuid",
+            "not": {
+              "const": "00000000-0000-0000-0000-000000000000"
+            }
+          },
+          "error": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "code",
+              "message"
+            ],
+            "properties": {
+              "code": {
+                "type": "string",
+                "enum": [
+                  "INVALID_REQUEST",
+                  "SESSION_INVALID",
+                  "REQUEST_REJECTED",
+                  "REQUEST_CONFLICT",
+                  "AUTHORITY_UNAVAILABLE"
+                ]
+              },
+              "message": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      },
+      "TargetMetadataV1": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "schemaVersion",
+          "targetId",
+          "projectId",
+          "environmentId",
+          "kind",
+          "status",
+          "revision"
+        ],
+        "properties": {
+          "schemaVersion": {
+            "const": 1
+          },
+          "targetId": {
+            "type": "string",
+            "format": "uuid",
+            "not": {
+              "const": "00000000-0000-0000-0000-000000000000"
+            }
+          },
+          "projectId": {
+            "type": "string",
+            "format": "uuid",
+            "not": {
+              "const": "00000000-0000-0000-0000-000000000000"
+            }
+          },
+          "environmentId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid"
+          },
+          "kind": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64
+          },
+          "status": {
+            "const": "active"
+          },
+          "revision": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1
+          }
+        }
+      }
+    }
+  },
+  "x-contract-id": "CTR-RESOURCE-POLICY-V1",
+  "x-source-base-commit": "784f1af68d311a101f805e23b04388d819e59e6e",
+  "x-working-tree-source-sha256": {
+    "src/Host/Kordra.Api/ProtectedMetadataEndpoints.cs": "531bfee323e4fdf9a862263b60aacc87f6078c19fabca356da9dd90621f8fc8a",
+    "src/Host/Kordra.Api/EnvironmentV2Endpoints.cs": "9e36894b0f2c1d607414252430fb9e5c661460509f31c6ade7f2a4360d58f107",
+    "src/Host/Kordra.Api/LocalAuthenticationEndpoints.cs": "d373375273ca149c70be0070f90cebcf04f34b7dc613fed4d575d15b6205ed82",
+    "src/Host/Kordra.Api/CurrentResourcePolicyReader.cs": "93446235d3d8ce0bb7f298a09c223fdb1df74be97812e16b82c65b85bb88ebe2",
+    "src/Modules/ProjectEnvironment/Contracts/EnvironmentCreationV2.cs": "ee07f8812de6d8b7bd9b53e3cd5c95e0ccbf1b1752a5cb67e5b576a4fd0925f4",
+    "src/Modules/IdentityAccess/Contracts/ResourcePolicies.cs": "5c004ddfe2f78ad7911625e00fd0151bd0afb32dd5309cc084613014c7375602",
+    "src/Modules/IdentityAccess/Contracts/AuthorityAdmission.cs": "ca662716df712f20f01dcec7a5ef3b6125567df191e0a2c1107eff570dbe7dee"
+  }
+}
