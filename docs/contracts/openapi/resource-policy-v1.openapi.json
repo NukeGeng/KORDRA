@@ -489,7 +489,7 @@
     "src/Modules/InfrastructureInventory/Contracts/ITargetMetadataReader.cs": "7f3ed5df9ccbd0e3bd0538e5fc10e919460d0872669649746cac82305b5a4280",
     "src/Modules/InfrastructureInventory/CurrentTargetMetadataReader.cs": "97b933e9282ec656a0834af4b760e6327b468c4cb8153a4c47f749886c3bea81",
     "src/Host/Kordra.Api/Composition/ResourceAuthorityServices.cs": "193e15526915d0056f490a703faac38c1c10ca0019eaaf87678064253c7e2e81",
-    "src/Host/Kordra.Api/Authorization/CurrentCredentialDependencyReader.cs": "6a63f7abf26acc0490aa38d268f8841501c8a23ac18c16679dd2ed7d717445e8",
+    "src/Host/Kordra.Api/Authorization/CurrentCredentialDependencyReader.cs": "0e7c0f8a3f297e13ee051216c9c54d88075163b37adc06fd8d83394a90e73a71",
     "src/Host/Kordra.Api/Authorization/CredentialTargetRead.cs": "fd60513dbe7e160ffb58a638817666c0634784b1269f995759e4a60fdf82bab1",
     "src/Host/Kordra.Api/Endpoints/CredentialReadHttpHandler.cs": "63fc3fd55fa3329a3d1466ca80f277fc1be62380cc5e356853894e374c76a51c",
     "src/Modules/IdentityAccess/Authentication/LocalAuthorityFacts.cs": "17bd5a8b4cbc15aa6338ac21de588dcd0250d246cfbfcb46d6c4356d331bc40f"

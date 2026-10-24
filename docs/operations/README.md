@@ -26,3 +26,5 @@ Runbook phải có: **trigger**, blast radius, preflight, safe actions, verifica
 ## Nomad workload observation
 
 [Nomad workloads v1](nomad-workloads-v1.md) covers explicit local-pilot activation, private trust/Keychain metadata, limits/expiry, optional own-lab native conformance and safe rollback. It does not authorize company access or claim permanent installation/production readiness.
+
+- [Kubernetes workloads v1](kubernetes-workloads-v1.md) — implemented bounded T09.1; synthetic validation, no live-cluster qualification.

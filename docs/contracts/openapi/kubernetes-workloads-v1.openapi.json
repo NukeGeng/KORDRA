@@ -1,0 +1,338 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Kordra Kubernetes Workloads v1",
+    "version": "1.0.0"
+  },
+  "servers": [
+    {
+      "url": "https://localhost:5128"
+    }
+  ],
+  "paths": {
+    "/api/v1/targets/{targetId}/workloads": {
+      "get": {
+        "operationId": "ReadKubernetesWorkloads",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "targetId",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "security": [
+          {
+            "localSession": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Current authorized, bounded workload facts; not health",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/KubernetesWorkloadsV1"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request shape"
+          },
+          "401": {
+            "description": "No current session"
+          },
+          "403": {
+            "description": "Denied/unconfigured target"
+          },
+          "503": {
+            "description": "Unavailable; response may be aborted before headers"
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "localSession": {
+        "type": "apiKey",
+        "in": "cookie",
+        "name": "__Host-kordra.session"
+      }
+    },
+    "schemas": {
+      "KubernetesWorkloadsV1": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "schemaVersion",
+          "invocationId",
+          "targetId",
+          "namespace",
+          "capturedAtUtc",
+          "completedAtUtc",
+          "validUntilUtc",
+          "coverage",
+          "resourceSets"
+        ],
+        "properties": {
+          "schemaVersion": {
+            "type": "integer",
+            "const": 1
+          },
+          "invocationId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "targetId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "namespace": {
+            "type": "string",
+            "maxLength": 63
+          },
+          "capturedAtUtc": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "completedAtUtc": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "validUntilUtc": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "coverage": {
+            "type": "string",
+            "enum": [
+              "complete",
+              "partial"
+            ]
+          },
+          "resourceSets": {
+            "type": "array",
+            "maxItems": 4,
+            "items": {
+              "$ref": "#/components/schemas/KubernetesResourceSetV1"
+            },
+            "minItems": 4
+          }
+        }
+      },
+      "KubernetesResourceSetV1": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "kind",
+          "status",
+          "coverage",
+          "resourceVersion",
+          "items"
+        ],
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "Pod",
+              "Deployment",
+              "StatefulSet",
+              "DaemonSet"
+            ]
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "observed",
+              "unavailable"
+            ]
+          },
+          "coverage": {
+            "type": "string",
+            "enum": [
+              "complete",
+              "partial",
+              "unavailable"
+            ]
+          },
+          "resourceVersion": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "maxLength": 128
+          },
+          "items": {
+            "type": "array",
+            "maxItems": 25,
+            "items": {
+              "$ref": "#/components/schemas/KubernetesWorkloadItemV1"
+            }
+          }
+        }
+      },
+      "KubernetesWorkloadItemV1": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "kind",
+          "name",
+          "uid",
+          "generation",
+          "observedGeneration",
+          "desiredReplicas",
+          "readyReplicas",
+          "availableReplicas",
+          "podPhase",
+          "podReady",
+          "images"
+        ],
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "Pod",
+              "Deployment",
+              "StatefulSet",
+              "DaemonSet"
+            ]
+          },
+          "name": {
+            "type": "string",
+            "maxLength": 253
+          },
+          "uid": {
+            "type": "string",
+            "maxLength": 128
+          },
+          "generation": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "minimum": 0,
+            "maximum": 9223372036854775807
+          },
+          "observedGeneration": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "minimum": 0,
+            "maximum": 9223372036854775807
+          },
+          "desiredReplicas": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "minimum": 0,
+            "maximum": 2147483647
+          },
+          "readyReplicas": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "minimum": 0,
+            "maximum": 2147483647
+          },
+          "availableReplicas": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "minimum": 0,
+            "maximum": 2147483647
+          },
+          "podPhase": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "enum": [
+              null,
+              "Pending",
+              "Running",
+              "Succeeded",
+              "Failed",
+              "Unknown"
+            ]
+          },
+          "podReady": {
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "images": {
+            "type": "array",
+            "maxItems": 16,
+            "items": {
+              "$ref": "#/components/schemas/KubernetesImageV1"
+            }
+          }
+        }
+      },
+      "KubernetesImageV1": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "containerName",
+          "reportedReference",
+          "declaredDigest",
+          "reportedRuntimeDigest"
+        ],
+        "properties": {
+          "containerName": {
+            "type": "string",
+            "maxLength": 63
+          },
+          "reportedReference": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "maxLength": 512
+          },
+          "declaredDigest": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "pattern": "^sha256:[0-9a-f]{64}$"
+          },
+          "reportedRuntimeDigest": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "pattern": "^sha256:[0-9a-f]{64}$"
+          }
+        }
+      }
+    }
+  },
+  "x-working-tree-source-sha256": {
+    "src/Modules/IdentityAccess/Contracts/AuthorityAdmission.cs": "91d364ff5a67a021aa350bbb7e10a101f4a135e6db70b06ad46f2c4e57fd2f8f",
+    "src/Modules/IdentityAccess/Authorization/ProtectedReadAdmission.cs": "d31825aad2eff6c6b19f18eb6bc8f164eedd71cfe9daafaf1ff260b031726f36",
+    "src/Host/Kordra.Api/Hosting/LocalApiHost.cs": "f9e36935f2909db23b1e1c1e4f09739eb792e50b50ba4478c4777d3ac0ceaa8b",
+    "src/Host/Kordra.Api/Hosting/LocalPilotHostOptions.cs": "1549466ba0517fe42d498381bc979ecef3135cf6bf7bee7061d95e9346f93d0b",
+    "src/Host/Kordra.Api/Authorization/CurrentCredentialDependencyReader.cs": "0e7c0f8a3f297e13ee051216c9c54d88075163b37adc06fd8d83394a90e73a71",
+    "src/Host/Kordra.Api/Authorization/CredentialTargetRead.cs": "fd60513dbe7e160ffb58a638817666c0634784b1269f995759e4a60fdf82bab1",
+    "src/Modules/InfrastructureInventory/Infrastructure/Kubernetes/KubernetesReadOnlyTransport.cs": "fc2eb079e6ca6030ae67ccc2c87c2a3a7e38c049ec5b2f3e372d292903abdf3f",
+    "src/Modules/InfrastructureInventory/Infrastructure/Kubernetes/KubernetesWorkloadReader.cs": "a71e7993599396fdfabc2edf9e074526959e9f64683c87f5427bccff779fb66f",
+    "src/Modules/InfrastructureInventory/Infrastructure/Kubernetes/KubernetesTargetTrust.cs": "17ef6507b9fd6a6f51ee31b12bf85a1d4ce612e37377d8c595e63b689842483a",
+    "src/Modules/InfrastructureInventory/Infrastructure/Kubernetes/KubernetesTrustConfiguration.cs": "e3d5beff58f77469d6ac899a7f7b29faf97a6d1ce861e8c6472a4ff69e36a802",
+    "src/Modules/InfrastructureInventory/Infrastructure/Kubernetes/KubernetesWorkloadProjection.cs": "4e4b398d250325677ce8b6e9fec410246a02c157a4d4177c7b0e3650ef32d40c",
+    "src/Modules/InfrastructureInventory/Contracts/KubernetesWorkloadsV1.cs": "6149ae5205fadcf9c779d9a3d3e8100376123b80c076393265fc643b4241e08a",
+    "src/Host/Kordra.Api/Authorization/KubernetesObservationRegistry.cs": "03d1e61c0c276f55c8de367ffe7bef765d7b165fba3d1c4409d1e1cb7a74208b",
+    "src/Host/Kordra.Api/Authorization/KubernetesObservationConsumer.cs": "2952f5c73647de16e05da7447d6bab905a71e5003ef2e0f7720b4e399efc9380",
+    "src/Host/Kordra.Api/Endpoints/KubernetesWorkloadEndpoints.cs": "49d563e78ec9661ad2c4bd55122c87a109bf50812e96be0b1450a005b6059111"
+  }
+}

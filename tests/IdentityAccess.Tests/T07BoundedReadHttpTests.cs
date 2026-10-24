@@ -39,7 +39,10 @@ public sealed partial class CurrentAuthorityHttpTests
         context.Response.Body = new MetadataWriteCounter(original, _probe);
         try
         {
-            if (_nomadRegistry is not null && context.Request.Path.Value!.EndsWith("/nomad-workloads",StringComparison.Ordinal) &&
+            if (_kubernetesRegistry is not null && context.Request.Path.Value!.EndsWith("/workloads",StringComparison.Ordinal) &&
+                Guid.TryParse(context.Request.Path.Value.Split('/')[^2],out var kubernetesTarget))
+                await KubernetesWorkloadEndpoints.Handle(context,kubernetesTarget,_kubernetesRegistry,_kubernetesBroker!,_host.Authentication,_host.Services.GetRequiredService<ProtectedReadAdmission>());
+            else if (_nomadRegistry is not null && context.Request.Path.Value!.EndsWith("/nomad-workloads",StringComparison.Ordinal) &&
                 Guid.TryParse(context.Request.Path.Value.Split('/')[^2],out var nomadTarget))
                 await NomadWorkloadEndpoints.Handle(context,nomadTarget,_nomadRegistry,_nomadBroker!,_host.Authentication,_host.Services.GetRequiredService<ProtectedReadAdmission>());
             else if (_credentialRead is not null)

@@ -154,3 +154,7 @@ Disable workloads registration to roll back. Preserve local metadata route, SEC/
 ## Exact-content acceptance — 2026-10-24
 
 NukeGeng approved this contract with ADR-0016 for T09.1a–d, including the four explicit transport/trust/admission decisions. See the [ADR acceptance evidence](../decisions/0016-kubernetes-workload-observation.md#exact-content-acceptance-evidence--2026-10-24) for pre-annotation hashes and the private receipt. No T09.1e or existing credential/cluster operation is authorized. Runtime and K09-01–12 verification remain pending.
+
+## Implementation continuation — 2026-10-24
+
+T09.1a–d source and synthetic conformance are now implemented in the [owner feature](../features/infrastructure-inventory/features/register-target.md#t091-approved-implementation-continuation--2026-10-24), with [OpenAPI](openapi/kubernetes-workloads-v1.openapi.json), [HTTP fixture](fixtures/kubernetes-workloads-v1.http.json) and [runbook](../operations/kubernetes-workloads-v1.md). This dated annotation supersedes earlier pending-implementation wording only; normative design and exact acceptance remain unchanged. Final gate receipts and remote PR review remain separate; no T09.1e or real cluster/version evidence is claimed.
