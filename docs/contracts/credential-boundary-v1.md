@@ -152,3 +152,8 @@ Completion reporting separates implemented source, synthetic deterministic tests
 ## Acceptance and fixture decision — 2026-10-23
 
 The owner accepted this contract and ADR-0015 for the exact T08 scope. Pre-acceptance contract SHA-256: 250251a09262b5795ecb38c68f30559252fc2342d03265cb7923417aec3eb71d. Original bytes and the separate fixture authorization are retained in .amr-local/approvals/adr-0015-t08/. The owner also explicitly permitted section 10's new isolated temporary synthetic-Keychain fixture; the missing operational permission described in that proposal is now satisfied only for that exact scope. No existing item, real provider/cluster access or completed native test is implied. All acceptance cases still require implementation/executed evidence.
+
+
+### PR15 implementation clarification — 2026-10-24
+
+SEC08-05/08 known-versus-unknown semantics apply to launch as well as commit: a completed failed/cancelled factory launch or null result with no returned helper is unavailable, not unresolved ownership. Observe its terminal outcome without releasing ownership of a successfully returned process. Only a still-pending launch or genuinely unconfirmed helper exit retains the unresolved slot and fences admission. This corrects implementation classification without changing the accepted protocol, numeric bounds or public schema.

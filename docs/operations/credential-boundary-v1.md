@@ -43,3 +43,8 @@ Native conformance is explicitly unsupported/skipped on non-macOS CI; a separate
 After unknown database commit, reacquire offline custody and retry only the identical manifest/hash for receipt lookup; compare its exact history/result and AUD ID/hash/time evidence. No replayed receipt grants new credential use. Known pre-commit setup failures roll back without poisoning admission. Contradictory/missing receipts stay unknown for maintainer investigation. Disable credential-consuming registration for rollback while preserving SEC/AUD revisions. Existing metadata reads can remain enabled when configured independently.
 
 Record exact fixture identity, source/gate digest, native result and deletion status privately. T08 completion is local proof, separate from hosted CI/Codex review, merge, real provider configuration and OP-P0 readiness. No automatic Sol review/model dispatch belongs to recovery.
+
+
+## Known startup failure versus unresolved helper
+
+A known failure to start the configured helper (for example, missing execute permission) reports unavailable and releases its helper slot while unrelated metadata reads/authority operations remain usable. Correct the installation executable permissions/identity under the existing maintenance procedure; never fall back to another executable or credential. A launch still in progress at its deadline or an owned process whose exit cannot be confirmed remains unknown and closes admission as before. Tests inject the known startup failure and verify repeated attempts do not exhaust the two-slot bound or close the shared gate.

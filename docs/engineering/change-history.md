@@ -190,3 +190,7 @@ FEAT-TEN-001 corrects the new provenance regression fixture after Linux artifact
 ## 2026-10-24 — T08 approved credential boundary implementation
 
 Implemented accepted ADR-0015 T08.1–T08.5 in existing SEC/ConnectionManagement: metadata/immutable references/revision history, additive migrations, offline exact-hash commands and SEC/IAM/AUD receipt reconciliation; IAM current dependency U/C/D and bounded broker with native read-only child IPC. Added synthetic SQL/HTTPS/process fault/architecture tests and isolated Mac Keychain conformance. Runtime native bindings cannot create/delete Keychain items; fixture mutation stays in tests. Source mapping, runbook and consumers are updated. Current API files retain their behavior under grouped folders. Final local evidence/source identities remain private; no existing credential/provider access, startup migration, PR action or historical checkpoint replay. Product serial test timeout is 300 seconds with deterministic regression coverage; all other gate budgets remain unchanged.
+
+## PR15 known launch failure correction — 2026-10-24
+
+FEAT-SEC-001 fixes provider finding 4366071511: a completed failed/null helper launch stays unavailable and releases its slot; pending launches/unconfirmed exits still fence admission. Added lifecycle and actual-owner HTTPS regressions for slot reuse and unrelated protected reads/writers. No schema, dependency, permission or ADR change; see the [owner evidence](../features/connection-secrets/features/secret-binding.md#pr15-known-launch-failure-correction--2026-10-24).

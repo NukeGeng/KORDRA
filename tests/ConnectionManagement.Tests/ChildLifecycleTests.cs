@@ -8,7 +8,7 @@ namespace Kordra.Credentials.Tests;
 public sealed class ChildLifecycleTests
 {
     [Theory]
-    [InlineData("success")][InlineData("nonzero")][InlineData("hang")][InlineData("unreaped")][InlineData("stderr")][InlineData("launch-hang")][InlineData("cancelled-before-start")]
+    [InlineData("success")][InlineData("launch-failed")][InlineData("launch-null")][InlineData("nonzero")][InlineData("hang")][InlineData("unreaped")][InlineData("stderr")][InlineData("launch-hang")][InlineData("cancelled-before-start")]
     public async Task Exact_owned_process_is_bounded_reaped_or_explicitly_unknown(string mode)
     {
         var root=new DirectoryInfo(AppContext.BaseDirectory);while(root is not null&&!File.Exists(Path.Combine(root.FullName,"Kordra.slnx")))root=root.Parent;
@@ -26,16 +26,20 @@ public sealed class ChildLifecycleTests
         else Assert.Equal(1,factory.Starts);
         if(mode=="launch-hang"){factory.AllowLaunch.Set();await process.Disposed.Task.WaitAsync(TimeSpan.FromSeconds(2));Assert.Equal(1,process.Kills);}
         else if(mode=="unreaped"){process.Release();await process.Disposed.Task.WaitAsync(TimeSpan.FromSeconds(2));}
+        else if(mode is "launch-failed" or "launch-null")
+        { Assert.Equal(0,process.Kills);Assert.False(process.Disposed.Task.IsCompleted);process.Dispose(); }
         else if(factory.Starts>0)Assert.True(process.Disposed.Task.IsCompleted);
     }
     private sealed class Factory(FakeProcess process):IKeychainProcessFactory
     {
         public int Starts; public readonly ManualResetEventSlim AllowLaunch=new(false);
-        public IKeychainProcess Start(ProcessStartInfo start)
+        public IKeychainProcess? Start(ProcessStartInfo start)
         {
             Interlocked.Increment(ref Starts); if(process.Mode=="launch-hang")AllowLaunch.Wait();Assert.False(start.UseShellExecute);Assert.True(start.RedirectStandardInput&&start.RedirectStandardOutput&&start.RedirectStandardError);
             Assert.Equal(new[]{"--internal-keychain-read"},start.ArgumentList);Assert.DoesNotContain("PASSWORD",string.Join(",",start.Environment.Keys));
-            Assert.Equal("0",start.Environment["DOTNET_EnableDiagnostics"]);return process;
+            Assert.Equal("0",start.Environment["DOTNET_EnableDiagnostics"]);
+            if(process.Mode=="launch-failed")throw new System.ComponentModel.Win32Exception(13,"Synthetic execute permission denied.");
+            return process.Mode=="launch-null"?null:process;
         }
     }
     private sealed class FakeProcess:IKeychainProcess

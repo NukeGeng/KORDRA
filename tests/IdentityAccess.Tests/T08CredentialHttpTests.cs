@@ -39,7 +39,7 @@ public sealed partial class CurrentAuthorityHttpTests
     {
         _credentialCommands.Add(m.ManifestId); return await CredentialCoordinator().ExecuteAsync(_offline, m.CanonicalBytes(), m.Hash());
     }
-    private async Task EnableCredentialRead()
+    private async Task EnableCredentialRead(Func<KeychainAccessConfiguration, ISecretLookup>? createLookup = null)
     {
         var now = DateTimeOffset.FromUnixTimeMilliseconds(_host.Clock.GetUtcNow().ToUnixTimeMilliseconds());
         var m = new CredentialManifest(1, Guid.NewGuid(), CredentialInstallation, _tenant, _target, "inventory.readonly.v1", "target.read", "create", null, 0,
@@ -48,7 +48,7 @@ public sealed partial class CurrentAuthorityHttpTests
         var root = FindProductRoot(); var executable = Path.Combine(root, "src/Host/Kordra.Api/bin/Release/net10.0/Kordra.Api");
         var configuration = new KeychainAccessConfiguration(CredentialInstallation, executable,
             Convert.ToHexStringLower(SHA256.HashData(File.ReadAllBytes(executable))), new Dictionary<Guid,string> { [m.LocatorId!.Value] = "/private/synthetic-do-not-open.keychain" });
-        var broker = new CredentialBroker(Credentials, _host.Services.GetRequiredService<FairAsyncReaderWriterAdmissionGate>(), _host.Authentication, configuration, _credentialLookup);
+        var broker = new CredentialBroker(Credentials, _host.Services.GetRequiredService<FairAsyncReaderWriterAdmissionGate>(), _host.Authentication, configuration, createLookup?.Invoke(configuration) ?? _credentialLookup);
         _credentialConsumer.Read = (_, context, ct) => _host.Services.GetRequiredService<TargetMetadataRead>().Admit(new(context.InvocationId, context.Selection.TenantId,
             context.Selection.TargetId, context.ScopeKind, context.ScopeId), ct);
         _credentialRead = new CredentialTargetRead(CredentialInstallation, broker, _credentialConsumer);
@@ -155,6 +155,41 @@ public sealed partial class CurrentAuthorityHttpTests
         using var response=await _client.GetAsync(MetadataUrl);Assert.Equal(HttpStatusCode.ServiceUnavailable,response.StatusCode);
         Assert.Empty(_probe.Audits);Assert.Equal(0,_credentialLookup.Calls);Assert.Equal(0,_probe.OutputBytes);
     }
+    [Fact]
+    public async Task T08_known_failed_launch_releases_slots_and_preserves_unrelated_admission()
+    {
+        var factory = new FailedLaunchFactory();
+        await EnableCredentialRead(configuration => new PortableNativeLookup(new(configuration, factory)));
+        for (var attempt = 1; attempt <= 3; attempt++)
+        {
+            await AssertAbortedOrEmptyUnavailable(_client.GetAsync(MetadataUrl));
+            Assert.Equal(0, _probe.OutputBytes);
+            Assert.Equal(attempt, factory.Starts); // More attempts than the two slots: none may leak.
+            await using var writer = await _host.Services.GetRequiredService<FairAsyncReaderWriterAdmissionGate>().AcquireWriteAsync();
+        }
+        Assert.Equal(0, _credentialConsumer.Calls);
+        Assert.Equal(3, _probe.Audits.Count);
+        Assert.All(_probe.Audits, x => Assert.Equal(AuthorityCommitPurpose.ReadAdmission, x.Purpose));
+        _credentialRead = null; // Exercise the unchanged Product metadata route after the failures.
+        using var metadata = await _client.GetAsync(MetadataUrl);
+        Assert.Equal(HttpStatusCode.OK, metadata.StatusCode);
+        Assert.Equal(3, factory.Starts);
+    }
+
+    private sealed class FailedLaunchFactory : IKeychainProcessFactory
+    {
+        public int Starts;
+        public IKeychainProcess? Start(System.Diagnostics.ProcessStartInfo start)
+        {
+            Interlocked.Increment(ref Starts);
+            throw new System.ComponentModel.Win32Exception(13, "Synthetic execute permission denied.");
+        }
+    }
+    private sealed class PortableNativeLookup(NativeSecretLookup inner) : ISecretLookup
+    {
+        public Task<SecretLookup> ReadAsync(KeychainRequest request, CancellationToken ct) => inner.ReadCoreAsync(request, ct);
+    }
+
     [Fact]
     public async Task T08_unresolved_lookup_closes_admission_without_starting_C()
     {

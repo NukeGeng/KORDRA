@@ -59,8 +59,11 @@ internal sealed class NativeSecretLookup(KeychainAccessConfiguration configurati
             result?.Dispose();
             if (process is null && launch is not null)
             {
-                if (launch.IsCompletedSuccessfully) process = launch.Result;
-                else { _ = ReapLateLaunch(launch); return new(null, quiescent: false); }
+                if (!launch.IsCompleted) { _ = ReapLateLaunch(launch); return new(null, quiescent: false); }
+                // Observe the completed task once: a failed start returned no helper to reap.
+                // Await also preserves ownership if launch completed successfully as cancellation won.
+                try { process = await launch; }
+                catch { return new(null); }
             }
             if (process is null) return new(null);
             try
