@@ -154,3 +154,8 @@ The canonical Product CI and existing amr.py deterministic gate now pass MSBuild
 ## PR #11 review corrections — 2026-10-23
 
 FEAT-AMR-001 / engineering tooling; actor: local repository contributor; no product permission or tenant authority. Findings `4343932365` and `4343932372` reproduced before correction. New regression cases in `test_goal.py` cover absent declared-output deletion tombstones with unchanged origin/no replay, reject null for existing context/output, and reject Architect source output/write paths before dispatch. `amr.py` validates Architect inputs/outputs; `amr_goal.py` additionally bounds writes and preserves historical task validation. Product runtime code/test conflicts retain merged main content, including PR10 audit setup/unknown-commit semantics. No new dependency, role/model routing, AI review invocation or checkpoint migration is added. Applicable deterministic results and exact revision are recorded in the PR/private publication evidence; provider follow-up and human merge remain separate.
+
+
+### Serial Product validation capacity — 2026-10-24
+
+The expanded T08 serial PostgreSQL/HTTPS/native fixture suite uses a bounded 300-second Product-test stage instead of the old 90-second whole-suite budget, which had already produced false timeouts as the suite grew. All other command deadlines remain 90 seconds; failed/missing checks and stale binaries still block. One regression models a legitimate >90-second suite while verifying the Product cap and other-stage bounds. This is deterministic CLI validation capacity only; no model/routing/checkpoint/review-policy or runtime admission/provider deadline changes.

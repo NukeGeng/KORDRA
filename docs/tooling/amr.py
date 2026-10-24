@@ -446,7 +446,7 @@ def gates(root, base=None, *, reuse=None, validation_context=None):
             results.append(cached)
             continue
         try:
-            p = subprocess.run(cmd, cwd=root, text=True, capture_output=True, timeout=90)
+            p = subprocess.run(cmd, cwd=root, text=True, capture_output=True, timeout=300 if name == 'product-test' else 90)
             results.append({'name': name, 'command': cmd, 'status': 'passed' if p.returncode == 0
                             else 'failed', 'exit_code': p.returncode,
                             'output': p.stdout+p.stderr})
