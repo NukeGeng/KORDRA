@@ -2,7 +2,7 @@
 id: ADR-INDEX
 status: proposed
 owner: unassigned
-last_reviewed: 2026-10-22
+last_reviewed: 2026-10-24
 ---
 
 # Architecture Decision Records (ADRs)
@@ -30,3 +30,14 @@ ADR tracks **why** a design was chosen; status initially `proposed`, so not a fi
 | [0014](0014-resource-policy-v1.md) | Accepted exact T06 resource-policy supplement on 2026-10-22: IAM immutable policy/head, exact PRJ binding, fixed target.read eligibility and U/D compatibility; implementation evidence pending |
 
 | [0015](0015-credential-boundary-preparation.md) | Accepted exact T08 credential boundary, offline SEC metadata and bounded native macOS Keychain child; synthetic fixture separately authorized, implementation pending |
+
+## T09.1 Kubernetes workload proposal — preparation before acceptance, 2026-10-24
+
+[ADR-0016](0016-kubernetes-workload-observation.md) remains proposed: workload-first namespace read, exact provider trust/RBAC, bounded transport and explicit T08 managed-header supplement. The owner's sequencing choice is not ADR acceptance or live-target authorization.
+
+
+Accepted scope update — 2026-10-24: NukeGeng approved exact ADR-0016 and Kubernetes workloads v1 for T09.1a–d, including the post-C managed-header exception, offline private-PKI residual, exact Namespace identity GET and additive config/scope/freshness caps. This supersedes pending-design approval wording in this section only. Runtime implementation and K09-01–12 verification remain pending. T09.1e, existing secrets, real clusters, Helm and OBS runtime remain excluded; historical checkpoints are preserved without replay.
+
+## Nomad provider accepted design — 2026-10-24
+
+[ADR-0017](0017-nomad-workload-observation.md) accepts T09.2a–d Nomad-first implementation after the owner reported a platform change. It preserves accepted ADR-0016 and records Nomad identity, credential-header and personal-loopback differences. NukeGeng separately approved the exact ADR/contract on 2026-10-24; creating the personal lab alone did not confer Product adoption.

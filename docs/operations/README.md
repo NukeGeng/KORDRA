@@ -18,3 +18,11 @@ Runbook phải có: **trigger**, blast radius, preflight, safe actions, verifica
 - [Credential rotation](credential-rotation-runbook.md)
 - [Local Resource Policy v1](resource-policy-v1.md) — T06 offline manifest/impact/apply/recovery and guarded metadata/environment routes; real operations need separate authorization.
 - [Local PostgreSQL setup and role access](local-postgresql-setup.md)
+
+## Personal Nomad lab
+
+[Local Nomad lab](local-nomad-lab.md) owns the explicitly authorized 1-vCPU/2-GiB/15-GiB instance, private credential locations, TLS/ACL evidence, lifecycle and limitations. It is independent of company LAB-01 and not Product provider completion.
+
+## Nomad workload observation
+
+[Nomad workloads v1](nomad-workloads-v1.md) covers explicit local-pilot activation, private trust/Keychain metadata, limits/expiry, optional own-lab native conformance and safe rollback. It does not authorize company access or claim permanent installation/production readiness.

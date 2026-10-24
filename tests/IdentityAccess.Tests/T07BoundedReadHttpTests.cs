@@ -29,6 +29,7 @@ public sealed partial class CurrentAuthorityHttpTests
         services.AddSingleton<ITargetMetadataReader>(s => new ProbeReader(
             ActivatorUtilities.CreateInstance<CurrentTargetMetadataReader>(s), _probe));
         services.AddSingleton<IAuthorityCommitter>(s => new ProbeAudit(s.GetRequiredService<LocalAuthenticationService>(), _probe));
+        services.AddSingleton<IProtectedReadDependencyReader>(s => new NomadFixtureDependencyReader(this,s));
     }
 
     private async Task CaptureMetadataWrites(HttpContext context, RequestDelegate next)
@@ -38,7 +39,10 @@ public sealed partial class CurrentAuthorityHttpTests
         context.Response.Body = new MetadataWriteCounter(original, _probe);
         try
         {
-            if (_credentialRead is not null)
+            if (_nomadRegistry is not null && context.Request.Path.Value!.EndsWith("/nomad-workloads",StringComparison.Ordinal) &&
+                Guid.TryParse(context.Request.Path.Value.Split('/')[^2],out var nomadTarget))
+                await NomadWorkloadEndpoints.Handle(context,nomadTarget,_nomadRegistry,_nomadBroker!,_host.Authentication,_host.Services.GetRequiredService<ProtectedReadAdmission>());
+            else if (_credentialRead is not null)
                 await CredentialReadHttpHandler.Handle(context, Guid.Parse(context.Request.Path.Value!.Split('/').Last()), _credentialRead, _host.Services.GetRequiredService<ProtectedReadAdmission>());
             else await next(context);
         }
@@ -269,6 +273,7 @@ public sealed partial class CurrentAuthorityHttpTests
         public Func<ITargetMetadataReader, TargetMetadataReadSelection, CancellationToken, Task<TargetMetadata?>>? Read;
         public (AuthorityStage Stage, AuthorityCommitStatus Status)? AuditFault;
         public AuthorityCommitStatus? CredentialAuditFault;
+        public Action<AuthorityCommitment>? AfterAudit;
         public int OutputBytes;
     }
     private sealed class ProbeReader(ITargetMetadataReader real, MetadataProbe probe) : ITargetMetadataReader
@@ -287,7 +292,7 @@ public sealed partial class CurrentAuthorityHttpTests
             if (commitment.Purpose == AuthorityCommitPurpose.CredentialConsumption && probe.CredentialAuditFault is { } credentialFault) return credentialFault;
             if (probe.AuditFault is { } fault && fault.Stage == commitment.Stage) return fault.Status;
             var status = await real.CommitUnderAdmissionAsync(commitment, ct);
-            if (status == AuthorityCommitStatus.Durable) probe.Audits.Add(commitment);
+            if (status == AuthorityCommitStatus.Durable) { probe.Audits.Add(commitment); probe.AfterAudit?.Invoke(commitment); }
             return status;
         }
     }

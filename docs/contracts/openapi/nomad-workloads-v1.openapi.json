@@ -1,0 +1,405 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Kordra Nomad Workloads v1",
+    "version": "1.0.0"
+  },
+  "servers": [
+    {
+      "url": "https://localhost:5128"
+    }
+  ],
+  "paths": {
+    "/api/v1/targets/{targetId}/nomad-workloads": {
+      "get": {
+        "operationId": "ReadNomadWorkloads",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "targetId",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "security": [
+          {
+            "localSession": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Current authorized, bounded workload facts; not health",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NomadWorkloadsV1"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request shape"
+          },
+          "401": {
+            "description": "No current session"
+          },
+          "403": {
+            "description": "Denied/unconfigured target"
+          },
+          "503": {
+            "description": "Unavailable; response may be aborted before headers"
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "localSession": {
+        "type": "apiKey",
+        "in": "cookie",
+        "name": "__Host-kordra.session"
+      }
+    },
+    "schemas": {
+      "NomadWorkloadsV1": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "schemaVersion": {
+            "const": 1
+          },
+          "invocationId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "targetId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "provider": {
+            "const": "nomad"
+          },
+          "namespace": {
+            "type": "string"
+          },
+          "region": {
+            "type": "string"
+          },
+          "capturedAtUtc": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "completedAtUtc": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "validUntilUtc": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "coverage": {
+            "enum": [
+              "complete",
+              "partial"
+            ]
+          },
+          "resourceSets": {
+            "type": "array",
+            "prefixItems": [
+              {
+                "$ref": "#/components/schemas/JobsSet"
+              },
+              {
+                "$ref": "#/components/schemas/AllocationsSet"
+              }
+            ],
+            "items": false,
+            "minItems": 2,
+            "maxItems": 2
+          }
+        },
+        "required": [
+          "schemaVersion",
+          "invocationId",
+          "targetId",
+          "provider",
+          "namespace",
+          "region",
+          "capturedAtUtc",
+          "completedAtUtc",
+          "validUntilUtc",
+          "coverage",
+          "resourceSets"
+        ]
+      },
+      "ResourceSet": {
+        "oneOf": [
+          {
+            "$ref": "#/components/schemas/JobsSet"
+          },
+          {
+            "$ref": "#/components/schemas/AllocationsSet"
+          }
+        ]
+      },
+      "Job": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "type": {
+            "enum": [
+              "service",
+              "batch",
+              "system",
+              "sysbatch",
+              null
+            ]
+          },
+          "status": {
+            "enum": [
+              "pending",
+              "running",
+              "dead",
+              null
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "type",
+          "status"
+        ]
+      },
+      "Allocation": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "jobId": {
+            "type": "string"
+          },
+          "taskGroup": {
+            "type": "string"
+          },
+          "clientStatus": {
+            "enum": [
+              "pending",
+              "running",
+              "complete",
+              "failed",
+              "lost",
+              "unknown",
+              null
+            ]
+          },
+          "desiredStatus": {
+            "enum": [
+              "run",
+              "stop",
+              "evict",
+              null
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "jobId",
+          "taskGroup",
+          "clientStatus",
+          "desiredStatus"
+        ]
+      },
+      "JobsSet": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "kind": {
+            "const": "Jobs"
+          },
+          "status": {
+            "enum": [
+              "observed",
+              "unavailable"
+            ]
+          },
+          "coverage": {
+            "enum": [
+              "complete",
+              "partial",
+              "unavailable"
+            ]
+          },
+          "observationIndex": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "items": {
+            "type": "array",
+            "maxItems": 25,
+            "items": {
+              "$ref": "#/components/schemas/Job"
+            }
+          }
+        },
+        "required": [
+          "kind",
+          "status",
+          "coverage",
+          "observationIndex",
+          "items"
+        ],
+        "allOf": [
+          {
+            "if": {
+              "properties": {
+                "status": {
+                  "const": "unavailable"
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "coverage": {
+                  "const": "unavailable"
+                },
+                "observationIndex": {
+                  "type": "null"
+                },
+                "items": {
+                  "maxItems": 0
+                }
+              }
+            },
+            "else": {
+              "properties": {
+                "coverage": {
+                  "enum": [
+                    "complete",
+                    "partial"
+                  ]
+                },
+                "observationIndex": {
+                  "type": "string",
+                  "pattern": "^[1-9][0-9]{0,19}$"
+                }
+              }
+            }
+          }
+        ]
+      },
+      "AllocationsSet": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "kind": {
+            "const": "Allocations"
+          },
+          "status": {
+            "enum": [
+              "observed",
+              "unavailable"
+            ]
+          },
+          "coverage": {
+            "enum": [
+              "complete",
+              "partial",
+              "unavailable"
+            ]
+          },
+          "observationIndex": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "items": {
+            "type": "array",
+            "maxItems": 25,
+            "items": {
+              "$ref": "#/components/schemas/Allocation"
+            }
+          }
+        },
+        "required": [
+          "kind",
+          "status",
+          "coverage",
+          "observationIndex",
+          "items"
+        ],
+        "allOf": [
+          {
+            "if": {
+              "properties": {
+                "status": {
+                  "const": "unavailable"
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "coverage": {
+                  "const": "unavailable"
+                },
+                "observationIndex": {
+                  "type": "null"
+                },
+                "items": {
+                  "maxItems": 0
+                }
+              }
+            },
+            "else": {
+              "properties": {
+                "coverage": {
+                  "enum": [
+                    "complete",
+                    "partial"
+                  ]
+                },
+                "observationIndex": {
+                  "type": "string",
+                  "pattern": "^[1-9][0-9]{0,19}$"
+                }
+              }
+            }
+          }
+        ]
+      }
+    }
+  },
+  "x-working-tree-source-sha256": {
+    "src/Modules/InfrastructureInventory/Contracts/NomadWorkloadsV1.cs": "0a7e8bbf066f0ab92281ef140c10a0a1be00aaba78bbda5aa442a4b1f3e962af",
+    "src/Modules/InfrastructureInventory/Infrastructure/Nomad/NomadReadOnlyTransport.cs": "8f69af0e68390163f4a2eec4a6db04439e69693405e1530c517a9b4ae7702797",
+    "src/Modules/InfrastructureInventory/Infrastructure/Nomad/NomadWorkloadProjection.cs": "2c9c55f9d02310fef7cf6335bd46151131feaf250991f377d17bf26c8f20c670",
+    "src/Modules/InfrastructureInventory/Infrastructure/Nomad/NomadTrustConfiguration.cs": "f933f830d039edf1934e6227f3da7484cf201ec737899044a89a185c3f9ed484",
+    "src/Modules/InfrastructureInventory/Infrastructure/Nomad/NomadTargetTrust.cs": "1621b80026d9c527e73cfa01c01de4c0bb3593c496cf6fee9e11e14666dffe3a",
+    "src/Modules/InfrastructureInventory/Infrastructure/Nomad/NomadWorkloadReader.cs": "3655bd10284d750ae5778ee3e69f417173353ebcdb57d504b19890ce38609edd",
+    "src/Host/Kordra.Api/Authorization/NomadObservationConsumer.cs": "78188af190a7d9ef60122b51e11d50a82796ee3393468ac211fef369053b07e1",
+    "src/Host/Kordra.Api/Authorization/NomadObservationRegistry.cs": "4082ead9eb758f66a874bee2ffb257af5acea82100b22d50550e1ece5726f1ae",
+    "src/Host/Kordra.Api/Endpoints/NomadWorkloadEndpoints.cs": "80ec97f66bfcd65878f9497dc4b5543b0390bc6a3d8ef0c1e7ea9bdae9f915de",
+    "src/Modules/IdentityAccess/Contracts/AuthorityAdmission.cs": "91d364ff5a67a021aa350bbb7e10a101f4a135e6db70b06ad46f2c4e57fd2f8f",
+    "src/Modules/IdentityAccess/Authorization/ProtectedReadAdmission.cs": "d31825aad2eff6c6b19f18eb6bc8f164eedd71cfe9daafaf1ff260b031726f36",
+    "src/Host/Kordra.Api/Hosting/LocalApiHost.cs": "40599405e8819dd27141ca67c472cf4d4f12f175cbebd304830e7f7ebab2f010",
+    "src/Host/Kordra.Api/Hosting/LocalPilotHostOptions.cs": "dd713f65433d228411aea9a042d1ced1b1d5db17eabb894f0b4c01e65a96e8c2",
+    "src/Host/Kordra.Api/Authorization/CurrentCredentialDependencyReader.cs": "6a63f7abf26acc0490aa38d268f8841501c8a23ac18c16679dd2ed7d717445e8",
+    "src/Host/Kordra.Api/Authorization/CredentialTargetRead.cs": "fd60513dbe7e160ffb58a638817666c0634784b1269f995759e4a60fdf82bab1"
+  }
+}

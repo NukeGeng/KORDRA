@@ -2,7 +2,7 @@
 id: ENG-TRACE
 status: proposed
 owner: unassigned
-last_reviewed: 2026-10-22
+last_reviewed: 2026-10-24
 ---
 
 # Requirements ↔ Module ↔ Feature ↔ Code ↔ Tests
@@ -271,3 +271,22 @@ Canonical exact-base AMR gates passed on the stable implementation tree: 218 too
 ## PR15 known launch failure correction — 2026-10-24
 
 PR15-SEC-LAUNCH-001 / FEAT-SEC-001 maps NativeSecretLookup, ChildLifecycleTests and T08CredentialHttpTests. Original code reproduces the launch classification error and closed writer gate; the repair separates completed failure from unresolved ownership. Tests cover throwing/null startup, retained hung/unreaped handling, three failed starts across two slots, no consumer/C and successful unrelated metadata/writer admission. Exact red/green/final-gate receipts remain private under .amr-local/t08/pr15-launch-failure/. Accepted ADR-0015 and existing schemas/permissions are unchanged. Local repair evidence does not assert provider follow-up or merge approval.
+
+## T09.1 design preparation — preparation before acceptance, 2026-10-24
+
+FEAT-INV-001 with IAM/SEC/AUD consumers now has proposed ADR-0016/Kubernetes workloads v1, based on merged PR15 main 40acd58. The owner chose workloads-first; actual native metadata verifies the bounded Architect profile gpt-6.1-sol/high. The proposal records precise namespace identity/TLS/RBAC, transport/string residuals, resource/byte/deadline limits, typed DTO and freshness-at-D compatibility with exact planned files. It does not map new runtime/tests or claim conformance/live reads. Source/test checkpoints and accepted T08 design remain unchanged pending exact T09.1 approval. Author checks are documentation/scope checks, not routine Product tests, a second AI review or PR action.
+
+
+Accepted scope update — 2026-10-24: NukeGeng approved exact ADR-0016 and Kubernetes workloads v1 for T09.1a–d, including the post-C managed-header exception, offline private-PKI residual, exact Namespace identity GET and additive config/scope/freshness caps. This supersedes pending-design approval wording in this section only. Runtime implementation and K09-01–12 verification remain pending. T09.1e, existing secrets, real clusters, Helm and OBS runtime remain excluded; historical checkpoints are preserved without replay.
+
+## T09.2 lab preparation and accepted provider design — 2026-10-24
+
+FEAT-INV-001/MOD-INV owns the accepted Nomad provider design, with existing IAM/SEC/AUD consumers. [ADR-0017](../decisions/0017-nomad-workload-observation.md) and [contract](../contracts/nomad-workloads-v1.md) were exactly accepted by NukeGeng on 2026-10-24 and declare planned paths/N09-01–10 before implementation. [Local lab](../operations/local-nomad-lab.md) records separately authorized direct API/TLS/ACL and synthetic allocation evidence in private T09-NOMAD-LOCAL-001 receipts. No Product source/test mapping, native GOAL completion or checkpoint recovery is claimed; the historical goal-status owner-path failure was observed and preserved.
+
+## T09.2a source adoption — 2026-10-24
+
+FEAT-INV-001 maps NomadTargetTrust/NomadTrustConfiguration and NomadTrustTests in the existing INV runtime/test projects. FEAT-IAM-001 retains ownership of AuthorityAdmission, ProtectedReadAdmission and their regression suite; existing SEC/Host CurrentCredentialDependencyReader rejects unregistered config-qualified plans. Accepted ADR-0017 is unchanged. Targeted validation passed 40 trust and 58 admission cases; full gate outcome is recorded separately and must not be inferred from these counts. No provider call, live credential use, company operation or AI review occurs in T09.2a.
+
+## T09.2b–e source and conformance adoption — 2026-10-24
+
+FEAT-INV-001 maps the existing INV Contracts/runtime Nomad DTO, transport/projection/reader and Host consumer/registry/endpoint; IAM/SEC own existing admission, binding and native lookup ports. Shared test TLS/native declarations stay test-only in existing projects. N09 cases map to NomadTrustTests, NomadTransportTests, NomadProjectionTests and T09NomadWorkloadHttpTests; optional T09NomadLabTests is the separately recorded own-lab operation, not a fake fixture substituted for live evidence. Schema/source pins are in [OpenAPI](../contracts/openapi/nomad-workloads-v1.openapi.json). Exact final gates/source identities and private native-cleanup receipt remain under .amr-local/t09/. PR/CI/merge is separate; historical checkpoint evidence is preserved without replay.

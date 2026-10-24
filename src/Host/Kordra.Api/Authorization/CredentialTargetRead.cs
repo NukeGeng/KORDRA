@@ -5,10 +5,10 @@ using Kordra.Modules.IdentityAccess.Contracts;
 
 namespace Kordra.Api;
 
-/// <summary>Explicit server plan. No network/synthetic consumer is registered by Product in T08.</summary>
-public sealed class CredentialTargetRead(Guid installation, CredentialBroker broker, CredentialConsumer<PrivateReadBuffer> consumer) : IProtectedCredentialRead
+/// <summary>Explicit server plan; configured providers also bind their immutable trust digest.</summary>
+public sealed class CredentialTargetRead(Guid installation, CredentialBroker broker, CredentialConsumer<PrivateReadBuffer> consumer, string? configurationDigest = null) : IProtectedCredentialRead
 {
-    public ProtectedReadPlan Plan { get; } = ProtectedReadPlan.Credential(installation);
+    public ProtectedReadPlan Plan { get; } = ProtectedReadPlan.Credential(installation) with { ConsumerConfigurationDigest = configurationDigest };
     public IProtectedCredentialReadReservation? TryReserve()
     {
         if (!Plan.IsValid || consumer.Id != Plan.ConsumerId) return null;

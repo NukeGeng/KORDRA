@@ -2,7 +2,7 @@
 id: ENG-LUNA-IMPLEMENTATION-HANDOFF
 status: proposed
 owner: NukeGeng
-last_reviewed: 2026-10-22
+last_reviewed: 2026-10-24
 ---
 
 # Luna Max implementation handoff — approved direction, decision-gated execution
@@ -124,3 +124,28 @@ The maintainer approved the exact ADR-0015/Credential boundary v1 package and ex
 Accepted ADR-0015/credential-boundary-v1 T08.1–T08.5 is implemented locally on codex/foundation-t08-credentials in the existing foundation-t03 Product worktree. FEAT-SEC-001 and the dated traceability/runbook map actual code, consumers and synthetic tests. Keep the separate approval receipt, completed T07 and historical AMR evidence unchanged. Use the final source-bound .amr-local/t08/implementation/ gate receipt before publication; native model/effort is unverified. No local AI/PR review is part of this implementation.
 
 Do not infer permission for existing Keychain items, real installation DDL or a cluster. No network consumer or credential HTTP management route is registered. Future activation needs the stable installed apphost/hash and explicit ACL/private locator configuration; T09 still needs provider/identity/TLS/RBAC design. The API folder cleanup is integrated by moving current implementations, preserving T07 additions; the primary worktree's staged cleanup and Clients remain untouched. Unrelated dotnet-tools.json is excluded from implementation ownership.
+
+## T09.1 bounded Architect handoff — preparation before acceptance, 2026-10-24
+
+PR15 head ef42551 had all three hosted checks passing and was human-merged as main 40acd58; this is not a claim about a separate main-branch CI run. The owner selected namespaced Kubernetes workloads before Helm release inventory. The native current turn is verified gpt-6.1-sol/high; [ADR-0016](../decisions/0016-kubernetes-workload-observation.md) and [Kubernetes workloads v1](../contracts/kubernetes-workloads-v1.md) are the bounded proposed design, not accepted implementation authority.
+
+[NEEDS-DECISION]: exact approval must explicitly include the post-C transient managed-header exception, private-PKI/offline revocation residual, exact named Namespace GET bootstrap privilege and additive config/scope/freshness admission changes. Do not approve them from the scope preference alone. After acceptance, Luna can implement T09.1a–d in existing projects using the contract's exact planned files and K09-01–12; update owner mappings only when files exist. T09.1e live access, Helm/OBS health, Clients, runtime installation provisioning and the wider pilot remain separate. Preserve T07/T08 and original checkpoints without replay; no extra independent AI/PR review is part of this design.
+
+
+Accepted scope update — 2026-10-24: NukeGeng approved exact ADR-0016 and Kubernetes workloads v1 for T09.1a–d, including the post-C managed-header exception, offline private-PKI residual, exact Namespace identity GET and additive config/scope/freshness caps. This supersedes pending-design approval wording in this section only. Runtime implementation and K09-01–12 verification remain pending. T09.1e, existing secrets, real clusters, Helm and OBS runtime remain excluded; historical checkpoints are preserved without replay.
+
+Developer next action: start T09.1a using the accepted contract’s planned files and compatibility vectors, then T09.1b–d. No new design approval or Sol review is needed for those covered slices. The bounded Architect task ends here. Product GOAL checkpoints remain unchanged; this design receipt is not native GOAL completion.
+
+## T09.2 Nomad continuation handoff — 2026-10-24
+
+The owner authorized and received a personal lab; [local runbook](../operations/local-nomad-lab.md) identifies its exact scope/private artifacts. [ADR-0017](../decisions/0017-nomad-workload-observation.md) plus [Nomad workloads v1](../contracts/nomad-workloads-v1.md) were accepted by NukeGeng on 2026-10-24 for exact T09.2a–d adoption, preserving accepted T09.1 rather than relabeling Kubernetes code. Luna starts T09.2a now under the recorded acceptance, then b–d, under the planned N09 checks and existing single-agent AMR. No extra Sol review is requested. T09.2e is a separate exact new lab/Keychain integration scope.
+
+The current bounded Architect/setup turn has no Product source changes, routine Product tests or PR actions. A read-only goal-status check reports task paths not mapped to owner feature for the retained historical checkpoint; do not replay completed tasks or falsely mark it valid. Inspect retained artifacts and prepare a mapped approved provider scope through the existing reconciliation/continuation workflow. Preserve all old checkpoints; this design/setup receipt is separate from GOAL execution.
+
+## T09.2a retained implementation — 2026-10-24
+
+The user explicitly permitted gpt-6.1-sol/medium for T09.2a–d, and native turn metadata verified that profile for this increment. T09.2a now contains INV trust/parser and compatible IAM admission/result caps; existing Host rejects config-qualified plans until the T09.2c registry. Targeted evidence: 40 trust/58 admission cases, no skips. Use the final source-bound gate receipt under .amr-local/t09/implementation/ before claiming complete validation. Next source slice is T09.2b transport/projection; do not replay T09.2a or reapprove ADR-0017. Historical checkpoint mapping diagnostics are retained, with no native GOAL completion fabricated.
+
+## Active T09 Nomad source/conformance handoff — 2026-10-24
+
+The explicit Sol Medium implementation exception remains in force and was verified from native turn metadata. T09.2b–d now has bounded transport/projection, immutable registry and guarded endpoint, private stopped-installation activation, exact schema artifacts and negative/current-authority tests. T09.2e personal case also passed actual native Keychain/U/C/D/live Nomad; its store and synthetic owner rows were removed. Do not replay these operations or request design approval again. Use the final private source-bound gates/completion receipt before claiming validation; PR/CI/human merge remain distinct. The old mapping-diagnostic checkpoint is unchanged and must not be falsely marked native-completed. The next Product feature needs its own already-approved scope; deferred Kubernetes/Helm and OBS health are not automatically enabled.
