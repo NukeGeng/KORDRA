@@ -79,3 +79,47 @@ Keep root `Kordra.slnx`, root `tests/` and `docs/tooling/` as the working baseli
 The proposed [repository](../architecture/repository-structure.md), [solution](../architecture/solution-architecture.md), [module structure](../architecture/module-internal-structure.md), [dependency rules](../architecture/dependency-rules.md), [host composition](../architecture/host-composition.md) and [ADR-0009](../decisions/0009-source-architecture.md) guide review. [ADR-0008](../decisions/0008-domain-bootstrap-validation.md), [ADR-0010](../decisions/0010-local-readonly-bootstrap.md) and the exact IAM T01 slice of [ADR-0012](../decisions/0012-operator-pilot-runtime-foundation.md) authorize the current scoped source. Before adding more source: approved feature and technology/boundary decision → exact ownership mapping → implementation/tests → gates/review → evidence. A reserved README is not a source mapping.
 
 The FEAT-IAM-001 design and synthetic policy proof are recorded in the [owning feature](../features/identity-access/features/authorize-resource.md); the maintainer accepted ADR-0003 for the narrow permission/trusted-scope baseline. FEAT-IAM-002 T01 persistence is mapped and locally verified. Login/session behavior, runtime authorization and inventory ingress remain unimplemented/denied. The remaining reserved READMEs do not map or authorize those capabilities.
+
+
+## API host folder organization — 2026-10-23
+
+The maintainer explicitly requested grouping the flat API source after inspecting the current tree. This is a mechanical layout change within the existing project, not adoption of the proposed repository architecture or a new dependency/ownership boundary. Only Program.cs remains as C# source at the project root; the project and package lock stay there. Existing Kordra.Api namespaces and all moved source bytes are preserved so API consumers, DI and tests retain the same types. SDK recursive source discovery needs no project edit.
+
+```text
+src/Host/Kordra.Api/
+├── Program.cs
+├── Kordra.Api.csproj
+├── packages.lock.json
+├── Hosting/
+│   ├── LocalApiHost.cs
+│   └── LocalPilotHostOptions.cs
+├── Composition/
+│   ├── ResourceAuthorityServices.cs
+│   └── Catalog/
+│       ├── CatalogClockFloorWriter.cs
+│       └── CatalogMutationCoordinator.cs
+├── Endpoints/
+│   ├── LocalAuthenticationEndpoints.cs
+│   ├── EnvironmentV2Endpoints.cs
+│   └── ProtectedMetadataEndpoints.cs
+├── Authorization/
+│   ├── AuthorityWriterRegistry.cs
+│   ├── CallerBoundResponseCommitter.cs
+│   ├── CurrentResourcePolicyReader.cs
+│   └── CurrentTargetAuthorityReader.cs
+├── Audit/
+│   ├── IdentityAccessAuditTransactionAdapter.cs
+│   └── TenantAuditTransactionAdapter.cs
+└── OfflineAdministration/
+    ├── Identity/
+    │   └── LocalIdentityAdminCommand.cs
+    └── ResourcePolicy/
+        ├── LocalResourcePolicyCommand.cs
+        ├── ResourcePolicyManifest.cs
+        ├── OfflineResourcePolicyCoordinator.cs
+        └── OfflinePolicyAuditTransactionFactory.cs
+```
+
+New API code should join its existing responsibility group and retain exact feature ownership mapping. Composition/Catalog coordinates existing owner contracts; these directories do not grant it business ownership or permit cross-module table access. Endpoint routes belong under Endpoints, process/TLS configuration under Hosting, and API-stopped administration under OfflineAdministration. Bin/obj remain generated/ignored artifacts. This change does not add editor preferences, other hosts, frontend changes or a new module framework.
+
+Five owning feature specs carry the relocated mappings. The OpenAPI source-identity keys use the new paths with unchanged hashes and wire schema. Verification includes 19 byte-identity comparisons, locked restore/build, existing HTTP/owner/architecture tests and the canonical documentation/source gates. Exact final local evidence is retained privately under .amr-local/api-folder-organization; hosted CI/PR review and human merge remain separate. Existing T07/T08 work and checkpoints in the other worktree are untouched.

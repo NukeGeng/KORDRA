@@ -7,6 +7,10 @@ last_reviewed: 2026-10-22
 
 # Requirements ↔ Module ↔ Feature ↔ Code ↔ Tests
 
+## API host folder organization — 2026-10-23
+
+FEAT-IAM-001/002, FEAT-INV-001, FEAT-PRJ-001 and FEAT-TEN-001 retain ownership of the same 19 Host files after the maintainer-requested responsibility grouping. [Actual layout](repository-folder-framework.md#api-host-folder-organization--2026-10-23) and the owning specs map every destination. All moved files preserve exact bytes, namespaces and assembly; Program, project and package lock are unchanged. OpenAPI source-identity paths relocate without changing hashes or wire schema. Existing authentication/tenant/policy/HTTP/audit regression tests validate the same behavior; no mirror tests are added for the directory names. Final deterministic source-bound evidence is private under .amr-local/api-folder-organization. No new ADR, dependency, permission, runtime operation or debt change; independent T07/T08 work/checkpoints remain untouched.
+
 ## T06 scoped runtime implementation — 2026-10-23
 
 FEAT-IAM-001 / MOD-IAM, FEAT-PRJ-001 / MOD-PRJ and INV/TEN/AUD consumers implement accepted ADR-0014/resource-policy-v1 in the existing owner paths. Concrete source/test mappings are in all six owning specs. The local slice supplies current exact owner facts and grant/policy evaluation, immutable policy/head plus unique binding/history, persisted UTC floor, shared bounded U/D and actual HTTPS handoff, typed offline policy impact/apply/recovery, one metadata GET and environment-create v2. Canonical installation custody also excludes simultaneous runtime/offline/migration processes. No new dependency or runtime architecture is selected.

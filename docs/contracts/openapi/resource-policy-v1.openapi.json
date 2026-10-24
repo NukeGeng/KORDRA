@@ -479,10 +479,10 @@
   "x-contract-id": "CTR-RESOURCE-POLICY-V1",
   "x-source-base-commit": "784f1af68d311a101f805e23b04388d819e59e6e",
   "x-working-tree-source-sha256": {
-    "src/Host/Kordra.Api/ProtectedMetadataEndpoints.cs": "531bfee323e4fdf9a862263b60aacc87f6078c19fabca356da9dd90621f8fc8a",
-    "src/Host/Kordra.Api/EnvironmentV2Endpoints.cs": "9e36894b0f2c1d607414252430fb9e5c661460509f31c6ade7f2a4360d58f107",
-    "src/Host/Kordra.Api/LocalAuthenticationEndpoints.cs": "d373375273ca149c70be0070f90cebcf04f34b7dc613fed4d575d15b6205ed82",
-    "src/Host/Kordra.Api/CurrentResourcePolicyReader.cs": "93446235d3d8ce0bb7f298a09c223fdb1df74be97812e16b82c65b85bb88ebe2",
+    "src/Host/Kordra.Api/Endpoints/ProtectedMetadataEndpoints.cs": "531bfee323e4fdf9a862263b60aacc87f6078c19fabca356da9dd90621f8fc8a",
+    "src/Host/Kordra.Api/Endpoints/EnvironmentV2Endpoints.cs": "9e36894b0f2c1d607414252430fb9e5c661460509f31c6ade7f2a4360d58f107",
+    "src/Host/Kordra.Api/Endpoints/LocalAuthenticationEndpoints.cs": "d373375273ca149c70be0070f90cebcf04f34b7dc613fed4d575d15b6205ed82",
+    "src/Host/Kordra.Api/Authorization/CurrentResourcePolicyReader.cs": "93446235d3d8ce0bb7f298a09c223fdb1df74be97812e16b82c65b85bb88ebe2",
     "src/Modules/ProjectEnvironment/Contracts/EnvironmentCreationV2.cs": "ee07f8812de6d8b7bd9b53e3cd5c95e0ccbf1b1752a5cb67e5b576a4fd0925f4",
     "src/Modules/IdentityAccess/Contracts/ResourcePolicies.cs": "5c004ddfe2f78ad7911625e00fd0151bd0afb32dd5309cc084613014c7375602",
     "src/Modules/IdentityAccess/Contracts/AuthorityAdmission.cs": "ca662716df712f20f01dcec7a5ef3b6125567df191e0a2c1107eff570dbe7dee"
