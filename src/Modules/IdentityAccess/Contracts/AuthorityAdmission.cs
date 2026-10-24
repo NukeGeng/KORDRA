@@ -51,14 +51,16 @@ public interface IAuthorityCommitter
 
 
 /// <summary>Server-registered plan only. Never deserialize a plan from an HTTP request.</summary>
-public sealed record ProtectedReadPlan(string Kind, Guid InstallationId, string ConsumerId)
+public sealed record ProtectedReadPlan(string Kind, Guid InstallationId, string ConsumerId, string? ConsumerConfigurationDigest = null)
 {
     public static ProtectedReadPlan Metadata { get; } = new("metadata-v1", Guid.Empty, "");
     public static ProtectedReadPlan Credential(Guid installation) => new("credential-bound-v1", installation, "inventory.readonly.v1");
     public bool IsCredential => Kind == "credential-bound-v1";
-    public bool IsValid => IsCredential ? InstallationId != Guid.Empty && ConsumerId == "inventory.readonly.v1" : this == Metadata;
+    public bool IsValid => IsCredential ? InstallationId != Guid.Empty && ConsumerId == "inventory.readonly.v1" &&
+        (ConsumerConfigurationDigest is null || ConsumerConfigurationDigest.Length == 64 && ConsumerConfigurationDigest.All(char.IsAsciiHexDigitLower)) : this == Metadata;
 }
-public sealed record ReadDependencySelection(ProtectedReadPlan Plan, Guid TenantId, Guid TargetId);
+public sealed record ReadDependencySelection(ProtectedReadPlan Plan, Guid TenantId, Guid TargetId,
+    string? ScopeKind = null, Guid? ScopeId = null);
 public sealed record ReadDependencySnapshot(string Kind, ReadDependencySelection Selection, Guid BindingId,
     long Revision, string Digest, DateTimeOffset NotBeforeUtc, DateTimeOffset ExpiresAtUtc);
 public interface IProtectedReadDependencyReader

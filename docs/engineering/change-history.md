@@ -2,7 +2,7 @@
 id: ENG-HISTORY
 status: proposed
 owner: unassigned
-last_reviewed: 2026-10-22
+last_reviewed: 2026-10-24
 ---
 
 # Feature change log and release-note discipline
@@ -194,3 +194,29 @@ Implemented accepted ADR-0015 T08.1–T08.5 in existing SEC/ConnectionManagement
 ## PR15 known launch failure correction — 2026-10-24
 
 FEAT-SEC-001 fixes provider finding 4366071511: a completed failed/null helper launch stays unavailable and releases its slot; pending launches/unconfirmed exits still fence admission. Added lifecycle and actual-owner HTTPS regressions for slot reuse and unrelated protected reads/writers. No schema, dependency, permission or ADR change; see the [owner evidence](../features/connection-secrets/features/secret-binding.md#pr15-known-launch-failure-correction--2026-10-24).
+
+## 2026-10-24 — T09.1 workload-first provider design proposal
+
+Recorded the owner's Kubernetes-workloads-first choice and prepared proposed ADR-0016/Kubernetes workloads v1 with INV/IAM/SEC boundaries, exact TLS/identity/RBAC/read limits, managed-header residual, disclosure freshness and bounded implementation/acceptance slices. No Product code, dependency, accepted ADR or credential/cluster operation changed. Exact design approval is still required; Helm and OBS health remain later slices.
+
+## 2026-10-24 — T09.1 exact design accepted
+
+NukeGeng approved ADR-0016 and Kubernetes workloads v1 for T09.1a–d. Recorded exact pre-annotation hashes and the private owner decision receipt, annotated the narrow accepted T08 managed-header supplement and handed T09.1a to Luna. No substantive design change, Product implementation/test execution, PR action, checkpoint replay or live operation is part of recording this decision. T09.1e remains separately gated.
+
+## 2026-10-24 — T09 Nomad lab setup and provider proposal
+
+Created the owner-authorized isolated 1-vCPU/2-GiB/15-GiB personal VM, verified the pinned Ubuntu image/Nomad archive, enabled local TLS/ACL and issued new privately stored lab tokens. Confirmed direct read-only access/denials and a completed synthetic non-root exec job. Prepared proposed ADR-0017/Nomad workloads v1 to address provider differences before Product code. Accepted Kubernetes design, Product source, Clients/Website/services and historical checkpoints are preserved; no PR/AI review or company operation.
+
+## 2026-10-24 — Exact T09.2a–d Nomad design acceptance
+
+NukeGeng approved ADR-0017 and Nomad workloads v1 for T09.2a–d. Verified both files against the frozen proposal hashes before annotation, preserved original bytes/decision privately, marked the exact design accepted and annotated the narrow T08 Nomad managed-header supplement. Updated existing owner/index/roadmap/handoff records for Luna to start T09.2a without repeat approval or Sol review. No Product code/tests, lab/credential mutation, PR action, company operation or checkpoint replay was performed in recording this decision. T09.2e remains separately scoped.
+
+## 2026-10-24 — T09.2a trust and compatible admission implementation
+
+Implemented immutable Nomad installation trust/configuration with strict schema, custody, canonical digest, explicit loopback mode and malformed/foreign-input tests. Added config/scope-bound authority v3 with explicit legacy v1/v2 shapes, preserved SEC digest and an optional finite UTC result cap checked at disclosure. Unregistered configured plans remain denied by existing Host composition. Product source/test ownership mapping is updated; no new package, endpoint, network call, Keychain read or checkpoint replay. The owner explicitly authorized this Sol Medium implementation exception.
+
+T09.2a also refreshes only the two changed working-tree source fingerprints in the existing resource-policy OpenAPI artifact; schemas and HTTP fields remain unchanged. Strict trust URL tests reject empty userinfo and dot-segment normalization.
+
+## 2026-10-24 — Complete active T09 Nomad implementation and own-lab proof
+
+Implemented bounded Nomad read transport/sanitized projection, immutable trust registry and opt-in guarded HTTPS endpoint through existing SEC/IAM/AUD U/C/D. Added private installed configuration fields, exact DTO/HTTP/OpenAPI artifacts, TLS/protocol/projection/current-authority regressions and a source-bound runbook. Initial TLS policy also disables AIA/revocation downloads before the custom callback; no SDK/package/project or provider write path. The recorded personal case passed native Keychain → current U/C/D → live Nomad with only the newly created lab token/store, then verified store cleanup. Company systems, Clients/Website and permanent installation provisioning remain outside this implementation. Final deterministic gates and PR/CI evidence are separate; no local AI review or manual PR review trigger was run.

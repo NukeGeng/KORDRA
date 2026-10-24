@@ -17,4 +17,6 @@
     <ProjectReference Include="../../src/Host/Kordra.Api/Kordra.Api.csproj" />
     <ProjectReference Include="../../src/Host/Kordra.DbMigrator/Kordra.DbMigrator.csproj" />
   </ItemGroup>
+  <ItemGroup><Compile Include="../Shared/NomadTlsFixture.cs" Link="Fixtures/NomadTlsFixture.cs" /></ItemGroup>
+  <ItemGroup><Compile Include="../ConnectionManagement.Tests/FixtureKeychainNative.cs" Link="Fixtures/FixtureKeychainNative.cs" /></ItemGroup>
 </Project>

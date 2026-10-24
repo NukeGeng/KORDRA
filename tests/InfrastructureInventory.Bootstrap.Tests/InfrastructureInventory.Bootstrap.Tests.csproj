@@ -17,4 +17,5 @@
     <ProjectReference Include="../../src/Modules/InfrastructureInventory/Kordra.Modules.InfrastructureInventory.csproj" />
     <ProjectReference Include="../../src/Modules/InfrastructureInventory/Contracts/Kordra.Modules.InfrastructureInventory.Contracts.csproj" />
   </ItemGroup>
+  <ItemGroup><Compile Include="../Shared/NomadTlsFixture.cs" Link="Fixtures/NomadTlsFixture.cs" /></ItemGroup>
 </Project>

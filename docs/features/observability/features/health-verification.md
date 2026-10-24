@@ -2,7 +2,7 @@
 id: FEAT-OBS-001
 status: proposed
 owner: unassigned
-last_reviewed: 2026-10-20
+last_reviewed: 2026-10-24
 module_id: MOD-OBS
 feature_id: FEAT-OBS-001
 phase: MVP core / Phase 2 full
@@ -60,3 +60,10 @@ Status includes freshness/correlation; tenant-scoped dashboard shows only allowe
 - Test files: **unmapped** (`test_paths: []`).
 - Evidence: `PENDING` — link PR / commit / test report when implemented.
 - Open decisions: `NEEDS-DECISION` for any policy-specific variant not covered by accepted ADR.
+
+## T09.1 workload-first boundary — proposed 2026-10-24
+
+The owner's workload-first preference is captured in [ADR-0016](../../../decisions/0016-kubernetes-workload-observation.md) and its [contract](../../../contracts/kubernetes-workloads-v1.md). This first slice proposes INV-owned timestamped workload facts and a disclosure freshness bound; it does not implement OBS health policy, verification, telemetry projections or assign this module a runtime owner. OBS remains a prospective consumer; readiness/Running or a current snapshot is not business health. [NEEDS-DECISION]: provider design acceptance remains separate. Actual OBS source/test mappings stay empty.
+
+
+Accepted scope update — 2026-10-24: NukeGeng approved exact ADR-0016 and Kubernetes workloads v1 for T09.1a–d, including the post-C managed-header exception, offline private-PKI residual, exact Namespace identity GET and additive config/scope/freshness caps. This supersedes pending-design approval wording in this section only. Runtime implementation and K09-01–12 verification remain pending. T09.1e, existing secrets, real clusters, Helm and OBS runtime remain excluded; historical checkpoints are preserved without replay.

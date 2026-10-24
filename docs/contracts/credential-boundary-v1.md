@@ -157,3 +157,15 @@ The owner accepted this contract and ADR-0015 for the exact T08 scope. Pre-accep
 ### PR15 implementation clarification — 2026-10-24
 
 SEC08-05/08 known-versus-unknown semantics apply to launch as well as commit: a completed failed/cancelled factory launch or null result with no returned helper is unavailable, not unresolved ownership. Observe its terminal outcome without releasing ownership of a successfully returned process. Only a still-pending launch or genuinely unconfirmed helper exit retains the unresolved slot and fences admission. This corrects implementation classification without changing the accepted protocol, numeric bounds or public schema.
+
+## Accepted T09.1 transport supplement — 2026-10-24
+
+[ADR-0016](../decisions/0016-kubernetes-workload-observation.md) and [Kubernetes workloads v1](kubernetes-workloads-v1.md) introduce one narrow exception to the no-managed-secret-strings baseline above: only the registered T09.1 post-C HttpClient transport may create transient managed bearer-header representations from validated borrowed bytes, confined to per-call request/transport state. No default headers, retained token fields, caches, URLs, logs, diagnostic export, exceptions or DTOs may contain them. Dispose request/response/transport scope and clear owned mutable copies on all paths. Keychain child/broker IPC remains raw bytes with existing zeroing rules; other consumers retain the prohibition.
+
+Managed strings and framework/TLS copies cannot be deterministically zeroed. This residual is explicitly accepted for the local in-process pilot only, without a perfect-erasure claim. This approved supplement does not claim runtime implementation or authorize existing secrets, real clusters or T09.1e.
+
+## Accepted T09.2 Nomad transport supplement — 2026-10-24
+
+[ADR-0017](../decisions/0017-nomad-workload-observation.md) and [Nomad workloads v1](nomad-workloads-v1.md) add one narrow post-C managed-header exception for the registered Nomad transport: transient per-request X-Nomad-Token representations from validated borrowed bytes. No default headers, retained token field, cache, URL, diagnostic export, logs, exception payload or public DTO may contain the token. Dispose request/response/transport scope and clear owned mutable copies on every path. Keychain child/broker IPC remains raw bytes under the existing zeroing rules; other consumers retain their prohibition. Managed/framework/TLS copies cannot be deterministically erased; the accepted local pilot residual is not a perfect-erasure guarantee.
+
+This supplement records exact T09.2a–d design acceptance, not runtime implementation or permission to import/read an existing Keychain item, use company credentials or activate T09.2e. The Kubernetes-specific ADR-0016 supplement remains valid independently.

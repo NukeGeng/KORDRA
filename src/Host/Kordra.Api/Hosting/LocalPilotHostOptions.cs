@@ -1,3 +1,5 @@
+using Kordra.Modules.ConnectionManagement.Keychain;
+using Kordra.Modules.InfrastructureInventory.Infrastructure.Nomad;
 using System.Security.Cryptography.X509Certificates;
 using System.Text.Json;
 using System.Text.Json.Serialization;
@@ -48,6 +50,9 @@ public sealed class LocalPilotHostOptions : IDisposable
         _processLock = processLock;
     }
 
+    public NomadTrustConfiguration? NomadTrust { get; private init; }
+    public KeychainAccessConfiguration? CredentialAccess { get; private init; }
+
     public string RuntimeConnectionString { get; }
     public X509Certificate2 Certificate { get; }
     public LocalAuthenticationConfiguration Authentication { get; }
@@ -96,18 +101,35 @@ public sealed class LocalPilotHostOptions : IDisposable
                 throw;
             }
 
-            var denylistPath = RequirePrivateFile(config.PasswordDenylistFile);
-            var denylist = LocalPasswordPolicy.Load(
-                denylistPath,
-                config.PasswordDenylistVersion,
-                config.PasswordDenylistProvenance,
-                config.PasswordDenylistSha256);
-            return new LocalPilotHostOptions(
-                connectionString,
-                certificate,
-                new LocalAuthenticationConfiguration(installationId, Guid.NewGuid()),
-                denylist,
-                processLock);
+            try
+            {
+                var denylistPath = RequirePrivateFile(config.PasswordDenylistFile);
+                var denylist = LocalPasswordPolicy.Load(
+                    denylistPath,
+                    config.PasswordDenylistVersion,
+                    config.PasswordDenylistProvenance,
+                    config.PasswordDenylistSha256);
+                NomadTrustConfiguration? nomad = null;
+                KeychainAccessConfiguration? access = null;
+                if (config.NomadTrustConfigurationFile is not null)
+                {
+                    if (config.NomadTrustConfigurationSha256 is null || config.CredentialExecutableFile is null ||
+                        config.CredentialExecutableSha256 is null || config.CredentialKeychainLocators is null)
+                        throw new InvalidOperationException("Installed Nomad configuration is incomplete.");
+                    nomad = NomadTrustConfiguration.Load(RequirePrivateFile(config.NomadTrustConfigurationFile), config.NomadTrustConfigurationSha256, installationId);
+                    access = new(installationId, config.CredentialExecutableFile, config.CredentialExecutableSha256, config.CredentialKeychainLocators);
+                }
+                else if (config.NomadTrustConfigurationSha256 is not null || config.CredentialExecutableFile is not null ||
+                    config.CredentialExecutableSha256 is not null || config.CredentialKeychainLocators is not null)
+                    throw new InvalidOperationException("Credential access requires explicit Nomad trust configuration.");
+                return new LocalPilotHostOptions(
+                    connectionString,
+                    certificate,
+                    new LocalAuthenticationConfiguration(installationId, Guid.NewGuid()),
+                    denylist,
+                    processLock) { NomadTrust = nomad, CredentialAccess = access };
+            }
+            catch { certificate.Dispose(); throw; }
         }
         catch
         {
@@ -207,7 +229,12 @@ public sealed class LocalPilotHostOptions : IDisposable
         string PasswordDenylistFile,
         string PasswordDenylistVersion,
         string PasswordDenylistProvenance,
-        string PasswordDenylistSha256);
+        string PasswordDenylistSha256,
+        string? NomadTrustConfigurationFile = null,
+        string? NomadTrustConfigurationSha256 = null,
+        string? CredentialExecutableFile = null,
+        string? CredentialExecutableSha256 = null,
+        Dictionary<Guid, string>? CredentialKeychainLocators = null);
 }
 
 internal sealed class LocalInstallationProcessLock : IDisposable
