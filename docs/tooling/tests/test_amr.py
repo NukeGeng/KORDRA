@@ -935,6 +935,20 @@ class Gates(unittest.TestCase):
             result=amr.gates(root,'base')
         self.assertFalse(result['source_stable']);self.assertEqual(result['local_status'],'failed')
 
+    def test_serial_product_suite_has_bounded_room_without_extending_other_gates(self):
+        with tempfile.TemporaryDirectory() as d:
+            root=Path(d);(root/'Kordra.slnx').write_text('<Solution />')
+            def command(cmd,**kwargs):
+                if cmd[:2]==['dotnet','test']:
+                    # The expanded serial fixture suite legitimately exceeds the old 90s cap.
+                    if kwargs['timeout'] < 120:raise subprocess.TimeoutExpired(cmd,kwargs['timeout'])
+                    self.assertLessEqual(kwargs['timeout'],300)
+                elif cmd!=['dotnet','--info']:
+                    self.assertEqual(kwargs['timeout'],90)
+                return subprocess.CompletedProcess(cmd,0,'stable SDK' if cmd==['dotnet','--info'] else 'passed','')
+            with patch.object(amr.subprocess,'run',side_effect=command):result=amr.gates(root)
+            self.assertEqual(result['local_status'],'passed')
+
     def test_failed_product_restore_blocks_build_and_stale_binary_tests(self):
         with tempfile.TemporaryDirectory() as d:
             root=Path(d);(root/'Kordra.slnx').write_text('<Solution />')

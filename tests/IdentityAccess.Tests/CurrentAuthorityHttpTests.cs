@@ -22,7 +22,7 @@ using Xunit;
 namespace Kordra.Modules.IdentityAccess.Tests;
 
 [Collection("IdentityAccess PostgreSQL and local HTTPS")]
-public sealed class CurrentAuthorityHttpTests : IAsyncLifetime
+public sealed partial class CurrentAuthorityHttpTests : IAsyncLifetime
 {
     private LocalAuthenticationTestHost _host = null!;
     private HttpClient _client = null!;
@@ -39,7 +39,8 @@ public sealed class CurrentAuthorityHttpTests : IAsyncLifetime
 
     public async Task InitializeAsync()
     {
-        _host = await LocalAuthenticationTestHost.StartAsync(resourceAuthority: true);
+        _host = await LocalAuthenticationTestHost.StartAsync(resourceAuthority: true,
+            resourceServices: ConfigureT07Probe, afterAuthentication: CaptureMetadataWrites);
         var user = _host.NewUserName(); var enrolled = await _host.EnrollAsync(user);
         Assert.Equal(LocalAuthenticationStatus.Success, enrolled.Status); _principal = enrolled.PrincipalId!.Value;
         var roles = (RoleDefinitionStore)_host.Services.GetRequiredService<IRoleDefinitionReader>();
@@ -143,11 +144,11 @@ public sealed class CurrentAuthorityHttpTests : IAsyncLifetime
         using var legacy = await _client.GetAsync("/inventory"); Assert.Equal(HttpStatusCode.Forbidden, legacy.StatusCode);
     }
 
-    private async Task<Guid> PublishEnvironmentPolicy()
+    private async Task<Guid> PublishEnvironmentPolicy(bool allowRead = false)
     {
         var installation = _host.Services.GetRequiredService<LocalAuthenticationConfiguration>().InstallationId;
         var payload = new ResourcePolicyPayload(1, "target.read", "environment", "active",
-            DateTimeOffset.FromUnixTimeMilliseconds(_host.Clock.GetUtcNow().AddMinutes(-1).ToUnixTimeMilliseconds()), null, [new("Production", "deny")]);
+            DateTimeOffset.FromUnixTimeMilliseconds(_host.Clock.GetUtcNow().AddMinutes(-1).ToUnixTimeMilliseconds()), null, [new("Production", allowRead ? "allow" : "deny")]);
         var manifest = new ResourcePolicyManifest(1, Guid.NewGuid(), installation, new("kordra_test", "kordra_test"),
             _tenant, _project, "create", null, 0, payload, []);
         var coordinator = new OfflineResourcePolicyCoordinator(installation, Identity, _host.Services.GetRequiredService<TenantMembershipService>(),
@@ -239,6 +240,7 @@ public sealed class CurrentAuthorityHttpTests : IAsyncLifetime
     public async Task DisposeAsync()
     {
         _client?.Dispose();
+        if (_host is not null) await CleanupCredentials();
         if (_host is null) { _offline.Dispose(); return; }
         await using (var inv = await Inventory.CreateDbContextAsync()) await inv.Targets.Where(x => x.Id == _target).ExecuteDeleteAsync();
         await using (var prj = await Projects.CreateDbContextAsync())

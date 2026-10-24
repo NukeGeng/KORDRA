@@ -142,6 +142,7 @@
         "dependencies": {
           "Kordra.Modules.AuditCompliance": "[1.0.0, )",
           "Kordra.Modules.AuditCompliance.Contracts": "[1.0.0, )",
+          "Kordra.Modules.ConnectionManagement": "[1.0.0, )",
           "Kordra.Modules.IdentityAccess": "[1.0.0, )",
           "Kordra.Modules.InfrastructureInventory": "[1.0.0, )",
           "Kordra.Modules.InfrastructureInventory.Contracts": "[1.0.0, )",
@@ -160,6 +161,18 @@
         }
       },
       "kordra.modules.auditcompliance.contracts": {
+        "type": "Project"
+      },
+      "kordra.modules.connectionmanagement": {
+        "type": "Project",
+        "dependencies": {
+          "Kordra.BuildingBlocks.Security": "[1.0.0, )",
+          "Kordra.Modules.ConnectionManagement.Contracts": "[1.0.0, )",
+          "Kordra.Modules.IdentityAccess.Contracts": "[1.0.0, )",
+          "Npgsql.EntityFrameworkCore.PostgreSQL": "[10.0.3, )"
+        }
+      },
+      "kordra.modules.connectionmanagement.contracts": {
         "type": "Project"
       },
       "kordra.modules.identityaccess": {

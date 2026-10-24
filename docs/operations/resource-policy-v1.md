@@ -53,3 +53,8 @@ Record installation/target identity, scope, exact manifest/hash, privately appro
 ### Fresh bind validity and historical replay
 
 A new bind/rebind requires an active, already-effective current policy that has not expired; equality at expiry is denied. The coordinator checks again just before commit. A denied fresh command creates no binding history, receipt or audit record and preserves existing bindings. Publishing an inactive revision to disable a policy remains supported. An exact committed command may still reconcile its original receipt after expiry/deactivation; that replay neither rebinds nor grants read authority. Do not change the manifest/hash merely to bypass a denial.
+
+
+## T07 bounded-reader verification boundary
+
+The metadata route uses the INV local registry reader by default. There is no fake/provider selector in Product configuration. T07's controlled source and audit faults are registered only by the test host against synthetic owner state; they must never be copied into installation wiring. The seven-field metadata response excludes tenant/name/credential/provider payloads. Cancellation, provider deadline, stale authority, invalid source data and failed U/D audit discard the private result with no protected output. This is local enforcement proof, not authorization to connect a Kubernetes/Helm provider or apply runtime migrations.

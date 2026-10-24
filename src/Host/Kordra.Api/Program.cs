@@ -4,6 +4,11 @@ public static class Program
 {
     public static async Task<int> Main(string[] args)
     {
+        if (args is ["--internal-keychain-read"])
+        {
+            if (!Console.IsInputRedirected || !Console.IsOutputRedirected || !Console.IsErrorRedirected) return 2;
+            return await Kordra.Modules.ConnectionManagement.Keychain.KeychainChild.RunAsync(Console.OpenStandardInput(), Console.OpenStandardOutput());
+        }
         if (args.Length == 0)
         {
             await using var healthOnlyApp = LocalApiHost.Create();
@@ -35,7 +40,13 @@ public static class Program
                 return await LocalResourcePolicyCommand.RunAsync(args[1..], options);
             }
 
-            Console.Error.WriteLine("Usage: Kordra.Api [--profile local-pilot | identity enroll-user|recover-user|disable-user | policy inspect <private-manifest> <private-admin-locator> | policy apply <private-manifest> <private-admin-locator> <approved-sha256>]");
+            if (args is ["credential", "inspect", _, _] || args is ["credential", "apply", _, _, _])
+            {
+                using var options = LocalPilotHostOptions.LoadInstalled();
+                return await LocalCredentialCommand.RunAsync(args[1..], options);
+            }
+
+            Console.Error.WriteLine("Usage: Kordra.Api [--profile local-pilot | identity enroll-user|recover-user|disable-user | policy inspect <private-manifest> <private-admin-locator> | policy apply <private-manifest> <private-admin-locator> <approved-sha256> | credential inspect <private-manifest> <private-admin-locator> | credential apply <private-manifest> <private-admin-locator> <approved-sha256>]");
             return 2;
         }
         catch

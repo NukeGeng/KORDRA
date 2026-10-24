@@ -12,6 +12,7 @@ last_reviewed: 2026-10-22
 - [Local authentication v1](local-authentication-v1.md) — accepted for Foundation T01–T07; FEAT-IAM-002 browser/session contract and numeric bounds.
 - [Authority/admission v1](authority-admission-v1.md) — accepted for Foundation T01–T07; owner facts, management DTOs, single-process ordering and AUD intent/idempotency.
 - [Resource Policy v1](resource-policy-v1.md) — accepted exact T06 supplement under ADR-0014 on 2026-10-22; scoped local implementation is mapped by IAM/PRJ owner specs, with [HTTP fixtures](fixtures/resource-policy-v1.http.json), [source-bound OpenAPI snapshot](openapi/resource-policy-v1.openapi.json) and [runbook](../operations/resource-policy-v1.md). Local tests, hosted review and real configuration/provisioning remain separate evidence.
+- [Credential boundary v1](credential-boundary-v1.md) — accepted exact T08 local Mac Keychain/SEC metadata and U/C/D supplement under ADR-0015 on 2026-10-23; isolated synthetic fixture separately authorized; local T08 implementation and source-bound verification are recorded in [FEAT-SEC-001](../features/connection-secrets/features/secret-binding.md#t08-local-implementation--2026-10-24).
 - [Client API handoff v1](client-api-handoff-v1.md) — proposed independently owned clients integration, schemas and UI states.
 - [Release/execution v1](release-execution-v1.md) — proposed immutable release/approval, operation transitions, durable delivery and verification/rollback.
 

@@ -101,3 +101,26 @@ T03 was merged by the human maintainer at main 25bd7e71fbeb5370d19baac1878ab1609
 ## T05 owner continuation — 2026-10-22
 
 PRJ catalog and INV metadata/association owner slices are implemented locally with separate persistence/Contracts and one Host-composed owner/AUD transaction. 28 targeted cases and actual XML/PE/negative architecture checks passed; final gate results are in the dated traceability/private T05 evidence. T04 inputs are snapshotted for later commit separation; no historical checkpoint is reset or task replayed. Native model/effort for this resumed turn is unverified. No AI review/PR side effect or HTTP/provider/runtime migration was initiated. T06 still owns trusted adapters/current policy/workspace composition, endpoint authorization and real U/D output proof; these must not be replaced by the fixture adapters.
+
+
+### T07 local implementation handoff — 2026-10-23
+
+The approved bounded read now uses an INV-owned observation port with the same existing metadata v1 route/allowlist. The actual-owner HTTP fixture supplies a controlled test-only reader, normal durable U/D and response-write instrumentation. See [T07 traceability](traceability.md#t07-bounded-protected-read--2026-10-23) and final `.amr-local/t07/` gates for exact evidence; do not reuse T06 counts or replay blocked historical checkpoints. Product defaults to the real local registry reader; there is no production fake switch or provider access. T08/T09 need their separately recorded design/operational gates; no entire Foundation completion is implied.
+
+
+### T08 exact design handoff — 2026-10-23
+
+The owner selected macOS Keychain for the local Mac pilot and requested design completion. [Proposed ADR-0015](../decisions/0015-credential-boundary-preparation.md) and [Credential boundary v1](../contracts/credential-boundary-v1.md) now provide the exact T08 decision package, including SEC08-01–12 and slices T08.1–T08.5. Status remains proposed until exact human acceptance. Do not ask again which provider was preferred; do not infer design or operational acceptance from that preference.
+
+After acceptance, implement SEC metadata/offline receipts and audit; wire neutral IAM SEC-dependency evidence and separate C before consumer use; implement the bounded native Keychain child in the same API executable; validate synthetic consumer/HTTPS and separately authorized isolated-Keychain fixture. Use the reserved ConnectionManagement module path. Follow the completed API responsibility-folder layout when adding Host files, integrating that separate branch first. Existing T07 observation/wire contract and historical checkpoints stay intact. T08 does not register a real network adapter or approve T09 TLS/provider identity/RBAC/dependencies/cluster access. No automatic Sol review, PR action or GOAL replay belongs to this handoff.
+
+
+### T08 accepted Developer handoff — 2026-10-23
+
+The maintainer approved the exact ADR-0015/Credential boundary v1 package and explicitly authorized the isolated synthetic-Keychain fixture described in contract section 10. Proceed with T08.1–T08.5 under that bounded design; do not repeat provider/design/fixture approval or request an additional Sol review. Keep metadata-only behavior and T07 receipts intact. Record actual fixture/executable identities before running and retain cleanup evidence. Accepted design does not claim implementation, native profile verification, migration, existing secret access, T09 provider adoption or human merge. The bounded design task ends at this handoff; Developer execution/checkpoints remain a separate scope.
+
+## T08 implementation continuation — 2026-10-24
+
+Accepted ADR-0015/credential-boundary-v1 T08.1–T08.5 is implemented locally on codex/foundation-t08-credentials in the existing foundation-t03 Product worktree. FEAT-SEC-001 and the dated traceability/runbook map actual code, consumers and synthetic tests. Keep the separate approval receipt, completed T07 and historical AMR evidence unchanged. Use the final source-bound .amr-local/t08/implementation/ gate receipt before publication; native model/effort is unverified. No local AI/PR review is part of this implementation.
+
+Do not infer permission for existing Keychain items, real installation DDL or a cluster. No network consumer or credential HTTP management route is registered. Future activation needs the stable installed apphost/hash and explicit ACL/private locator configuration; T09 still needs provider/identity/TLS/RBAC design. The API folder cleanup is integrated by moving current implementations, preserving T07 additions; the primary worktree's staged cleanup and Clients remain untouched. Unrelated dotnet-tools.json is excluded from implementation ownership.

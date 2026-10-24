@@ -1,6 +1,9 @@
+using Kordra.Modules.ConnectionManagement.Infrastructure;
 using Kordra.Modules.IdentityAccess.Authentication;
 using Kordra.Modules.IdentityAccess.Authorization;
 using Kordra.Modules.IdentityAccess.Contracts;
+using Kordra.Modules.InfrastructureInventory;
+using Kordra.Modules.InfrastructureInventory.Contracts;
 using Kordra.Modules.InfrastructureInventory.Infrastructure;
 using Kordra.Modules.ProjectEnvironment;
 using Kordra.Modules.ProjectEnvironment.Contracts;
@@ -22,6 +25,7 @@ public static class ResourceAuthorityServices
         services.AddDbContextFactory<ProjectDbContext>(b => b.UseNpgsql(runtimeConnectionString, p => p.MigrationsHistoryTable(ProjectDbContext.HistoryTable, "app").CommandTimeout(2)));
         services.AddDbContextFactory<InventoryDbContext>(b => b.UseNpgsql(runtimeConnectionString, p => p.MigrationsHistoryTable(InventoryDbContext.HistoryTable, "app").CommandTimeout(2)));
         services.AddDbContextFactory<TenantDbContext>(b => b.UseNpgsql(runtimeConnectionString, p => p.MigrationsHistoryTable(TenantDbContext.HistoryTable, "app").CommandTimeout(2)));
+        services.AddDbContextFactory<CredentialDbContext>(b => b.UseNpgsql(runtimeConnectionString, p => p.MigrationsHistoryTable(CredentialDbContext.HistoryTable, "app").CommandTimeout(2)));
         services.AddResourceAuthorityOwnerServices();
     }
 
@@ -44,6 +48,8 @@ public static class ResourceAuthorityServices
         services.AddSingleton<IExactEnvironmentPolicyReader>(s => s.GetRequiredService<CurrentResourcePolicyReader>());
         services.AddSingleton<IProjectOwnershipReader, CurrentProjectOwnershipReader>();
         services.AddSingleton<ITargetAuthorityReader, CurrentTargetAuthorityReader>();
+        services.AddSingleton<ITargetMetadataReader, CurrentTargetMetadataReader>();
+        services.AddSingleton<IProtectedReadDependencyReader, CurrentCredentialDependencyReader>();
         services.AddSingleton<ProtectedReadAdmission>(); services.AddSingleton<TargetMetadataRead>();
         services.AddSingleton<ICatalogAuthority, CurrentCatalogAuthority>();
         services.AddSingleton<ICatalogAuditTransactionFactory, CatalogAuditTransactionFactory>();

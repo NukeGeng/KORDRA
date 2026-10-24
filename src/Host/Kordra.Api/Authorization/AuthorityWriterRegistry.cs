@@ -26,6 +26,7 @@ public static class AuthorityWriterRegistry
         new("ten.mutate", typeof(TenantMembershipService), nameof(TenantMembershipService.ExecuteAsync), false),
         new("catalog.mutate", typeof(CatalogMutationCoordinator), nameof(CatalogMutationCoordinator.ExecuteAsync), false),
         new("catalog.environment-v2", typeof(CatalogMutationCoordinator), nameof(CatalogMutationCoordinator.ExecuteEnvironmentV2Async), false),
+        new("sec.binding", typeof(OfflineCredentialCoordinator), nameof(OfflineCredentialCoordinator.ExecuteAsync), true),
         new("policy.publish-bind", typeof(OfflineResourcePolicyCoordinator), nameof(OfflineResourcePolicyCoordinator.ExecuteAsync), true)
     });
 

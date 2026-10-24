@@ -1,10 +1,7 @@
 using System.Text.Json;
 using Kordra.Modules.IdentityAccess.Authorization;
 using Kordra.Modules.IdentityAccess.Contracts;
-using Kordra.Modules.InfrastructureInventory;
-using Kordra.Modules.InfrastructureInventory.Infrastructure;
-using Kordra.Modules.ProjectEnvironment.Contracts;
-using Microsoft.EntityFrameworkCore;
+using Kordra.Modules.InfrastructureInventory.Contracts;
 
 namespace Kordra.Api;
 
@@ -27,14 +24,17 @@ public static class ProtectedMetadataEndpoints
     }
 }
 
-public sealed class TargetMetadataRead(IDbContextFactory<InventoryDbContext> contexts, IProjectOwnershipReader projects) : IProtectedTargetRead
+public sealed class TargetMetadataRead(ITargetMetadataReader source) : IProtectedTargetRead
 {
     public Task<PrivateReadBuffer> Admit(TypedReadSelection selection, CancellationToken ct) => ReadAsync(selection, ct);
     private async Task<PrivateReadBuffer> ReadAsync(TypedReadSelection selection, CancellationToken ct)
     {
-        await using var db = await contexts.CreateDbContextAsync(ct);
-        var row = await new TargetRegistryStore(db, projects).ReadCurrentAsync(selection.TenantId, selection.TargetId, ct);
+        var row = await source.ReadAsync(new(selection.InvocationId, selection.TenantId, selection.TargetId,
+            selection.ScopeKind, selection.ScopeId), ct);
         if (row is null || row.TenantId != selection.TenantId || row.TargetId != selection.TargetId ||
+            row.ProjectId == Guid.Empty || row.Status != "active" || row.Revision <= 0 || row.AssociationRevision <= 0 ||
+            string.IsNullOrWhiteSpace(row.Kind) || row.Kind.Length > 64 ||
+            row.Kind.Any(c => !(char.IsAsciiLetterLower(c) || char.IsAsciiDigit(c) || c is '.' or '-')) ||
             (row.EnvironmentId is null ? selection.ScopeKind != "project" || selection.ScopeId != row.ProjectId :
                 selection.ScopeKind != "environment" || selection.ScopeId != row.EnvironmentId))
             throw new InvalidOperationException("Selected metadata is unavailable.");

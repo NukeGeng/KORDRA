@@ -45,6 +45,7 @@ public sealed partial class LocalAuthenticationService
     {
         if (c is null || c.IntentId == Guid.Empty || c.InvocationId == Guid.Empty || c.SubjectId == Guid.Empty || c.TenantId == Guid.Empty || c.TargetId == Guid.Empty ||
             c.ScopeId == Guid.Empty || c.Stage is not (AuthorityStage.Use or AuthorityStage.Disclosure) || c.PolicyRevision <= 0 || c.AuthorityRevision <= 0 ||
+            !Enum.IsDefined(c.Purpose) || c.Stage == AuthorityStage.Disclosure && c.Purpose != AuthorityCommitPurpose.ReadAdmission ||
             c.BindingDigest.Length != 64 || c.BindingDigest.Any(x => !char.IsAsciiHexDigitLower(x)) ||
             !FoundationPermissions.IsValid(new("target.read", c.ScopeKind))) return AuthorityCommitStatus.Rejected;
         var protocolEntered = false;
@@ -57,7 +58,7 @@ public sealed partial class LocalAuthenticationService
             var intent = new AuditIntent(1, c.IntentId, c.InvocationId,
                 c.Stage == AuthorityStage.Use ? AuditIntentStage.Use : AuditIntentStage.Disclosure,
                 c.SubjectId, c.TenantId, c.TargetId, "target.read", c.ScopeKind, c.ScopeId, c.PolicyRevision, c.AuthorityRevision,
-                "authority-" + c.BindingDigest, c.OccurredAtUtc, c.InvocationId, c.ResultDigest, c.ResultSize);
+                (c.Purpose == AuthorityCommitPurpose.CredentialConsumption ? "credential-use-" : "authority-") + c.BindingDigest, c.OccurredAtUtc, c.InvocationId, c.ResultDigest, c.ResultSize);
             resolved = await CommitWithAuditAsync(db, tx, intent, _ => Task.CompletedTask, budget.Token, () => protocolEntered = true);
         }
         catch when (resolved is not null) { /* Resolved commit remains resolved if later context disposal fails. */ }

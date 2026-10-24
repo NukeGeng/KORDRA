@@ -39,11 +39,29 @@ public interface IResourcePolicyReader
 }
 public enum AuthorityStage { Use, Disclosure }
 public enum AuthorityCommitStatus { Durable, Rejected, Unavailable, Unknown }
+public enum AuthorityCommitPurpose { ReadAdmission, CredentialConsumption }
 public sealed record AuthorityCommitment(Guid IntentId, Guid InvocationId, AuthorityStage Stage,
     Guid SubjectId, Guid TenantId, Guid TargetId, string ScopeKind, Guid ScopeId, long PolicyRevision,
     long AuthorityRevision, string BindingDigest, DateTimeOffset OccurredAtUtc,
-    string? ResultDigest = null, long? ResultSize = null);
+    string? ResultDigest = null, long? ResultSize = null, AuthorityCommitPurpose Purpose = AuthorityCommitPurpose.ReadAdmission);
 public interface IAuthorityCommitter
 {
     Task<AuthorityCommitStatus> CommitUnderAdmissionAsync(AuthorityCommitment commitment, CancellationToken ct = default);
+}
+
+
+/// <summary>Server-registered plan only. Never deserialize a plan from an HTTP request.</summary>
+public sealed record ProtectedReadPlan(string Kind, Guid InstallationId, string ConsumerId)
+{
+    public static ProtectedReadPlan Metadata { get; } = new("metadata-v1", Guid.Empty, "");
+    public static ProtectedReadPlan Credential(Guid installation) => new("credential-bound-v1", installation, "inventory.readonly.v1");
+    public bool IsCredential => Kind == "credential-bound-v1";
+    public bool IsValid => IsCredential ? InstallationId != Guid.Empty && ConsumerId == "inventory.readonly.v1" : this == Metadata;
+}
+public sealed record ReadDependencySelection(ProtectedReadPlan Plan, Guid TenantId, Guid TargetId);
+public sealed record ReadDependencySnapshot(string Kind, ReadDependencySelection Selection, Guid BindingId,
+    long Revision, string Digest, DateTimeOffset NotBeforeUtc, DateTimeOffset ExpiresAtUtc);
+public interface IProtectedReadDependencyReader
+{
+    Task<ReadDependencySnapshot?> ReadCurrentUnderAdmissionAsync(ReadDependencySelection selection, CancellationToken ct = default);
 }

@@ -1,0 +1,11 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup><TargetFramework>net10.0</TargetFramework><ImplicitUsings>enable</ImplicitUsings><Nullable>enable</Nullable><TreatWarningsAsErrors>true</TreatWarningsAsErrors><RestorePackagesWithLockFile>true</RestorePackagesWithLockFile></PropertyGroup>
+  <ItemGroup>
+    <Compile Remove="Contracts/**/*.cs" />
+    <ProjectReference Include="../../BuildingBlocks/Security/Kordra.BuildingBlocks.Security.csproj" />
+    <ProjectReference Include="Contracts/Kordra.Modules.ConnectionManagement.Contracts.csproj" />
+    <ProjectReference Include="../IdentityAccess/Contracts/Kordra.Modules.IdentityAccess.Contracts.csproj" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.11"><PrivateAssets>all</PrivateAssets><IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets></PackageReference>
+    <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="10.0.3" />
+  </ItemGroup>
+</Project>

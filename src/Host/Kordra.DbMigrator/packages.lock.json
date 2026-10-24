@@ -401,6 +401,18 @@
       "kordra.modules.auditcompliance.contracts": {
         "type": "Project"
       },
+      "kordra.modules.connectionmanagement": {
+        "type": "Project",
+        "dependencies": {
+          "Kordra.BuildingBlocks.Security": "[1.0.0, )",
+          "Kordra.Modules.ConnectionManagement.Contracts": "[1.0.0, )",
+          "Kordra.Modules.IdentityAccess.Contracts": "[1.0.0, )",
+          "Npgsql.EntityFrameworkCore.PostgreSQL": "[10.0.3, )"
+        }
+      },
+      "kordra.modules.connectionmanagement.contracts": {
+        "type": "Project"
+      },
       "kordra.modules.identityaccess": {
         "type": "Project",
         "dependencies": {

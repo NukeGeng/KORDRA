@@ -28,3 +28,5 @@ ADR tracks **why** a design was chosen; status initially `proposed`, so not a fi
 
 | [0013](0013-clients-git-submodule.md) | Accepted narrow independent Clients repository/submodule at the original root path; no UI stack or broader ADR-0009 acceptance |
 | [0014](0014-resource-policy-v1.md) | Accepted exact T06 resource-policy supplement on 2026-10-22: IAM immutable policy/head, exact PRJ binding, fixed target.read eligibility and U/D compatibility; implementation evidence pending |
+
+| [0015](0015-credential-boundary-preparation.md) | Accepted exact T08 credential boundary, offline SEC metadata and bounded native macOS Keychain child; synthetic fixture separately authorized, implementation pending |
