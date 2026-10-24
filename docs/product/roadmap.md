@@ -7,6 +7,14 @@ last_reviewed: 2026-10-20
 
 # Delivery roadmap & architecture maturity
 
+## T08 credential design ready for owner decision — 2026-10-23
+
+The owner selected macOS Keychain for the local pilot. [ADR-0015](../decisions/0015-credential-boundary-preparation.md) and [Credential boundary v1](../contracts/credential-boundary-v1.md) supply the proposed exact T08 architecture/acceptance package. Status is proposed, not implemented or accepted: offline binding lifecycle, current SEC evidence at U/C/D and bounded native child access must be approved and then proven. No real Keychain item, provider/cluster connection or T09 adoption is authorized. See [handoff](../engineering/luna-implementation-handoff.md#t08-exact-design-handoff--2026-10-23).
+
+## T07 bounded-read increment — 2026-10-23
+
+The local T07 slice adds an observation-only INV reader port and controlled-adapter/actual HTTPS proof over real test IAM/TEN/PRJ/INV/policy/AUD state. It preserves the existing metadata v1 API and keeps fake wiring in tests. See [T07 traceability](../engineering/traceability.md#t07-bounded-protected-read--2026-10-23) for tested scope and final gate evidence. This closes the bounded fake-adapter proof only; T08 credential custody and T09 real Kubernetes/Helm resources/provider/freshness remain separately gated. Whole-workspace management and full Foundation/Operator Pilot acceptance remain pending. Earlier progress statements below are historical.
+
 ## T06 local policy/admission increment — 2026-10-23
 
 The current local T06 branch implements accepted ADR-0014 resource policy plus existing admission v1: exact current owner/grant/policy evidence, unique explicit bindings/history, persisted clock floor, durable U/D with bounded actual HTTP handoff, offline policy inspect/apply/reconciliation and two scoped HTTPS routes (metadata GET and environment-create v2). See [traceability](../engineering/traceability.md#t06-scoped-runtime-implementation--2026-10-23) and [runbook](../operations/resource-policy-v1.md) for exact scope. Local deterministic evidence is separate from hosted CI/PR review and real installation configuration; this note does not assert current remote PR/merge state. The historical delivery statements below remain historical. Wider workspace provisioning, list/history/other catalog routes and T07–T09 provider/credential capability are not completed by this slice, and the full Foundation/native GOAL is not marked complete.
@@ -157,3 +165,12 @@ The stopped T03 checkpoint is reconciled as failed with its prior snapshot and f
 ## T05 local owner progress — 2026-10-22
 
 PRJ catalog and INV metadata/two-owner association slices are locally implemented under accepted ADR-0012, with 28 targeted PostgreSQL cases and four architecture tests passed. See [T05 traceability](../engineering/traceability.md#t05--prj-catalog-and-inv-target-association--2026-10-22) for exact full-gate/publication evidence and limits. T06 current authorization/policy/workspace composition and U/D HTTP enforcement remain the next dependency. No runtime migration, real provisioning, provider read or Operator Pilot/Beta readiness claim.
+
+
+## T08 design accepted; implementation pending — 2026-10-23
+
+NukeGeng accepted the exact ADR-0015/Credential boundary v1 package and separately permitted its new isolated synthetic-Keychain fixture. The accepted Developer handoff covers T08.1–T08.5. This supersedes pending-design decision wording above only for T08; SEC source/native fixture proof still does not exist. No existing credential or real provider/cluster operation is authorized, and T09 remains separately gated.
+
+### T08 local implementation scope — 2026-10-24
+
+The approved local credential boundary now has SEC metadata/offline lifecycle, current U/C/D admission and a bounded native Mac Keychain child, with synthetic owner/HTTPS/process/native tests mapped in FEAT-SEC-001. Exact final source-bound gate evidence is private under .amr-local/t08/implementation/. The native fixture is newly created, isolated and deleted; existing secrets and real targets are excluded. Product metadata routes remain credential-independent and no credential network consumer is registered. This delivers the narrow T08 implementation when its applicable local gates pass; it does not complete OP-P0, the broader credential MVP or T09. Installation apphost/ACL/locator provisioning and approved Kubernetes/Helm provider design remain separate work.

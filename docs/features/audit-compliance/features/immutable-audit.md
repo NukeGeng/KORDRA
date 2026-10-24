@@ -117,3 +117,18 @@ T05 Host CatalogMutationCoordinator enlists owner PRJ/INV contexts and AUD in on
 T06 preserves schemaVersion 1 historical intents and current append-only AUD grants. Offline policy composition uses an explicit IOfflineAuditLease and exact admin/test transaction role guard; the existing runtime transaction path still rejects admin. Custody is checked at staging/commit. Owner state, policy head, selected binding/history, receipt and IAM clock floor enlist with AUD in one commit. U/D use distinct result-bound receipts and nonsecret canonical binding digests, with actual HTTP ordering/partial failure proof. New fault tests distinguish setup-only rollback from lost ACK after real commit, fence unknown outcome and reconcile without repeating publication. No AUD query API, policy payload storage/disclosure, retention purge or real production operation is added.
 
 PR14 P2 co-owner acknowledgment (2026-10-23): the offline policy coordinator rechecks bind validity after actual AUD staging and before invoking commit. The expiry-during-stage regression asserts zero commit calls and rollback of staged AUD/PRJ/IAM state; exact committed receipt recovery still uses the original AUD hash. No AUD schema, canonicalization, protocol or unknown-commit semantics change.
+
+
+### T07 bounded-read consumer acknowledgment — 2026-10-23
+
+AUD retains the actual durable U/D append contract; the T07 test decorator records real commitments and injects unavailable/unknown only in the test host. No audit payload/schema or owner permission changes. Shared Host composition and the actual-owner HTTP fixture are mapped here; the new adapter/probe paths belong to [FEAT-INV-001](../../infrastructure-inventory/features/register-target.md). T07 keeps the existing seven-field metadata v1 wire shape.
+
+
+### Proposed T08 credential dependency — 2026-10-23
+
+The owner-requested [Credential boundary v1](../../../contracts/credential-boundary-v1.md) and [ADR-0015](../../../decisions/0015-credential-boundary-preparation.md) define a pending SEC dependency/C-consumption supplement and its actual consumers. Existing accepted behavior/source mappings remain unchanged until exact approval and implementation. T07 metadata-only U/D is not treated as credential-use proof; existing AUD v1 stages and metadata wire shape stay stable in the proposal. See the contract for compatibility, owner boundaries and planned acceptance; no provider call or test completion is claimed here.
+
+
+### T08 shared implementation consumer — 2026-10-24
+
+Accepted ADR-0015 adds the SEC owner runtime/Contracts/test graph and scoped Host/offline migration composition. The existing source/test mappings above cover the shared solution, authority/HTTP/audit/architecture consumers changed in the same increment. [FEAT-SEC-001](../../connection-secrets/features/secret-binding.md#t08-local-implementation--2026-10-24) owns exact new paths and local evidence. IAM neutral dependencies/current C intent do not add a circular SEC runtime edge; AUD keeps v1 stages/schema, metadata wire v1 and existing role permissions remain unchanged. Synthetic fixture/native proof does not authorize provider network access or change this module's business ownership.

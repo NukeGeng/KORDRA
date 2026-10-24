@@ -1,14 +1,10 @@
 ---
 id: LAYOUT-SRC-MODULES-CONNECTIONMANAGEMENT
 status: proposed
-owner: engineering-maintainers
-last_reviewed: 2026-10-18
+owner: NukeGeng
+last_reviewed: 2026-10-24
 ---
 
-# src/Modules/ConnectionManagement
+# ConnectionManagement — MOD-SEC local pilot implementation
 
-Reserved folder requested by the maintainer after ADR-0010 bootstrap validation. This README tracks the directory in Git; no project, package, implementation or deployment is provided here.
-
-Product ownership: [canonical module specification](../../../docs/features/connection-secrets/module.md).
-
-See [current folder framework](../../../docs/engineering/repository-folder-framework.md) for implemented paths and exceptions. The [source architecture ADR-0009](../../../docs/decisions/0009-source-architecture.md) remains proposed; this reservation does not accept its technology, trust boundaries or integrations. Add source only for an approved, mapped feature with applicable tests and review.
+This directory now contains the scoped T08 runtime and BCL Contracts under accepted [ADR-0015](../../../docs/decisions/0015-credential-boundary-preparation.md). It owns credential metadata/history/receipts and bounded read-only Keychain infrastructure. [FEAT-SEC-001](../../../docs/features/connection-secrets/features/secret-binding.md) maps actual source/tests and evidence. This does not accept the broader ADR-0009 source proposal or all proposed module capabilities. No credential HTTP endpoint or network provider consumer is enabled. Native fixture setup/mutating APIs live only in tests; installation activation and unsupported platforms are explicit in the [runbook](../../../docs/operations/credential-boundary-v1.md).

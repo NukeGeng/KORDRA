@@ -108,6 +108,11 @@ Regression fixtures use synthetic stored chains with earlier upstream expiry, in
 The P1 provenance fixture now always injects a sub-microsecond input and reloads committed expiry values from PostgreSQL before computing its independent expected deadline. The prior pre-save .NET value differed by 100 ns ticks on Linux. All three variants reproduce that mismatch with forced input before the reload correction. Exact equality and equality-at-expiry assertions remain intact; no tolerance, test skip, production clock/grant semantics, schema or contract change is introduced.
 
 
-### API host folder organization — 2026-10-23
+### T07 bounded-read consumer acknowledgment — 2026-10-23
 
-Owner-requested mechanical organization groups the mapped Host implementation by responsibility inside the existing Kordra.Api project. Source paths above now point to actual files under Hosting, Composition, Endpoints, Authorization, Audit or OfflineAdministration. All 19 moved C# files preserve their bytes and Kordra.Api type namespaces; no endpoint, policy, transaction, permission, package or module ownership changes. The existing owner integration/negative tests remain applicable. See [actual folder layout](../../../engineering/repository-folder-framework.md#api-host-folder-organization--2026-10-23) for the shared layout and evidence boundary. This does not accept the broader ADR-0009 proposal or complete T07/T08.
+Current TEN membership and exact-scope grants remain authoritative at U/D. T07 synthetic fixture revocation/suspension under the common writer gate proves delayed results cannot disclose. No new management route, permission or tenant contract. Shared Host composition and the actual-owner HTTP fixture are mapped here; the new adapter/probe paths belong to [FEAT-INV-001](../../infrastructure-inventory/features/register-target.md). T07 keeps the existing seven-field metadata v1 wire shape.
+
+
+### T08 shared implementation consumer — 2026-10-24
+
+Accepted ADR-0015 adds the SEC owner runtime/Contracts/test graph and scoped Host/offline migration composition. The existing source/test mappings above cover the shared solution, authority/HTTP/audit/architecture consumers changed in the same increment. [FEAT-SEC-001](../../connection-secrets/features/secret-binding.md#t08-local-implementation--2026-10-24) owns exact new paths and local evidence. IAM neutral dependencies/current C intent do not add a circular SEC runtime edge; AUD keeps v1 stages/schema, metadata wire v1 and existing role permissions remain unchanged. Synthetic fixture/native proof does not authorize provider network access or change this module's business ownership.

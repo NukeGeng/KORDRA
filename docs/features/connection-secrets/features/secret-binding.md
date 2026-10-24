@@ -1,13 +1,13 @@
 ---
 id: FEAT-SEC-001
 status: proposed
-owner: unassigned
-last_reviewed: 2026-10-20
+owner: NukeGeng
+last_reviewed: 2026-10-24
 module_id: MOD-SEC
 feature_id: FEAT-SEC-001
 phase: MVP
-source_paths: []
-test_paths: []
+source_paths: ["Kordra.slnx", "src/Modules/ConnectionManagement/", "src/Host/Kordra.Api/Kordra.Api.csproj", "src/Host/Kordra.Api/packages.lock.json", "src/Host/Kordra.Api/Program.cs", "src/Host/Kordra.Api/OfflineAdministration/Credentials/", "src/Host/Kordra.Api/Authorization/CurrentCredentialDependencyReader.cs", "src/Host/Kordra.Api/Authorization/CredentialTargetRead.cs", "src/Host/Kordra.Api/Endpoints/CredentialReadHttpHandler.cs", "src/Host/Kordra.Api/Authorization/AuthorityWriterRegistry.cs", "src/Host/Kordra.Api/Composition/ResourceAuthorityServices.cs", "src/Host/Kordra.DbMigrator/Program.cs", "src/Host/Kordra.DbMigrator/Kordra.DbMigrator.csproj", "src/Host/Kordra.DbMigrator/packages.lock.json", "src/Host/Kordra.DbMigrator/ConnectionManagementMigrationCommand.cs", "src/Modules/IdentityAccess/Contracts/AuthorityAdmission.cs", "src/Modules/IdentityAccess/Authorization/ProtectedReadAdmission.cs", "src/Modules/IdentityAccess/Authentication/LocalAuthorityFacts.cs"]
+test_paths: ["tests/ConnectionManagement.Tests/", "tests/IdentityAccess.Tests/T08CredentialHttpTests.cs", "tests/IdentityAccess.Tests/CurrentAuthorityHttpTests.cs", "tests/IdentityAccess.Tests/T07BoundedReadHttpTests.cs", "tests/IdentityAccess.Tests/LocalAuthenticationTestHost.cs", "tests/InfrastructureInventory.Bootstrap.Tests/ArchitectureTests.cs"]
 ---
 
 # FEAT-SEC-001 — Bind credentials safely to deployment targets
@@ -121,7 +121,40 @@ Future unit/contract/integration cases use synthetic references and secret marke
 - Product source/tests remain **not implemented** and planned cases above have not run. The coordinator must verify the current task-bound execution receipt, deterministic gates, independent native critical review and contributor finding triage for the exact content before task acceptance, then reconcile the existing roadmap/evidence. No historical `validation_failed` task is replayed or promoted; no subsequent task is authorized by this edit.
 
 ## Source & test traceability
-- Source files: **unmapped** (`source_paths: []`).
-- Test files: **unmapped** (`test_paths: []`).
-- Evidence: `PENDING` — link PR / commit / test report when implemented.
+- Source files: current scoped T08 paths are declared in the feature front matter; broader credential/provider capability remains proposed.
+- Test files: owner/native/process/HTTPS/architecture paths are declared in the feature front matter.
+- Evidence: local T08 evidence is recorded below; publication/hosted review and broader provider capability remain pending.
 - Open decisions: `NEEDS-DECISION` for any policy-specific variant not covered by accepted ADR.
+
+
+## T08 bounded design — 2026-10-23
+
+The owner selected macOS Keychain and requested resolution of the T08 design. [Proposed ADR-0015](../../../decisions/0015-credential-boundary-preparation.md) and [Credential boundary v1](../../../contracts/credential-boundary-v1.md) now define the concrete metadata/command/IPC schema, ownership, authority dependencies, U→lookup→C→consumer→D ordering, audit purpose, lifecycle, canonicalization, process limits and SEC08-01–12 acceptance matrix. They replace the earlier preparation-only brief but are still proposed, pending exact human approval; no code, provider read or runtime test is claimed.
+
+Actor: exclusive installation maintainer for offline create/rotate/revoke; current trusted tenant user plus server-selected inventory consumer for a credential-bound target.read. There is no new online credential.bind permission or endpoint. Existing metadata reads remain credential-independent. SEC owns profile/reference/head/history/receipts in the existing reserved ConnectionManagement root. Host adapts SEC evidence to IAM-owned neutral dependency contracts; no circular runtime or cross-owner table dependency is allowed.
+
+The selected local implementation uses an explicit file-based Mac Keychain with native read-only lookup in a bounded child mode of the existing Kordra.Api executable. A separate C commitment prevents secret use after authority changes during lookup; full U/C/D comparison with SEC revision prevents disclosure after rotation/revoke. The installed apphost's ACL/provisioning and actual isolated fixture proof remain operational requirements. No real Kubernetes/Helm/network consumer, credential import/cleanup automation, T09 identity/TLS/RBAC/provider decision, source mapping, dependency or accepted ADR is introduced by writing the design.
+
+Implementation follows contract slices T08.1–T08.5 after approval. A separate explicit permission is needed for create/read/delete of a newly isolated synthetic Keychain fixture; existing personal/company/installation items are excluded. Planned cases are not passed tests. This exact proposal does not complete T08 or native GOAL; prior T07 and historical checkpoint evidence remains untouched.
+
+
+### Exact T08 design accepted — 2026-10-23
+
+The maintainer accepted ADR-0015 and Credential boundary v1 and separately authorized their new isolated synthetic Keychain fixture. The decision supersedes pending-approval wording in the earlier design history above for this exact T08 scope only. Implement T08.1–T08.5 without re-asking the same provider/design/fixture decision; retain the original proposal hashes and record actual fixture identity before use. The feature remains proposed at module/runtime level: no source/test mappings or implementation evidence exist yet, and no real network consumer or existing credential access is authorized.
+
+
+## T08 local implementation — 2026-10-24
+
+Actor/permission: API-stopped installation maintainer for exact manifest/hash create/rotate/revoke; current tenant User with target.read and exact resource/registered consumer/SEC binding for credential U/C/D. Source and test paths now map actual files under accepted ADR-0015. This is local implementation evidence, not a complete broader credential MVP or a production-ready provider.
+
+T08.1 supplies BCL metadata/consumer-context contracts, canonical manifests, own EF context/composite constraints and additive migrations with runtime SELECT-only grants. Heads/history advance monotonically; references are immutable and unique per installation. T08.2 supplies offline CLI inspect/apply, SEC/IAM clock-floor/AUD enlistment and exact receipt reconciliation with stored audit time/result/history validation. No setup failure is mislabeled an unknown commit. Down migrations refuse to erase authority/receipt history.
+
+T08.3 supplies neutral IAM read-dependency evidence, explicit server plans, a separate C intent before consumer admission, earliest-expiry/current U/C/D comparison and invocation-local reservations. Consumer context preserves the original invocation/tenant/target/scope. Existing metadata-only behavior remains credential-independent and no credential-bound route/network consumer is registered by Product. T08.4 supplies the bounded broker, read-only native child mode in the existing apphost, exact private IPC, cleared owned buffers, two helper slots and bounded startup/kill/reap. Late/unreaped work closes admission instead of launching replacements. Keychain-mutating imports reside only in test assembly.
+
+T08.5 has owner/manifest/SQL/receipt tests, malformed IPC and child lifecycle fault tests, actual-owner HTTPS secret/redaction/revocation/expiry/audit/cancellation/capacity proofs, explicit restored/PE architecture checks and a native synthetic fixture. Actual native proof creates only a new UUID private store and synthetic service/account items with designated apphost ACL, validates raw bytes/missing/locked/service selection, then deletes the fixture. Permission/evidence stays private under .amr-local/t08; no existing item or cluster is accessed. Exact final gate source digest/counts are recorded separately after validation; planned SEC08 cases are not silently treated as executed.
+
+Installation configuration still requires a stable apphost/hash/Keychain ACL and private immutable locator mapping before any future registered consumer. Mac native proof is platform-specific; Linux validates unsupported behavior and cannot claim native Keychain execution. No runtime startup migration, online credential.bind permission, token import/automatic deletion, remote worker custody, Kubernetes/Helm reader, T09 adoption or new debt is introduced. See [runbook](../../../operations/credential-boundary-v1.md).
+
+### Local T08 validation result — 2026-10-24
+
+Canonical exact-base AMR gates passed on the stable implementation tree: 218 tooling tests and 524 Product tests, zero failures/skips; locked restore, Release build, docs/scope/submodule pin and source ownership checks passed. The Product count includes 32 SEC/IPC/process/native cases and 18 T08 HTTPS cases covering both project and environment scope. Strict doccheck checked 232 Markdown files, 214 IDs and 21 modules with zero errors/warnings. The Mac native fixture completed exact raw-byte/service/ACL/missing/locked checks and verified deletion. Counts establish local validation only; no hosted CI/PR review, existing-secret access, real installation migration or cluster result is claimed. Final receipts remain private under .amr-local/t08/implementation/. Accepted design, checkpoint history and T07 evidence are preserved; no debt or additional architecture approval was introduced.

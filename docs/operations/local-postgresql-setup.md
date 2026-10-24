@@ -44,7 +44,7 @@ Each of the three Kordra roles has a separate, randomly generated password in th
 | `Kordra/PostgreSQL/local/pg15` | `kordra_app` |
 | `Kordra/PostgreSQL/local/pg15` | `kordra_test` |
 
-For manual local logins, read the ignored, owner-only `docs/secret/accountpostgre.md`. The same values are mirrored in macOS Keychain for a future approved integration. After rotating, update the PostgreSQL role, the local file and Keychain together. Never copy passwords into tracked documentation, a connection URI, shell history, logs or a shared `.env` file. Product Keychain access has not been implemented.
+For manual local logins, read the ignored, owner-only `docs/secret/accountpostgre.md`. The same values are mirrored in macOS Keychain for a future approved integration. After rotating, update the PostgreSQL role, the local file and Keychain together. Never copy passwords into tracked documentation, a connection URI, shell history, logs or a shared `.env` file. T08 now implements a bounded native credential reader, verified only with separately authorized isolated synthetic fixtures; no existing PostgreSQL Keychain entry has been read or adopted by Product.
 
 ## Connection references
 
@@ -67,3 +67,7 @@ T04 tests applied IAM/TEN additive migrations only to synthetic kordra_test. Rea
 DbMigrator accepts project-environment with private KORDRA_PROJECTENVIRONMENT_MIGRATION_CONNECTION_STRING and infrastructure-inventory with private KORDRA_INVENTORY_MIGRATION_CONNECTION_STRING. Both factories require exact 127.0.0.1:5432/kordra as kordra_admin; runtime mutation enlistment instead validates kordra_app or the exact isolated kordra_test fixture. No runtime migration was executed. Existing stopped-API/installation-lock/backup/approval requirements apply before any real owner migration; PRJ precedes INV composition, and AUD/TEN/IAM prerequisites remain mandatory.
 
 Owner histories prj_ef_migrations_history/inv_ef_migrations_history revoke PUBLIC/kordra_app access; Down rejects automatic destructive rollback. T05 mutation tests applied only isolated test migrations and scoped synthetic-row fault-trigger DDL. Whole-workspace offline initialization, real policy adapters, application table grants and production migration/restore rehearsal are not established by local green tests. Reconcile exact receipts/audit/current owner state for unknown outcomes under fresh authority; neither a new key nor restart proves success.
+
+## T08 SEC migration boundary — 2026-10-24
+
+The offline connection-management command uses KORDRA_CREDENTIAL_MIGRATION_CONNECTION_STRING and the same canonical installation custody/API-stopped requirements. It validates exact loopback kordra/kordra_admin before connecting. SEC-specific migrations explicitly remove generic runtime DML on SEC metadata and deny runtime access to command receipts/migration history; runtime gets only the SELECT metadata required by the broker. Existing generic default grants above do not override these narrower owner grants. Local validation migrated only kordra_test and checked actual catalog privileges. No live kordra migration or adoption of the PostgreSQL Keychain entries is authorized by the synthetic T08 fixture. See [credential installation/verification](credential-boundary-v1.md).

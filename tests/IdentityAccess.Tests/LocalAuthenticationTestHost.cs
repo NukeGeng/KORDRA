@@ -44,6 +44,7 @@ public sealed class LocalAuthenticationTestHost : IAsyncDisposable
     private bool _schemaReady;
     private bool _disposed;
     private bool _resourceAuthority;
+    private Action<IServiceCollection>? _resourceServices;
 
     private LocalAuthenticationTestHost(
         string connectionString,
@@ -77,7 +78,8 @@ public sealed class LocalAuthenticationTestHost : IAsyncDisposable
         ManualTimeProvider? timeProvider = null,
         Func<HttpContext, RequestDelegate, Task>? afterAuthentication = null,
         DbCommandInterceptor? commandInterceptor = null,
-        bool resourceAuthority = false)
+        bool resourceAuthority = false,
+        Action<IServiceCollection>? resourceServices = null)
     {
         var connectionString = TestDatabaseConfiguration.TryGetConnectionString()
             ?? throw new InvalidOperationException(
@@ -104,6 +106,7 @@ public sealed class LocalAuthenticationTestHost : IAsyncDisposable
             afterAuthentication);
         host._commandInterceptor = commandInterceptor;
         host._resourceAuthority = resourceAuthority;
+        host._resourceServices = resourceServices;
         try
         {
             await host.EnsureSchemaAsync();
@@ -327,6 +330,8 @@ public sealed class LocalAuthenticationTestHost : IAsyncDisposable
             await projects.Database.MigrateAsync();
             await using var inventory = new Kordra.Modules.InfrastructureInventory.Infrastructure.InventoryDbContext(Kordra.Modules.InfrastructureInventory.Infrastructure.InventoryDbContextFactory.CreateTestOptions(_connectionString));
             await inventory.Database.MigrateAsync();
+            await using var credentials = new Kordra.Modules.ConnectionManagement.Infrastructure.CredentialDbContext(Kordra.Modules.ConnectionManagement.Infrastructure.CredentialDbContextFactory.CreateTestOptions(_connectionString));
+            await credentials.Database.MigrateAsync();
         }
     }
 
@@ -379,7 +384,10 @@ public sealed class LocalAuthenticationTestHost : IAsyncDisposable
                 new Microsoft.EntityFrameworkCore.Infrastructure.PooledDbContextFactory<Kordra.Modules.ProjectEnvironment.Infrastructure.ProjectDbContext>(Kordra.Modules.ProjectEnvironment.Infrastructure.ProjectDbContextFactory.CreateTestOptions(_connectionString)));
             builder.Services.AddSingleton<IDbContextFactory<Kordra.Modules.InfrastructureInventory.Infrastructure.InventoryDbContext>>(
                 new Microsoft.EntityFrameworkCore.Infrastructure.PooledDbContextFactory<Kordra.Modules.InfrastructureInventory.Infrastructure.InventoryDbContext>(Kordra.Modules.InfrastructureInventory.Infrastructure.InventoryDbContextFactory.CreateTestOptions(_connectionString)));
+            builder.Services.AddSingleton<IDbContextFactory<Kordra.Modules.ConnectionManagement.Infrastructure.CredentialDbContext>>(
+                new Microsoft.EntityFrameworkCore.Infrastructure.PooledDbContextFactory<Kordra.Modules.ConnectionManagement.Infrastructure.CredentialDbContext>(Kordra.Modules.ConnectionManagement.Infrastructure.CredentialDbContextFactory.CreateTestOptions(_connectionString)));
             builder.Services.AddResourceAuthorityOwnerServices();
+            _resourceServices?.Invoke(builder.Services);
         }
 
         _app = builder.Build();

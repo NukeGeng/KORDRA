@@ -7,6 +7,15 @@ namespace Kordra.InfrastructureInventory.Bootstrap.Tests;
 public sealed class InventoryReaderTests
 {
     [Fact]
+    public void Local_resource_composition_registers_only_the_real_metadata_source()
+    {
+        var services = new Microsoft.Extensions.DependencyInjection.ServiceCollection();
+        Kordra.Api.ResourceAuthorityServices.AddResourceAuthorityOwnerServices(services);
+        var descriptor = Assert.Single(services, x => x.ServiceType == typeof(ITargetMetadataReader));
+        Assert.Equal(typeof(CurrentTargetMetadataReader), descriptor.ImplementationType);
+    }
+
+    [Fact]
     public async Task MissingProvider_RepeatedAndParallelReads_RemainUnavailable()
     {
         IInventoryReader reader = new UnavailableInventoryReader();

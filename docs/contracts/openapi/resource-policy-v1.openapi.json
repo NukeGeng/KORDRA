@@ -479,12 +479,19 @@
   "x-contract-id": "CTR-RESOURCE-POLICY-V1",
   "x-source-base-commit": "784f1af68d311a101f805e23b04388d819e59e6e",
   "x-working-tree-source-sha256": {
-    "src/Host/Kordra.Api/Endpoints/ProtectedMetadataEndpoints.cs": "531bfee323e4fdf9a862263b60aacc87f6078c19fabca356da9dd90621f8fc8a",
+    "src/Host/Kordra.Api/Endpoints/ProtectedMetadataEndpoints.cs": "4aca2bab2c723f508f2399174ce6d9feaa029c68bc05c0d9bc36974fcf3d3f12",
     "src/Host/Kordra.Api/Endpoints/EnvironmentV2Endpoints.cs": "9e36894b0f2c1d607414252430fb9e5c661460509f31c6ade7f2a4360d58f107",
     "src/Host/Kordra.Api/Endpoints/LocalAuthenticationEndpoints.cs": "d373375273ca149c70be0070f90cebcf04f34b7dc613fed4d575d15b6205ed82",
     "src/Host/Kordra.Api/Authorization/CurrentResourcePolicyReader.cs": "93446235d3d8ce0bb7f298a09c223fdb1df74be97812e16b82c65b85bb88ebe2",
     "src/Modules/ProjectEnvironment/Contracts/EnvironmentCreationV2.cs": "ee07f8812de6d8b7bd9b53e3cd5c95e0ccbf1b1752a5cb67e5b576a4fd0925f4",
     "src/Modules/IdentityAccess/Contracts/ResourcePolicies.cs": "5c004ddfe2f78ad7911625e00fd0151bd0afb32dd5309cc084613014c7375602",
-    "src/Modules/IdentityAccess/Contracts/AuthorityAdmission.cs": "ca662716df712f20f01dcec7a5ef3b6125567df191e0a2c1107eff570dbe7dee"
+    "src/Modules/IdentityAccess/Contracts/AuthorityAdmission.cs": "ac84b6788c6bcafb1dd2e9ecac5384d448b389a36498752561e93de4c8a94ca4",
+    "src/Modules/InfrastructureInventory/Contracts/ITargetMetadataReader.cs": "7f3ed5df9ccbd0e3bd0538e5fc10e919460d0872669649746cac82305b5a4280",
+    "src/Modules/InfrastructureInventory/CurrentTargetMetadataReader.cs": "97b933e9282ec656a0834af4b760e6327b468c4cb8153a4c47f749886c3bea81",
+    "src/Host/Kordra.Api/Composition/ResourceAuthorityServices.cs": "193e15526915d0056f490a703faac38c1c10ca0019eaaf87678064253c7e2e81",
+    "src/Host/Kordra.Api/Authorization/CurrentCredentialDependencyReader.cs": "e15d53c8fadce88e3ad37343cb473deb3b3f50d1ce0bef2d77a7cdac3250d24d",
+    "src/Host/Kordra.Api/Authorization/CredentialTargetRead.cs": "1f9b76e78eac61a85746d73bde562081b251635a0ab6aa88bca27ffb878bbb8c",
+    "src/Host/Kordra.Api/Endpoints/CredentialReadHttpHandler.cs": "63fc3fd55fa3329a3d1466ca80f277fc1be62380cc5e356853894e374c76a51c",
+    "src/Modules/IdentityAccess/Authentication/LocalAuthorityFacts.cs": "17bd5a8b4cbc15aa6338ac21de588dcd0250d246cfbfcb46d6c4356d331bc40f"
   }
 }

@@ -494,6 +494,16 @@ P1 finding 4355763873 is corrected in TEN's existing owner resolver, which suppl
 P2 finding 4355763870 is corrected in the existing offline coordinator. Fresh bind requires the exact current policy to be active, effective at current trusted time, and not expired (expiry equality denies), both before staging bindings and after real AUD staging before commit. Exact installation/hash/receipt reconciliation still precedes mutable validity and returns only the committed historical result. Inactive publication remains supported to disable a policy. No new permission, owner, schema or ADR is introduced; independent provider follow-up remains pending.
 
 
-### API host folder organization — 2026-10-23
+### T07 bounded-read consumer acknowledgment — 2026-10-23
 
-Owner-requested mechanical organization groups the mapped Host implementation by responsibility inside the existing Kordra.Api project. Source paths above now point to actual files under Hosting, Composition, Endpoints, Authorization, Audit or OfflineAdministration. All 19 moved C# files preserve their bytes and Kordra.Api type namespaces; no endpoint, policy, transaction, permission, package or module ownership changes. The existing owner integration/negative tests remain applicable. See [actual folder layout](../../../engineering/repository-folder-framework.md#api-host-folder-organization--2026-10-23) for the shared layout and evidence boundary. This does not accept the broader ADR-0009 proposal or complete T07/T08.
+The existing protected read admission remains the only authority. The Host now consumes an observation-only INV reader port with an immutable U selection and validates returned target/tenant/scope/status/revisions and the bounded allowlist before D. No new permission or policy decision. Shared Host composition and the actual-owner HTTP fixture are mapped here; the new adapter/probe paths belong to [FEAT-INV-001](../../infrastructure-inventory/features/register-target.md). T07 keeps the existing seven-field metadata v1 wire shape.
+
+
+### Proposed T08 credential dependency — 2026-10-23
+
+The owner-requested [Credential boundary v1](../../../contracts/credential-boundary-v1.md) and [ADR-0015](../../../decisions/0015-credential-boundary-preparation.md) define a pending SEC dependency/C-consumption supplement and its actual consumers. Existing accepted behavior/source mappings remain unchanged until exact approval and implementation. T07 metadata-only U/D is not treated as credential-use proof; existing AUD v1 stages and metadata wire shape stay stable in the proposal. See the contract for compatibility, owner boundaries and planned acceptance; no provider call or test completion is claimed here.
+
+
+### T08 shared implementation consumer — 2026-10-24
+
+Accepted ADR-0015 adds the SEC owner runtime/Contracts/test graph and scoped Host/offline migration composition. The existing source/test mappings above cover the shared solution, authority/HTTP/audit/architecture consumers changed in the same increment. [FEAT-SEC-001](../../connection-secrets/features/secret-binding.md#t08-local-implementation--2026-10-24) owns exact new paths and local evidence. IAM neutral dependencies/current C intent do not add a circular SEC runtime edge; AUD keeps v1 stages/schema, metadata wire v1 and existing role permissions remain unchanged. Synthetic fixture/native proof does not authorize provider network access or change this module's business ownership.

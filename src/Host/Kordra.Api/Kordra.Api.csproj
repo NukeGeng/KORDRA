@@ -15,4 +15,5 @@
     <ProjectReference Include="../../Modules/InfrastructureInventory/Contracts/Kordra.Modules.InfrastructureInventory.Contracts.csproj" />
   <ProjectReference Include="../../Modules/ProjectEnvironment/Kordra.Modules.ProjectEnvironment.csproj" />
 </ItemGroup>
+  <ItemGroup><ProjectReference Include="../../Modules/ConnectionManagement/Kordra.Modules.ConnectionManagement.csproj" /></ItemGroup>
 </Project>

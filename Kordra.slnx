@@ -26,6 +26,12 @@
   <Folder Name="/src/Modules/" />
   <Folder Name="/src/Modules/AuditCompliance/" />
   <Folder Name="/src/Modules/AuditCompliance/Contracts/" />
+  <Folder Name="/src/Modules/ConnectionManagement/">
+    <Project Path="src/Modules/ConnectionManagement/Kordra.Modules.ConnectionManagement.csproj" />
+  </Folder>
+  <Folder Name="/src/Modules/ConnectionManagement/Contracts/">
+    <Project Path="src/Modules/ConnectionManagement/Contracts/Kordra.Modules.ConnectionManagement.Contracts.csproj" />
+  </Folder>
   <Folder Name="/src/Modules/IdentityAccess/">
     <Project Path="src/Modules/IdentityAccess/Kordra.Modules.IdentityAccess.csproj" />
   </Folder>
@@ -46,6 +52,7 @@
     <Project Path="src/Modules/TenantManagement/Contracts/Kordra.Modules.TenantManagement.Contracts.csproj" />
   </Folder>
   <Folder Name="/tests/">
+    <Project Path="tests/ConnectionManagement.Tests/ConnectionManagement.Tests.csproj" />
     <Project Path="tests/IdentityAccess.Tests/IdentityAccess.Tests.csproj" />
     <Project Path="tests/ProjectEnvironment.Tests/ProjectEnvironment.Tests.csproj" />
     <Project Path="tests/TenantManagement.Tests/TenantManagement.Tests.csproj" />

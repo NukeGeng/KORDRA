@@ -86,3 +86,8 @@ The shared solution adds IAM Contracts, TEN Contracts/runtime and TEN tests unde
 ## T05 shared-owner integration — 2026-10-22
 
 T05 adds the accepted PRJ catalog Contracts/runtime and scoped integration tests to the co-owned root solution. Artifact source/contract/dependencies are unchanged; its 48 tests and assembly isolation remain required.
+
+
+### T08 shared implementation consumer — 2026-10-24
+
+Accepted ADR-0015 adds the SEC owner runtime/Contracts/test graph and scoped Host/offline migration composition. The existing source/test mappings above cover the shared solution, authority/HTTP/audit/architecture consumers changed in the same increment. [FEAT-SEC-001](../../connection-secrets/features/secret-binding.md#t08-local-implementation--2026-10-24) owns exact new paths and local evidence. IAM neutral dependencies/current C intent do not add a circular SEC runtime edge; AUD keeps v1 stages/schema, metadata wire v1 and existing role permissions remain unchanged. Synthetic fixture/native proof does not authorize provider network access or change this module's business ownership.

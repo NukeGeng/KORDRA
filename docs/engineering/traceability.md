@@ -7,9 +7,17 @@ last_reviewed: 2026-10-22
 
 # Requirements ↔ Module ↔ Feature ↔ Code ↔ Tests
 
-## API host folder organization — 2026-10-23
+## T08 Keychain design proposal — 2026-10-23
 
-FEAT-IAM-001/002, FEAT-INV-001, FEAT-PRJ-001 and FEAT-TEN-001 retain ownership of the same 19 Host files after the maintainer-requested responsibility grouping. [Actual layout](repository-folder-framework.md#api-host-folder-organization--2026-10-23) and the owning specs map every destination. All moved files preserve exact bytes, namespaces and assembly; Program, project and package lock are unchanged. OpenAPI source-identity paths relocate without changing hashes or wire schema. Existing authentication/tenant/policy/HTTP/audit regression tests validate the same behavior; no mirror tests are added for the directory names. Final deterministic source-bound evidence is private under .amr-local/api-folder-organization. No new ADR, dependency, permission, runtime operation or debt change; independent T07/T08 work/checkpoints remain untouched.
+FEAT-SEC-001 / MOD-SEC with IAM/INV/PRJ/AUD consumers links the complete proposed ADR-0015 and Credential boundary v1 decision package. The owner selected macOS Keychain; the proposal specifies offline SEC metadata/history/receipts, exact manifest and child IPC, neutral current dependencies and U/C/D, bounded native child cleanup, compatibility, source adoption slices and SEC08-01–12 acceptance. Neither source nor runtime/provider test evidence exists for T08. Exact human design approval and isolated synthetic Keychain operational authorization remain separate, with no existing item or real network access implied. Historical/T07 evidence and accepted ADRs are preserved. The private design manifest binds exact proposal/context hashes; doc validation is not implementation or native-profile verification.
+
+## T07 bounded protected read — 2026-10-23
+
+FEAT-INV-001 / MOD-INV implements the approved T07 proof using the existing metadata GET. Source: `InfrastructureInventory/Contracts/ITargetMetadataReader.cs`, `CurrentTargetMetadataReader.cs` and mapped Host composition. The immutable server selection carries invocation/tenant/target/exact scope without granting authority. The default Product registration uses the real local registry reader. Wire v1 remains the same seven fields; no dependency, migration or ADR change.
+
+`T07BoundedReadHttpTests.cs` extends the existing actual-owner fixture with 23 cases: delayed golden read and durable U/D digest, project/environment scopes, grant/binding/target/tenant invalidation, audit unavailable/unknown at both boundaries, eight invalid/failing source results, caller cancellation, provider deadline and untrusted requests. All 37 CurrentAuthorityHttpTests cases passed together against synthetic PostgreSQL owner state and actual HTTPS. A separate bootstrap assertion checks the production reader registration. Existing fairness/capacity/partial-write/clock tests remain required in the full gate. The OpenAPI source hash map includes the new port/reader/composition with no wire change.
+
+Final gate evidence is retained privately in `.amr-local/t07/`, bound to its final source digest. Historical blocked/native checkpoints remain unchanged and are not replayed or relabeled completed. Native model/effort remains unverified. No hosted CI/PR review, live runtime provisioning, credential/provider access, full Foundation or OP-P0 readiness is claimed by this local slice.
 
 ## T06 scoped runtime implementation — 2026-10-23
 
@@ -242,3 +250,20 @@ Finding 4355763870 maps to OfflineResourcePolicyCoordinator and ResourcePolicyIn
 ## PR14 artifact-domain timestamp fixture — 2026-10-23
 
 Run 39915294133 failed two TEN provenance assertions on head 4df02bd because expected pre-save .NET timestamps retained fractional microsecond ticks discarded by PostgreSQL. TenantMembershipTests now forces that representation on every OS and derives expected timestamps from persisted rows. Before repair all three variants reproduced the CI mismatch locally; post-repair verification preserves strict deadline equality and boundary denial without altering production code. Hosted follow-up must establish Linux success on the new head.
+
+
+## T08 exact design acceptance — 2026-10-23
+
+FEAT-SEC-001 records the maintainer's exact ADR-0015/contract approval and separate isolated synthetic-Keychain fixture permission. The unchanged pre-acceptance proposal/context hashes and source-bound successful design gate receipt are retained under .amr-local/t08/design/; original snapshots and human decision are under .amr-local/approvals/adr-0015-t08/. Design validation passed 217 tooling and the existing 473 Product/T07 regressions before status annotation; no T08 runtime or native-Keychain test is claimed. Strict doc validation checks the acceptance annotations separately. Developer implementation is now eligible within T08.1–T08.5; all existing checkpoints and T07 evidence remain preserved.
+
+## T08 local credential implementation — 2026-10-24
+
+FEAT-SEC-001 / MOD-SEC maps actual ConnectionManagement Contracts/runtime, additive migrations, offline manifest/coordinator/DbMigrator and new SEC tests. IAM owns neutral current dependency evidence and U/C/D; Host composes SEC and authority ports without cross-owner runtime dependencies. The installation maintainer applies metadata only while API is stopped. Runtime target.read requires current trusted tenant/resource/policy/grant/binding and a registered consumer; Product registers no credential network consumer or online binding route.
+
+Local proof covers exact manifest/history/replay/expiry/SQL privileges, receipt/AUD reconciliation, raw-byte framed IPC, bounded startup/child cleanup, synthetic current-owner HTTPS cancellation/revoke/rotation/audit/capacity interleavings and actual restored/PE project boundaries. Mac conformance uses only a newly identified UUID fixture, designated apphost ACL and synthetic items, then verifies deletion; existing secrets and clusters remain excluded. Exact final commands/counts/source digest are recorded under .amr-local/t08/implementation/; local gates do not claim hosted CI/review or native GOAL dispatch. Non-Mac CI cannot establish native Keychain execution.
+
+The previously verified API folder organization is integrated by moving current files into Hosting/Composition/Endpoints/Authorization/Audit/OfflineAdministration and refreshing mapped source identities; public schemas are unchanged. The deterministic Product-suite timeout is bounded at 300 seconds to accommodate the larger serial suite, with a regression; other checks retain 90 seconds and missing/failed tests still fail. No AMR model/review policy changes. Historical checkpoints and completed T07 evidence are preserved without replay. Stable installed executable/hash, private locator mapping/ACL and T09 identity/TLS/RBAC/provider design remain future activation requirements. See [credential runbook](../operations/credential-boundary-v1.md).
+
+### Local T08 validation result — 2026-10-24
+
+Canonical exact-base AMR gates passed on the stable implementation tree: 218 tooling tests and 524 Product tests, zero failures/skips; locked restore, Release build, docs/scope/submodule pin and source ownership checks passed. The Product count includes 32 SEC/IPC/process/native cases and 18 T08 HTTPS cases covering both project and environment scope. Strict doccheck checked 232 Markdown files, 214 IDs and 21 modules with zero errors/warnings. The Mac native fixture completed exact raw-byte/service/ACL/missing/locked checks and verified deletion. Counts establish local validation only; no hosted CI/PR review, existing-secret access, real installation migration or cluster result is claimed. Final receipts remain private under .amr-local/t08/implementation/. Accepted design, checkpoint history and T07 evidence are preserved; no debt or additional architecture approval was introduced.
