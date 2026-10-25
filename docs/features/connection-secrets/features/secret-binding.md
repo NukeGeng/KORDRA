@@ -179,3 +179,7 @@ Accepted scope update — 2026-10-24: NukeGeng approved exact ADR-0016 and Kuber
 ## T09 registered Nomad consumer and own-lab verification — 2026-10-24
 
 Host composes the existing SEC broker/native child with the accepted post-C Nomad consumer; raw bytes remain scoped to the borrowed callback, while transient X-Nomad-Token strings are request-local. Startup validates helper hash/locator metadata but imports no item and performs no provider read. T09-NOMAD-LOCAL-002 explicitly copied only the new personal lab read-only token to a new UUID store with the designated apphost ACL, verified real broker/U/C/D/Nomad output, then deleted the store and synthetic binding rows. No existing Keychain items, company credentials or permanent binding were activated. See the [Nomad runbook](../../../operations/nomad-workloads-v1.md); general secure-erasure/production claims remain excluded.
+
+## T09.1 Kubernetes composition compatibility — 2026-10-24
+
+Accepted ADR-0016 now has an independent configured INV consumer/registry/route. The shared Host dependency reader validates either registered provider’s exact installation/tenant/target/scope/digest while retaining the original SEC snapshot digest and existing U/C/D. Installed configuration may enable Kubernetes, Nomad or both; metadata/default behavior, owner permissions, helper fencing, accepted ADRs and historical checkpoints are preserved. Synthetic current-owner conformance and final source-bound gates are recorded separately; no live Kubernetes/company permission or merge authority is inferred.

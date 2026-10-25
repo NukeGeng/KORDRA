@@ -35,7 +35,7 @@ public sealed partial class CurrentAuthorityHttpTests
     {
         public Task<ReadDependencySnapshot?> ReadCurrentUnderAdmissionAsync(ReadDependencySelection selection, CancellationToken ct = default) =>
             new CurrentCredentialDependencyReader(services.GetRequiredService<IDbContextFactory<CredentialDbContext>>(),
-                services.GetRequiredService<LocalAuthenticationConfiguration>(), services.GetRequiredService<IAuthorityClock>(), fixture._nomadRegistry)
+                services.GetRequiredService<LocalAuthenticationConfiguration>(), services.GetRequiredService<IAuthorityClock>(), fixture._nomadRegistry, fixture._kubernetesRegistry)
                 .ReadCurrentUnderAdmissionAsync(selection, ct);
     }
     [Theory]
