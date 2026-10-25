@@ -13,9 +13,14 @@ public sealed class PrivateReadBuffer
     private readonly byte[] _bytes;
     internal ReadOnlyMemory<byte> Bytes => _bytes;
     public int Records { get; }
-    public PrivateReadBuffer(ReadOnlySpan<byte> bytes, int records)
+    public DateTimeOffset? DisclosureValidUntilUtc { get; }
+    public PrivateReadBuffer(ReadOnlySpan<byte> bytes, int records) : this(bytes, records, null) { }
+    public PrivateReadBuffer(ReadOnlySpan<byte> bytes, int records, DateTimeOffset? disclosureValidUntilUtc)
     {
         if (bytes.Length > 256 * 1024 || records is < 0 or > 200) throw new InvalidDataException("Protected result exceeds the accepted bound.");
+        if (disclosureValidUntilUtc is { } cap && (cap.Offset != TimeSpan.Zero || cap == default || cap == DateTimeOffset.MaxValue))
+            throw new InvalidDataException("Protected result requires a finite UTC disclosure deadline.");
+        DisclosureValidUntilUtc = disclosureValidUntilUtc;
         _bytes = bytes.ToArray(); Records = records;
     }
 }
@@ -105,6 +110,7 @@ public sealed class ProtectedReadAdmission(FairAsyncReaderWriterAdmissionGate ga
                 var disclose = await Bounded(Resolve(subject, targetId, plan, stage.Token), stage.Token, response);
                 if (disclose is null || disclose.Digest != use!.Digest) return ProtectedReadStatus.Denied;
                 var validity = disclose.ValidUntil < use.ValidUntil ? disclose.ValidUntil : use.ValidUntil;
+                if (result.DisclosureValidUntilUtc is { } cap && cap < validity) validity = cap;
                 EnsureValid(validity, stage.Token);
                 if (!await Commit(disclose, invocationId, AuthorityStage.Disclosure, result, stage.Token, response)) return ProtectedReadStatus.Unavailable;
                 EnsureValid(validity, stage.Token);
@@ -159,7 +165,9 @@ public sealed class ProtectedReadAdmission(FairAsyncReaderWriterAdmissionGate ga
         if (plan.IsCredential)
         {
             if (dependencies is null) return null;
-            var requested = new ReadDependencySelection(plan, target.TenantId, target.TargetId);
+            var requested = new ReadDependencySelection(plan, target.TenantId, target.TargetId,
+                plan.ConsumerConfigurationDigest is null ? null : scope,
+                plan.ConsumerConfigurationDigest is null ? null : scopeId);
             dependency = await dependencies.ReadCurrentUnderAdmissionAsync(requested, ct);
             if (dependency is null || dependency.Kind != "credential-binding" || dependency.Selection != requested ||
                 dependency.BindingId == Guid.Empty || dependency.Revision <= 0 || dependency.Digest.Length != 64 ||
@@ -172,8 +180,19 @@ public sealed class ProtectedReadAdmission(FairAsyncReaderWriterAdmissionGate ga
         var bytes = JsonSerializer.SerializeToUtf8Bytes(new { subject.PrincipalId, subject.SessionId, subject.BootGeneration,
             subject.PrincipalRevision, subject.AbsoluteExpiresAtUtc, Grant = grant with { ExpiresAtUtc = null }, target,
             Policy = policy with { ExpiresAtUtc = null } });
-        if (dependency is not null) bytes = JsonSerializer.SerializeToUtf8Bytes(new { schemaVersion = 2,
-            authorityDigest = Convert.ToHexStringLower(SHA256.HashData(bytes)), plan, dependency });
+        if (dependency is not null)
+        {
+            // Pin historical v2 field order/shape explicitly: additive record properties must not change old hashes.
+            var legacyPlan = new { plan.Kind, plan.InstallationId, plan.ConsumerId, plan.IsCredential, plan.IsValid };
+            var legacyDependency = new { dependency.Kind,
+                Selection = new { Plan = legacyPlan, dependency.Selection.TenantId, dependency.Selection.TargetId },
+                dependency.BindingId, dependency.Revision, dependency.Digest, dependency.NotBeforeUtc, dependency.ExpiresAtUtc };
+            var authorityDigest = Convert.ToHexStringLower(SHA256.HashData(bytes));
+            bytes = plan.ConsumerConfigurationDigest is null
+                ? JsonSerializer.SerializeToUtf8Bytes(new { schemaVersion = 2, authorityDigest, plan = legacyPlan, dependency = legacyDependency })
+                : JsonSerializer.SerializeToUtf8Bytes(new { schemaVersion = 3, authorityDigest, plan = legacyPlan,
+                    plan.ConsumerConfigurationDigest, dependency = legacyDependency, dependency.Selection.ScopeKind, dependency.Selection.ScopeId });
+        }
         return new(subject, grant, target, policy, Convert.ToHexStringLower(SHA256.HashData(bytes)), until, dependency);
     }
 

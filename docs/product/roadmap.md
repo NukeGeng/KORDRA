@@ -2,7 +2,7 @@
 id: PROD-ROADMAP
 status: proposed
 owner: unassigned
-last_reviewed: 2026-10-20
+last_reviewed: 2026-10-24
 ---
 
 # Delivery roadmap & architecture maturity
@@ -174,3 +174,22 @@ NukeGeng accepted the exact ADR-0015/Credential boundary v1 package and separate
 ### T08 local implementation scope — 2026-10-24
 
 The approved local credential boundary now has SEC metadata/offline lifecycle, current U/C/D admission and a bounded native Mac Keychain child, with synthetic owner/HTTPS/process/native tests mapped in FEAT-SEC-001. Exact final source-bound gate evidence is private under .amr-local/t08/implementation/. The native fixture is newly created, isolated and deleted; existing secrets and real targets are excluded. Product metadata routes remain credential-independent and no credential network consumer is registered. This delivers the narrow T08 implementation when its applicable local gates pass; it does not complete OP-P0, the broader credential MVP or T09. Installation apphost/ACL/locator provisioning and approved Kubernetes/Helm provider design remain separate work.
+
+### T09.1 workload-first design gate — preparation before acceptance, 2026-10-24
+
+T07/T08 PR15 head ef42551 passed its three hosted checks and was human-merged as main 40acd58; separate main-branch CI is not claimed. The owner selected Kubernetes workloads by namespace before Helm release inventory. [ADR-0016](../decisions/0016-kubernetes-workload-observation.md) and its [contract](../contracts/kubernetes-workloads-v1.md) are proposed, awaiting exact approval of provider/trust/transport/freshness changes. No T09 adapter, actual observation, health result or live access is delivered by this design; wider OP-P0 is not complete.
+
+
+Accepted scope update — 2026-10-24: NukeGeng approved exact ADR-0016 and Kubernetes workloads v1 for T09.1a–d, including the post-C managed-header exception, offline private-PKI residual, exact Namespace identity GET and additive config/scope/freshness caps. This supersedes pending-design approval wording in this section only. Runtime implementation and K09-01–12 verification remain pending. T09.1e, existing secrets, real clusters, Helm and OBS runtime remain excluded; historical checkpoints are preserved without replay.
+
+### T09.2 Nomad personal lab and accepted provider design — 2026-10-24
+
+After the owner reported a company move to Nomad and no company credential, the requested personal 1-vCPU/2-GiB/15-GiB Lima VM was created with Ubuntu ARM64 and Nomad 2.0.7 TLS/ACL. Direct local API probes and a completed synthetic batch allocation provide lab-only evidence; no Kordra provider is implemented. [ADR-0017](../decisions/0017-nomad-workload-observation.md)/[Nomad workloads v1](../contracts/nomad-workloads-v1.md) is the exact T09.2a–d design accepted by NukeGeng on 2026-10-24; Product implementation remains pending. Kubernetes ADR-0016 stays accepted and unimplemented, with accepted sequencing behind Nomad. T09/OP-P0 completion, company access and broad deployment remain unclaimed.
+
+### T09.2a implementation — 2026-10-24
+
+Local code now implements Nomad trust/configuration and compatible IAM config/scope/freshness primitives under accepted ADR-0017. The targeted 40 trust/58 admission tests pass without skips. T09.2b transport/projection, T09.2c composition and T09.2d complete conformance remain pending. Full gate evidence is separate; no T09/OP-P0 completion or live Kordra observation is claimed.
+
+### Active T09 Nomad implementation and own-lab conformance — 2026-10-24
+
+T09.2a–d code, synthetic transport/projection and actual-owner U/C/D HTTPS tests are implemented locally under accepted ADR-0017. T09.2e own-lab conformance passed with the authorized new lab token/new UUID isolated Keychain/native helper and real Nomad; temporary store and test-owner bindings were cleaned up. Required final gates/PR/CI are tracked separately; no merge or deployed permanent installation is implied. Kubernetes T09.1 remains accepted/deferred and Helm/OBS health/wider OP-P0 are not complete. This completes the active Nomad source/conformance scope, not the entire product vision.

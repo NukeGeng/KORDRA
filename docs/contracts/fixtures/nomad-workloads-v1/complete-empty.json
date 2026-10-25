@@ -1,0 +1,28 @@
+{
+  "schemaVersion": 1,
+  "invocationId": "00000001-0000-0000-0000-000000000000",
+  "targetId": "00000002-0000-0000-0000-000000000000",
+  "provider": "nomad",
+  "namespace": "synthetic",
+  "region": "synthetic",
+  "capturedAtUtc": "2026-10-24T00:00:00+00:00",
+  "completedAtUtc": "2026-10-24T00:00:01+00:00",
+  "validUntilUtc": "2026-10-24T00:00:15+00:00",
+  "coverage": "complete",
+  "resourceSets": [
+    {
+      "kind": "Jobs",
+      "status": "observed",
+      "coverage": "complete",
+      "observationIndex": "1",
+      "items": []
+    },
+    {
+      "kind": "Allocations",
+      "status": "observed",
+      "coverage": "complete",
+      "observationIndex": "1",
+      "items": []
+    }
+  ]
+}

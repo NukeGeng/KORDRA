@@ -113,6 +113,13 @@ public static class LocalApiHost
             options.PasswordPolicy);
         LocalAuthenticationEndpoints.AddServices(builder.Services);
         builder.Services.AddLocalResourceAuthority(options.RuntimeConnectionString);
+        if (options.NomadTrust is not null)
+        {
+            if (options.CredentialAccess is null) throw new InvalidOperationException("Nomad requires explicit credential access.");
+            builder.Services.AddSingleton(new NomadObservationRegistry(options.NomadTrust));
+            builder.Services.AddSingleton(options.CredentialAccess);
+            builder.Services.AddSingleton<Kordra.Modules.ConnectionManagement.CredentialBroker>();
+        }
 
         var app = builder.Build();
         app.Use(LocalAuthenticationEndpoints.RequestGuard("localhost:5128"));
@@ -136,6 +143,7 @@ public static class LocalApiHost
         LocalAuthenticationEndpoints.Map(app);
         ProtectedMetadataEndpoints.Map(app);
         EnvironmentV2Endpoints.Map(app);
+        if (options.NomadTrust is not null) NomadWorkloadEndpoints.Map(app);
         app.MapFallback((RequestDelegate)(context =>
         {
             context.Response.StatusCode = StatusCodes.Status404NotFound;

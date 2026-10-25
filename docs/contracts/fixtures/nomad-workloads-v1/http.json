@@ -1,0 +1,57 @@
+{
+  "contractId": "CTR-NOMAD-WORKLOADS-V1",
+  "schemaVersion": 1,
+  "route": "/api/v1/targets/{targetId}/nomad-workloads",
+  "bodyFields": [
+    "schemaVersion",
+    "invocationId",
+    "targetId",
+    "provider",
+    "namespace",
+    "region",
+    "capturedAtUtc",
+    "completedAtUtc",
+    "validUntilUtc",
+    "coverage",
+    "resourceSets"
+  ],
+  "setFields": [
+    "kind",
+    "status",
+    "coverage",
+    "observationIndex",
+    "items"
+  ],
+  "jobFields": [
+    "id",
+    "name",
+    "type",
+    "status"
+  ],
+  "allocationFields": [
+    "id",
+    "jobId",
+    "taskGroup",
+    "clientStatus",
+    "desiredStatus"
+  ],
+  "cases": [
+    "complete-empty",
+    "complete-nonempty",
+    "partial-page",
+    "one-set-unavailable",
+    "wrong-namespace",
+    "wrong-pin",
+    "wrong-CA",
+    "wrong-hostname",
+    "expired-leaf",
+    "revoked-between-C-and-D",
+    "result-expires-during-D",
+    "C-audit-unknown",
+    "malformed-json",
+    "oversize",
+    "cancelled",
+    "query-override-denied"
+  ],
+  "secretValues": "omitted; use synthetic canaries only"
+}

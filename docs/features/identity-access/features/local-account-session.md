@@ -159,3 +159,7 @@ The owner-requested [Credential boundary v1](../../../contracts/credential-bound
 ### T08 shared implementation consumer — 2026-10-24
 
 Accepted ADR-0015 adds the SEC owner runtime/Contracts/test graph and scoped Host/offline migration composition. The existing source/test mappings above cover the shared solution, authority/HTTP/audit/architecture consumers changed in the same increment. [FEAT-SEC-001](../../connection-secrets/features/secret-binding.md#t08-local-implementation--2026-10-24) owns exact new paths and local evidence. IAM neutral dependencies/current C intent do not add a circular SEC runtime edge; AUD keeps v1 stages/schema, metadata wire v1 and existing role permissions remain unchanged. Synthetic fixture/native proof does not authorize provider network access or change this module's business ownership.
+
+## T09 Nomad opt-in composition — 2026-10-24
+
+Accepted ADR-0017 adds optional private Nomad trust/helper fields to the stopped-installation local-pilot profile. The immutable registry, broker and guarded endpoint are registered only when the complete validated group exists; absent configuration leaves the route disabled. Authentication/session/permission semantics, installation lock and boot invalidation remain unchanged. Test project compilation reuses shared TLS/native fixture declarations for the isolated personal-lab case. No credential is imported at startup, and no login/DB migration or Website service is changed.
