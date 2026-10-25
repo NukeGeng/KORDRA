@@ -163,3 +163,7 @@ Accepted ADR-0015 adds the SEC owner runtime/Contracts/test graph and scoped Hos
 ## T09 Nomad opt-in composition — 2026-10-24
 
 Accepted ADR-0017 adds optional private Nomad trust/helper fields to the stopped-installation local-pilot profile. The immutable registry, broker and guarded endpoint are registered only when the complete validated group exists; absent configuration leaves the route disabled. Authentication/session/permission semantics, installation lock and boot invalidation remain unchanged. Test project compilation reuses shared TLS/native fixture declarations for the isolated personal-lab case. No credential is imported at startup, and no login/DB migration or Website service is changed.
+
+## T09.1 Kubernetes composition compatibility — 2026-10-24
+
+Accepted ADR-0016 now has an independent configured INV consumer/registry/route. The shared Host dependency reader validates either registered provider’s exact installation/tenant/target/scope/digest while retaining the original SEC snapshot digest and existing U/C/D. Installed configuration may enable Kubernetes, Nomad or both; metadata/default behavior, owner permissions, helper fencing, accepted ADRs and historical checkpoints are preserved. Synthetic current-owner conformance and final source-bound gates are recorded separately; no live Kubernetes/company permission or merge authority is inferred.

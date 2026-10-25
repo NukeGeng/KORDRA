@@ -30,3 +30,5 @@ Mọi public API/message phải có owner, schema version, request/response/erro
 ## Nomad workload accepted design — 2026-10-24
 
 [Nomad workloads v1](nomad-workloads-v1.md) is the accepted T09.2a–d contract under [ADR-0017](../decisions/0017-nomad-workload-observation.md). Personal lab setup is authorized; the exact Product design was accepted by NukeGeng on 2026-10-24; implementation remains pending. Accepted Kubernetes T09.1 is preserved.
+
+- [Kubernetes workloads v1 OpenAPI](openapi/kubernetes-workloads-v1.openapi.json) and [HTTP fixture](fixtures/kubernetes-workloads-v1.http.json) — implemented bounded T09.1; synthetic validation, no live-cluster qualification.

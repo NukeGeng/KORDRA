@@ -1,0 +1,62 @@
+{
+  "contractId": "CTR-KUBERNETES-WORKLOADS-V1",
+  "schemaVersion": 1,
+  "route": "/api/v1/targets/{targetId}/workloads",
+  "bodyFields": [
+    "schemaVersion",
+    "invocationId",
+    "targetId",
+    "namespace",
+    "capturedAtUtc",
+    "completedAtUtc",
+    "validUntilUtc",
+    "coverage",
+    "resourceSets"
+  ],
+  "setFields": [
+    "kind",
+    "status",
+    "coverage",
+    "resourceVersion",
+    "items"
+  ],
+  "itemFields": [
+    "kind",
+    "name",
+    "uid",
+    "generation",
+    "observedGeneration",
+    "desiredReplicas",
+    "readyReplicas",
+    "availableReplicas",
+    "podPhase",
+    "podReady",
+    "images"
+  ],
+  "imageFields": [
+    "containerName",
+    "reportedReference",
+    "declaredDigest",
+    "reportedRuntimeDigest"
+  ],
+  "cases": [
+    "complete-empty",
+    "complete-nonempty",
+    "partial-page",
+    "one-set-unavailable",
+    "wrong-namespace",
+    "recreated-namespace",
+    "wrong-pin",
+    "wrong-CA",
+    "wrong-hostname",
+    "expired-leaf",
+    "revoked-between-C-and-D",
+    "result-expires-during-D",
+    "C-audit-unknown",
+    "malformed-json",
+    "oversize",
+    "cancelled",
+    "query-override-denied"
+  ],
+  "secretValues": "omitted; synthetic canaries only"
+}

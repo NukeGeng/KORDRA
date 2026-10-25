@@ -19,4 +19,5 @@
   </ItemGroup>
   <ItemGroup><Compile Include="../Shared/NomadTlsFixture.cs" Link="Fixtures/NomadTlsFixture.cs" /></ItemGroup>
   <ItemGroup><Compile Include="../ConnectionManagement.Tests/FixtureKeychainNative.cs" Link="Fixtures/FixtureKeychainNative.cs" /></ItemGroup>
+  <ItemGroup><Compile Include="../Shared/KubernetesTlsFixture.cs" Link="Fixtures/KubernetesTlsFixture.cs" /></ItemGroup>
 </Project>
