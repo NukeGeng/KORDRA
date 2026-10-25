@@ -1,3 +1,4 @@
+using Kordra.Modules.InfrastructureInventory.Infrastructure.Kubernetes;
 using Kordra.Modules.ConnectionManagement.Keychain;
 using Kordra.Modules.InfrastructureInventory.Infrastructure.Nomad;
 using System.Security.Cryptography.X509Certificates;
@@ -50,6 +51,7 @@ public sealed class LocalPilotHostOptions : IDisposable
         _processLock = processLock;
     }
 
+    public KubernetesTrustConfiguration? KubernetesTrust { get; private init; }
     public NomadTrustConfiguration? NomadTrust { get; private init; }
     public KeychainAccessConfiguration? CredentialAccess { get; private init; }
 
@@ -110,24 +112,29 @@ public sealed class LocalPilotHostOptions : IDisposable
                     config.PasswordDenylistProvenance,
                     config.PasswordDenylistSha256);
                 NomadTrustConfiguration? nomad = null;
+                KubernetesTrustConfiguration? kubernetes = null;
                 KeychainAccessConfiguration? access = null;
-                if (config.NomadTrustConfigurationFile is not null)
+                if (config.NomadTrustConfigurationFile is not null || config.KubernetesTrustConfigurationFile is not null)
                 {
-                    if (config.NomadTrustConfigurationSha256 is null || config.CredentialExecutableFile is null ||
+                    if ((config.NomadTrustConfigurationFile is null) != (config.NomadTrustConfigurationSha256 is null) ||
+                        (config.KubernetesTrustConfigurationFile is null) != (config.KubernetesTrustConfigurationSha256 is null) || config.CredentialExecutableFile is null ||
                         config.CredentialExecutableSha256 is null || config.CredentialKeychainLocators is null)
-                        throw new InvalidOperationException("Installed Nomad configuration is incomplete.");
-                    nomad = NomadTrustConfiguration.Load(RequirePrivateFile(config.NomadTrustConfigurationFile), config.NomadTrustConfigurationSha256, installationId);
+                        throw new InvalidOperationException("Installed provider configuration is incomplete.");
+                    if (config.NomadTrustConfigurationFile is not null)
+                        nomad = NomadTrustConfiguration.Load(RequirePrivateFile(config.NomadTrustConfigurationFile), config.NomadTrustConfigurationSha256!, installationId);
+                    if (config.KubernetesTrustConfigurationFile is not null)
+                        kubernetes = KubernetesTrustConfiguration.Load(RequirePrivateFile(config.KubernetesTrustConfigurationFile), config.KubernetesTrustConfigurationSha256!, installationId);
                     access = new(installationId, config.CredentialExecutableFile, config.CredentialExecutableSha256, config.CredentialKeychainLocators);
                 }
-                else if (config.NomadTrustConfigurationSha256 is not null || config.CredentialExecutableFile is not null ||
+                else if (config.KubernetesTrustConfigurationSha256 is not null || config.NomadTrustConfigurationSha256 is not null || config.CredentialExecutableFile is not null ||
                     config.CredentialExecutableSha256 is not null || config.CredentialKeychainLocators is not null)
-                    throw new InvalidOperationException("Credential access requires explicit Nomad trust configuration.");
+                    throw new InvalidOperationException("Credential access requires explicit provider trust configuration.");
                 return new LocalPilotHostOptions(
                     connectionString,
                     certificate,
                     new LocalAuthenticationConfiguration(installationId, Guid.NewGuid()),
                     denylist,
-                    processLock) { NomadTrust = nomad, CredentialAccess = access };
+                    processLock) { NomadTrust = nomad, KubernetesTrust = kubernetes, CredentialAccess = access };
             }
             catch { certificate.Dispose(); throw; }
         }
@@ -234,7 +241,9 @@ public sealed class LocalPilotHostOptions : IDisposable
         string? NomadTrustConfigurationSha256 = null,
         string? CredentialExecutableFile = null,
         string? CredentialExecutableSha256 = null,
-        Dictionary<Guid, string>? CredentialKeychainLocators = null);
+        Dictionary<Guid, string>? CredentialKeychainLocators = null,
+        string? KubernetesTrustConfigurationFile = null,
+        string? KubernetesTrustConfigurationSha256 = null);
 }
 
 internal sealed class LocalInstallationProcessLock : IDisposable
