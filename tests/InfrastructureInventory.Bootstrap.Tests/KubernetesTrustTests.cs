@@ -112,4 +112,11 @@ public sealed class KubernetesTrustTests
         }
         finally { Directory.Delete(dir,true); }
     }
+    [Fact]
+    public void Namespace_names_retain_the_separate_63_character_label_limit()
+    {
+        var c=Config();Entry(c)["namespaceName"]=new string('a',63);Assert.Single(Parse(c).Targets);
+        Entry(c)["namespaceName"]=new string('a',64);Assert.Throws<InvalidDataException>(()=>Parse(c));
+    }
+
 }

@@ -171,4 +171,28 @@ public sealed partial class CurrentAuthorityHttpTests
         Assert.Equal(6,provider.Requests.Count);Assert.All(_credentialLookup.LastMaterial!,x=>Assert.Equal(0,x));
     }
 
+    [Fact]
+    public async Task T091_long_controller_names_are_disclosed_through_the_existing_UCD_path()
+    {
+        await using var provider=await KubernetesTlsFixture.Start();await EnableKubernetes(provider);
+        var deployment=new string('a',64);var daemonset=new string('b',253);
+        provider.Respond=async(c,n)=>
+        {
+            if(n is 3 or 5)
+            {
+                var kind=n==3?"Deployment":"DaemonSet";
+                await c.Response.WriteAsJsonAsync(new{kind=kind+"List",apiVersion="apps/v1",metadata=new{resourceVersion="opaque"},
+                    items=new[]{new{kind,apiVersion="apps/v1",metadata=new{name=n==3?deployment:daemonset,uid=kind+"-uid",@namespace="default"}}}});
+                return;
+            }
+            await KubernetesTlsFixture.StandardResponse(c);
+        };
+        using var response=await _client.GetAsync(KubernetesUrl);Assert.Equal(HttpStatusCode.OK,response.StatusCode);
+        using var body=JsonDocument.Parse(await response.Content.ReadAsByteArrayAsync());AssertKubernetesFixture(body.RootElement);
+        var sets=body.RootElement.GetProperty("resourceSets");
+        Assert.Equal(deployment,sets[1].GetProperty("items")[0].GetProperty("name").GetString());
+        Assert.Equal(daemonset,sets[3].GetProperty("items")[0].GetProperty("name").GetString());
+        Assert.Equal(6,provider.Requests.Count);Assert.Equal(3,_probe.Audits.Count);Assert.True(_probe.OutputBytes>0);
+    }
+
 }

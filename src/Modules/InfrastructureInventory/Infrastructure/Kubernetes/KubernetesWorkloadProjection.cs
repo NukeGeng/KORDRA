@@ -33,7 +33,7 @@ public static partial class KubernetesWorkloadProjection
         {
             MatchType(item, kind, version); var m = Object(item, "metadata");
             var name = Text(m, "name", 253); var uid = Text(m, "uid", 128);
-            if (!DnsSubdomain().IsMatch(name) || name.Split('.').Any(x => !DnsLabel().IsMatch(x)) || Text(m, "namespace", 63) != ns ||
+            if (!DnsSubdomain().IsMatch(name) || Text(m, "namespace", 63) != ns ||
                 !names.Add(name) || !ids.Add(uid)) throw Invalid();
             var spec = OptionalObject(item, "spec"); var status = OptionalObject(item, "status");
             var podSpec = kind == "Pod" ? spec : OptionalObject(OptionalObject(spec, "template"), "spec");
@@ -141,7 +141,8 @@ public static partial class KubernetesWorkloadProjection
     }
     private static InvalidDataException Invalid() => KubernetesReadOnlyTransport.Unavailable();
     [GeneratedRegex("^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$", RegexOptions.CultureInvariant)] private static partial Regex DnsLabel();
-    [GeneratedRegex("^[a-z0-9](?:[a-z0-9.-]*[a-z0-9])?$", RegexOptions.CultureInvariant)] private static partial Regex DnsSubdomain();
+    // Kubernetes DNS1123 subdomains cap total length at 253 (Text above), not each segment at 63.
+    [GeneratedRegex(@"\A[a-z0-9](?:[a-z0-9-]*[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]*[a-z0-9])?)*\z", RegexOptions.CultureInvariant)] private static partial Regex DnsSubdomain();
     [GeneratedRegex("^sha256:[0-9a-fA-F]{64}$", RegexOptions.CultureInvariant)] private static partial Regex Sha256();
     [GeneratedRegex("^(?:(?:[a-z0-9](?:[a-z0-9.-]*[a-z0-9])?)(?::[0-9]{1,5})?/)?[a-z0-9]+(?:[._-][a-z0-9]+)*(?:/[a-z0-9]+(?:[._-][a-z0-9]+)*)*(?::[A-Za-z0-9_][A-Za-z0-9_.-]{0,127})?(?:@sha256:[0-9a-fA-F]{64})?$", RegexOptions.CultureInvariant)]
     private static partial Regex ImageReference();

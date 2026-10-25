@@ -76,4 +76,41 @@ public sealed class KubernetesProjectionTests
         var x=Assert.Single(Project(List(item)).Items);Assert.Empty(x.Images);Assert.Null(x.Generation);Assert.Null(x.PodReady);Assert.Null(x.PodPhase);
         var list=List();list["metadata"]!["continue"]="NEVER_RETURN_THIS";Assert.Equal("partial",Project(list).Coverage);Assert.DoesNotContain("NEVER_RETURN_THIS",JsonSerializer.Serialize(Project(list)));
     }
+    [Theory]
+    [InlineData("Pod",64)][InlineData("Pod",253)]
+    [InlineData("Deployment",64)][InlineData("Deployment",253)]
+    [InlineData("StatefulSet",64)][InlineData("StatefulSet",253)]
+    [InlineData("DaemonSet",64)][InlineData("DaemonSet",253)]
+    public void Workload_subdomains_accept_long_segments_within_the_total_limit(string kind, int length)
+    {
+        var item=Item();var name=new string('a',length);item["metadata"]!["name"]=name;
+        item["kind"]=kind;item["apiVersion"]=kind=="Pod"?"v1":"apps/v1";
+        var list=List(item);list["kind"]=kind+"List";list["apiVersion"]=kind=="Pod"?"v1":"apps/v1";
+        Assert.Equal(name,Assert.Single(Project(list,kind).Items).Name);
+    }
+    [Fact]
+    public void Workload_subdomains_allow_long_segments_separated_by_dots_but_cap_total_length()
+    {
+        var item=Item();var name=new string('a',64)+"."+new string('b',188);item["metadata"]!["name"]=name;
+        Assert.Equal(253,name.Length);Assert.Equal(name,Assert.Single(Project(List(item)).Items).Name);
+        var tooLong=Item();tooLong["metadata"]!["name"]=name+"c";
+        Assert.Throws<InvalidDataException>(()=>Project(List(tooLong)));
+    }
+    [Theory]
+    [InlineData("a..b")][InlineData("a.-b")][InlineData("a-.b")][InlineData(".a")][InlineData("a.")]
+    [InlineData("UPPER")][InlineData("under_score")][InlineData("slash/name")][InlineData("")]
+    public void Workload_subdomains_still_reject_malformed_segments(string name)
+    {
+        var item=Item();item["metadata"]!["name"]=name;
+        Assert.Throws<InvalidDataException>(()=>Project(List(item)));
+    }
+    [Theory]
+    [InlineData(63)][InlineData(64)]
+    public void Container_names_retain_the_separate_63_character_label_limit(int length)
+    {
+        var item=Item();item["spec"]!["containers"]![0]!["name"]=new string('a',length);
+        if(length==64)Assert.Throws<InvalidDataException>(()=>Project(List(item)));
+        else Assert.Equal(length,Assert.Single(Assert.Single(Project(List(item)).Items).Images).ContainerName.Length);
+    }
+
 }
