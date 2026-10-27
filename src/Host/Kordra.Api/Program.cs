@@ -46,7 +46,18 @@ public static class Program
                 return await LocalCredentialCommand.RunAsync(args[1..], options);
             }
 
-            Console.Error.WriteLine("Usage: Kordra.Api [--profile local-pilot | identity enroll-user|recover-user|disable-user | policy inspect <private-manifest> <private-admin-locator> | policy apply <private-manifest> <private-admin-locator> <approved-sha256> | credential inspect <private-manifest> <private-admin-locator> | credential apply <private-manifest> <private-admin-locator> <approved-sha256>]");
+            if (args is ["registry-credential", "inspect", _, _] || args is ["registry-credential", "apply", _, _, _])
+            {
+                using var options = LocalPilotHostOptions.LoadInstalled();
+                return await LocalRegistryCredentialCommand.RunAsync(args[1..], options);
+            }
+
+            if (args is ["artifact-recovery", "inspect", _, _] || args is ["artifact-recovery", "apply", _, _, _])
+            {
+                return await LocalArtifactRecoveryCommand.RunAsync(args[1..]);
+            }
+
+            Console.Error.WriteLine("Usage: Kordra.Api [--profile local-pilot | identity enroll-user|recover-user|disable-user | policy inspect <private-manifest> <private-admin-locator> | policy apply <private-manifest> <private-admin-locator> <approved-sha256> | credential inspect <private-manifest> <private-admin-locator> | credential apply <private-manifest> <private-admin-locator> <approved-sha256> | registry-credential inspect <private-manifest> <private-admin-locator> | registry-credential apply <private-manifest> <private-admin-locator> <approved-sha256> | artifact-recovery inspect <private-plan> <private-admin-locator> | artifact-recovery apply <private-plan> <private-admin-locator> <approved-sha256>]");
             return 2;
         }
         catch

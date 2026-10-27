@@ -152,6 +152,36 @@ public sealed class ProtectedReadAdmissionTests
     }
 
     [Fact]
+    public async Task Artifact_and_legacy_inventory_share_one_sixteen_slot_capacity()
+    {
+        var f = new Fixture();
+        var reserved = Enumerable.Range(0, 15).Select(_ => ProtectedInvocationCapacity.TryReserve(f.Gate)).ToArray();
+        Assert.All(reserved, item => Assert.NotNull(item));
+        var started = Signal();
+        var release = new TaskCompletionSource<PrivateReadBuffer>(TaskCreationOptions.RunContinuationsAsynchronously);
+        f.OnRead = (_, _) => { started.TrySetResult(); return release.Task; };
+        try
+        {
+            var inventory = f.Execute();
+            await started.Task.WaitAsync(TimeSpan.FromSeconds(2));
+            Assert.Null(ProtectedInvocationCapacity.TryReserve(f.Gate));
+            Assert.Equal(ProtectedReadStatus.Unavailable, await new Fixture(f.Gate).Execute());
+            release.TrySetResult(new("[]"u8, 0));
+            Assert.Equal(ProtectedReadStatus.Completed, await inventory);
+            using var available = ProtectedInvocationCapacity.TryReserve(f.Gate);
+            Assert.NotNull(available);
+            available.Dispose(); available.Dispose(); // one slot is released only once
+            using var independent = ProtectedInvocationCapacity.TryReserve(new FairAsyncReaderWriterAdmissionGate());
+            Assert.NotNull(independent);
+        }
+        finally
+        {
+            release.TrySetResult(new("[]"u8, 0));
+            foreach (var lease in reserved) lease?.Dispose();
+        }
+    }
+
+    [Fact]
     public async Task Cancellation_while_queued_for_admission_does_not_poison_shared_gate()
     {
         var f = new Fixture(); await using (var writer = await f.Gate.AcquireWriteAsync())

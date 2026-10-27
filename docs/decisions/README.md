@@ -2,7 +2,7 @@
 id: ADR-INDEX
 status: proposed
 owner: unassigned
-last_reviewed: 2026-10-24
+last_reviewed: 2026-10-25
 ---
 
 # Architecture Decision Records (ADRs)
@@ -41,3 +41,11 @@ Accepted scope update — 2026-10-24: NukeGeng approved exact ADR-0016 and Kuber
 ## Nomad provider accepted design — 2026-10-24
 
 [ADR-0017](0017-nomad-workload-observation.md) accepts T09.2a–d Nomad-first implementation after the owner reported a platform change. It preserves accepted ADR-0016 and records Nomad identity, credential-header and personal-loopback differences. NukeGeng separately approved the exact ADR/contract on 2026-10-24; creating the personal lab alone did not confer Product adoption.
+
+## T10 project artifact registration — proposed 2026-10-25
+
+[ADR-0018](0018-project-artifact-registration.md) and [Artifact registration v1](../contracts/artifact-registration-v1.md) propose bounded digest-first registration against a private OCI/Docker Distribution registry. New project permissions, ART EF persistence, typed SEC registry/reference allocation and current transactional U/C/M/D need exact human acceptance before code. Provider preference is recorded; no implementation, credential/registry access, accepted-ADR replacement or T11 release adoption is implied.
+
+## ADR-0018 accepted scope — 2026-10-25
+
+NukeGeng approved exact ADR-0018 and Artifact registration v1 for T10.1a–f. The decision resolves the design gate recorded above; original hashes/bytes and the explicit owner answer are preserved privately. No proposed wider ADR, live provider/secret use, real migration or implementation/merge is automatically accepted.

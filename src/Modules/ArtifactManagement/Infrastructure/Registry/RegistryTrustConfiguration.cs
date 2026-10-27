@@ -1,0 +1,135 @@
+using System.Collections.ObjectModel;
+using System.Globalization;
+using System.Net;
+using System.Net.Sockets;
+using System.Security.Cryptography;
+using System.Security.Cryptography.X509Certificates;
+using System.Text.Json;
+
+namespace Kordra.Modules.ArtifactManagement.Infrastructure.Registry;
+
+using System.Text.RegularExpressions;
+
+/// <summary>Strict, once-loaded private installation configuration. No networking or credentials.</summary>
+public sealed class RegistryTrustConfiguration
+{
+    public Guid InstallationId { get; }
+    public string FileSha256 { get; }
+    public ReadOnlyCollection<RegistryTrust> Registries { get; }
+    internal RegistryTrustConfiguration(Guid installation, string hash, RegistryTrust[] registries)
+    { InstallationId = installation; FileSha256 = hash; Registries = Array.AsReadOnly(registries); }
+
+    public static RegistryTrustConfiguration Load(string path, string expectedSha256, Guid installation)
+    {
+        // This pilot supports Unix private-file custody, not unverified Windows ACLs.
+        if (OperatingSystem.IsWindows()) throw Invalid();
+        var file = new FileInfo(Path.GetFullPath(path));
+        if (!file.Exists || file.Length is <= 0 or > 65536 || (file.Attributes & (FileAttributes.ReparsePoint | FileAttributes.Directory | FileAttributes.Device)) != 0) throw Invalid();
+        var forbidden = UnixFileMode.GroupRead | UnixFileMode.GroupWrite | UnixFileMode.GroupExecute |
+            UnixFileMode.OtherRead | UnixFileMode.OtherWrite | UnixFileMode.OtherExecute;
+        if ((File.GetUnixFileMode(file.FullName) & forbidden) != 0) throw Invalid();
+        for (var parent = file.Directory; parent is not null; parent = parent.Parent)
+            if ((parent.Attributes & FileAttributes.ReparsePoint) != 0) throw Invalid();
+        // Configuration is loaded only under stopped-API installation custody, never from an HTTP path.
+        using var input = new FileStream(file.FullName, FileMode.Open, FileAccess.Read, FileShare.Read);
+        if (input.Length is <= 0 or > 65536) throw Invalid();
+        var bytes = new byte[checked((int)input.Length)]; input.ReadExactly(bytes);
+        if (input.ReadByte() != -1) throw Invalid();
+        return Parse(bytes, expectedSha256, installation);
+    }
+
+    public static RegistryTrustConfiguration Parse(ReadOnlySpan<byte> bytes, string expectedSha256, Guid installation)
+    {
+        if (installation == Guid.Empty || !IsHash(expectedSha256) || bytes.Length is <= 0 or > 65536 ||
+            Convert.ToHexStringLower(SHA256.HashData(bytes)) != expectedSha256) throw Invalid();
+        try
+        {
+            using var doc = JsonDocument.Parse(bytes.ToArray(), new JsonDocumentOptions { MaxDepth = 8 });
+            var root = doc.RootElement; Shape(root, "schemaVersion", "installationId", "registries");
+            if (!root.GetProperty("schemaVersion").TryGetInt32(out var version) || version != 1 || Id(root, "installationId") != installation) throw Invalid();
+            var list = root.GetProperty("registries");
+            if (list.ValueKind != JsonValueKind.Array || list.GetArrayLength() > 32) throw Invalid();
+            var registries = list.EnumerateArray().Select(x => ReadRegistry(x, installation)).ToArray();
+            if (registries.Select(x => x.RegistryId).Distinct().Count() != registries.Length ||
+                registries.Select(x => (x.TenantId, x.ProjectId, x.ApiOrigin, x.Repository)).Distinct().Count() != registries.Length) throw Invalid();
+            return new(installation, expectedSha256, registries);
+        }
+        catch (Exception e) when (e is JsonException or InvalidOperationException or FormatException or ArgumentException or CryptographicException or OverflowException)
+        { throw Invalid(); }
+    }
+
+    private static RegistryTrust ReadRegistry(JsonElement e, Guid installation)
+    {
+        Shape(e, "tenantId", "projectId", "registryId", "displayName", "repository", "apiOrigin", "destinationIps", "caCertificateDerBase64",
+            "serverSpkiSha256", "authMode");
+        var tenant = Id(e, "tenantId"); var project = Id(e, "projectId"); var registry = Id(e, "registryId");
+        var repository = Text(e, "repository");
+        if (repository.Length is < 1 or > 255 || !Regex.IsMatch(repository,
+            @"\A[a-z0-9]+((\.|_|__|-+)[a-z0-9]+)*(/[a-z0-9]+((\.|_|__|-+)[a-z0-9]+)*)*\z",
+            RegexOptions.CultureInvariant | RegexOptions.NonBacktracking)) throw Invalid();
+        var display = Text(e, "displayName");
+        if (display.Length is < 1 or > 80 || display.Any(c => c is < ' ' or > '~')) throw Invalid();
+        var auth = Text(e, "authMode"); if (auth is not ("anonymous" or "basic" or "static-bearer")) throw Invalid();
+        var rawOrigin = Text(e, "apiOrigin");
+        if (!rawOrigin.StartsWith("https://", StringComparison.Ordinal)) throw Invalid();
+        if (rawOrigin.Any(c => !char.IsAscii(c) || char.IsWhiteSpace(c)) || rawOrigin.IndexOfAny(['%', '\\', '?', '#']) >= 0 ||
+            !Uri.TryCreate(rawOrigin, UriKind.Absolute, out var origin) || origin.Scheme != "https" || origin.UserInfo.Length != 0 ||
+            origin.AbsolutePath != "/" || origin.Host.EndsWith('.') || origin.Port is < 1 or > 65535) throw Invalid();
+        var authorityAndPath = rawOrigin[(rawOrigin.IndexOf("://", StringComparison.Ordinal) + 3)..];
+        var slash = authorityAndPath.IndexOf('/');
+        if (slash >= 0 && authorityAndPath[slash..] != "/") throw Invalid();
+        var rawAuthority = slash < 0 ? authorityAndPath : authorityAndPath[..slash];
+        if (rawAuthority.Contains('@')) throw Invalid();
+        var rawHost = rawAuthority.StartsWith('[') ? rawAuthority[1..rawAuthority.IndexOf(']')] : rawAuthority.Split(':')[0];
+        var host = origin.Host.Trim('[', ']');
+        if (IPAddress.TryParse(host, out var literal)) host = Address(rawHost).ToString();
+        else if (origin.HostNameType != UriHostNameType.Dns || host.Split('.').Any(label => label.Length is < 1 or > 63 ||
+            label.StartsWith('-') || label.EndsWith('-') || label.StartsWith("xn--", StringComparison.OrdinalIgnoreCase) || label.Any(c => !(char.IsAsciiLetterOrDigit(c) || c == '-')))) throw Invalid();
+        if (rawHost != rawHost.ToLowerInvariant()) throw Invalid();
+        host = host.ToLowerInvariant();
+        if (host.Contains(':')) host = "[" + host + "]";
+        origin = new Uri("https://" + host + (origin.Port == 443 ? "" : ":" + origin.Port.ToString(CultureInfo.InvariantCulture)));
+        var ipArray = e.GetProperty("destinationIps");
+        if (ipArray.ValueKind != JsonValueKind.Array || ipArray.GetArrayLength() is < 1 or > 8) throw Invalid();
+        var addresses = ipArray.EnumerateArray().Select(x => Address(x.GetString() ?? throw Invalid())).ToArray();
+        var ips = addresses.Select(x => x.ToString()).Order(StringComparer.Ordinal).ToArray();
+        if (ips.Distinct(StringComparer.Ordinal).Count() != ips.Length) throw Invalid();
+        if (addresses.Any(Forbidden)) throw Invalid();
+        if (literal is not null && !ips.Contains(literal.IsIPv4MappedToIPv6 ? literal.MapToIPv4().ToString() : literal.ToString(), StringComparer.Ordinal)) throw Invalid();
+        var ca = Convert.FromBase64String(Text(e, "caCertificateDerBase64"));
+        if (ca.Length is < 1 or > 16384) throw Invalid();
+        using var certificate = X509CertificateLoader.LoadCertificate(ca);
+        if (!certificate.RawData.AsSpan().SequenceEqual(ca) || certificate.HasPrivateKey || certificate.Extensions.OfType<X509BasicConstraintsExtension>().SingleOrDefault()?.CertificateAuthority != true ||
+            (certificate.Extensions.OfType<X509KeyUsageExtension>().SingleOrDefault()?.KeyUsages & X509KeyUsageFlags.KeyCertSign) != X509KeyUsageFlags.KeyCertSign) throw Invalid();
+        var pin = Text(e, "serverSpkiSha256"); if (!IsHash(pin)) throw Invalid();
+        return new(installation, tenant, project, registry, display, repository, origin, ips, ca, pin, auth);
+    }
+
+    private static IPAddress Address(string raw)
+    {
+        if (raw.Contains('%') || !IPAddress.TryParse(raw, out var ip)) throw Invalid();
+        if (ip.AddressFamily == AddressFamily.InterNetwork && raw != ip.ToString()) throw Invalid();
+        return ip.IsIPv4MappedToIPv6 ? ip.MapToIPv4() : ip;
+    }
+    private static bool Forbidden(IPAddress ip)
+    {
+        if (ip.Equals(IPAddress.Parse("fd00:ec2::254")) || ip.Equals(IPAddress.Parse("100.100.100.200"))) return true;
+        if (IPAddress.IsLoopback(ip) || ip.Equals(IPAddress.Any) || ip.Equals(IPAddress.IPv6Any) || ip.IsIPv6LinkLocal || ip.IsIPv6Multicast) return true;
+        var b = ip.GetAddressBytes();
+        return ip.AddressFamily == AddressFamily.InterNetwork && (b[0] == 0 || b[0] >= 224 || b[0] == 169 && b[1] == 254);
+    }
+    private static Guid Id(JsonElement e, string key)
+    { var s = Text(e, key); if (!Guid.TryParseExact(s, "D", out var id) || id == Guid.Empty || s != id.ToString("D")) throw Invalid(); return id; }
+    private static string Text(JsonElement e, string key) => e.GetProperty(key).GetString() ?? throw Invalid();
+    private static bool IsHash(string? s) => s is { Length: 64 } && s.All(char.IsAsciiHexDigitLower);
+    private static void Shape(JsonElement e, params string[] keys)
+    {
+        if (e.ValueKind != JsonValueKind.Object) throw Invalid();
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var property in e.EnumerateObject())
+            if (!seen.Add(property.Name) || !keys.Contains(property.Name, StringComparer.Ordinal) || property.Value.ValueKind == JsonValueKind.Null) throw Invalid();
+        if (seen.Count != keys.Length) throw Invalid();
+    }
+    private static InvalidDataException Invalid() => new("Invalid private registry trust configuration.");
+    public override string ToString() => "RegistryTrustConfiguration [private]";
+}

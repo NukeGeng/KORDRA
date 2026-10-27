@@ -2,7 +2,7 @@
 id: FEAT-AUD-001
 status: proposed
 owner: NukeGeng
-last_reviewed: 2026-10-23
+last_reviewed: 2026-10-26
 module_id: MOD-AUD
 feature_id: FEAT-AUD-001
 phase: MVP
@@ -132,3 +132,19 @@ The owner-requested [Credential boundary v1](../../../contracts/credential-bound
 ### T08 shared implementation consumer — 2026-10-24
 
 Accepted ADR-0015 adds the SEC owner runtime/Contracts/test graph and scoped Host/offline migration composition. The existing source/test mappings above cover the shared solution, authority/HTTP/audit/architecture consumers changed in the same increment. [FEAT-SEC-001](../../connection-secrets/features/secret-binding.md#t08-local-implementation--2026-10-24) owns exact new paths and local evidence. IAM neutral dependencies/current C intent do not add a circular SEC runtime edge; AUD keeps v1 stages/schema, metadata wire v1 and existing role permissions remain unchanged. Synthetic fixture/native proof does not authorize provider network access or change this module's business ownership.
+
+## T10 artifact transaction consumer proposal — 2026-10-25
+
+[Artifact registration v1](../../../contracts/artifact-registration-v1.md) under proposed [ADR-0018](../../../decisions/0018-project-artifact-registration.md) uses existing AUD schema/stages: Pending+U and terminal ART result/claim+Mutation each commit atomically with the clock floor; C uses Use, D uses Disclosure and safe failure bookkeeping uses Outcome. No new AUD stage, business message or audit-as-success assumption. Unknown commit fencing applies only after an attempted commit, retaining the pre-commit cancellation regression. ART owns receipts and recovery; AUD remains neutral. No implementation/test evidence is claimed; ART10-03/10/11/12 must prove these new consumers after approval.
+
+### Exact T10.1a–f acceptance — 2026-10-25
+
+NukeGeng approved exact ADR-0018 and Artifact registration v1, including this owner’s bounded design dependencies and NukeGeng’s ART/registry slice custody. This supersedes pending-approval language in the T10 proposal above only; wider feature/module status, existing accepted contracts and historical evidence remain unchanged. Implementation, ART10 tests, native/live scope, real provisioning and PR/merge evidence are still separate. No repeat design approval or extra Sol review is needed for covered T10.1a–f work.
+
+## T10.1e transaction observation scope — 2026-10-26
+
+Under accepted ADR-0018, Host atomically enlists ART/IAM-floor/AUD and must distinguish pre-commit setup/save failure from an actual attempted commit with unknown acknowledgement. Expose the existing AuditTransactionContext internal phase as read-only CommitAttempted observation; no new stage/schema, business permission, commit or review authority. The observation is not evidence of success. Coordinator tests must keep admission usable for known pre-commit failures and fence only actual unknown commit outcomes.
+
+## T10 stopped artifact recovery — 2026-10-27
+
+The artifact recovery increment uses a stopped-custody AUD receipt reader on a guarded owner connection and appends its outcome in the same transaction as the ART state and IAM clock floor. The reader grants no HTTP audit-query authority. Plan/hash, quiescence and ambiguous-outcome behavior are specified in [artifact registration v1](../../../contracts/artifact-registration-v1.md).

@@ -78,9 +78,10 @@ public static class LocalAuthenticationEndpoints
     public static Func<HttpContext, RequestDelegate, Task> RequestGuard(string authority) => async (context, next) =>
     {
         var path = context.Request.Path;
-        var businessRequest = path.StartsWithSegments("/api/v1/targets", StringComparison.OrdinalIgnoreCase) ||
+        var artifactRequest = path.StartsWithSegments("/api/v1/projects", StringComparison.OrdinalIgnoreCase);
+        var businessRequest = artifactRequest || path.StartsWithSegments("/api/v1/targets", StringComparison.OrdinalIgnoreCase) ||
             path.StartsWithSegments("/api/v2", StringComparison.OrdinalIgnoreCase);
-        if (path.StartsWithSegments("/api/v1/auth", StringComparison.OrdinalIgnoreCase))
+        if (artifactRequest || path.StartsWithSegments("/api/v1/auth", StringComparison.OrdinalIgnoreCase))
         {
             context.Response.Headers.CacheControl = "no-store";
             context.Response.Headers.Pragma = "no-cache";
@@ -92,27 +93,27 @@ public static class LocalAuthenticationEndpoints
             context.Connection.RemoteIpAddress is not { } remoteAddress || !IPAddress.IsLoopback(remoteAddress) ||
             HasForwardedAuthority(context.Request.Headers))
         {
-            await WriteErrorAsync(context, StatusCodes.Status403Forbidden, "REQUEST_REJECTED", "Request could not be accepted.");
+            await GuardError( StatusCodes.Status403Forbidden, "REQUEST_REJECTED", "Request could not be accepted.");
             return;
         }
 
         if (context.Request.Headers.TryGetValue("Origin", out var origins) &&
             (origins.Count != 1 || !string.Equals(origins[0], Origin, StringComparison.Ordinal)))
         {
-            await WriteErrorAsync(context, StatusCodes.Status403Forbidden, "REQUEST_REJECTED", "Request could not be accepted.");
+            await GuardError( StatusCodes.Status403Forbidden, "REQUEST_REJECTED", "Request could not be accepted.");
             return;
         }
 
-        if (context.Request.ContentLength > (businessRequest ? 128 * 1024 : MaximumBodyBytes))
+        if (context.Request.ContentLength > (artifactRequest ? ArtifactRequestParser.MaximumBodyBytes : businessRequest ? 128 * 1024 : MaximumBodyBytes))
         {
-            await WriteErrorAsync(context, StatusCodes.Status400BadRequest, "INVALID_REQUEST", "Request is invalid.");
+            await GuardError( artifactRequest ? 413 : StatusCodes.Status400BadRequest, "INVALID_REQUEST", "Request is invalid.");
             return;
         }
 
         if (context.Request.Headers.ContainsKey("Transfer-Encoding") &&
             context.Request.ContentLength is not null)
         {
-            await WriteErrorAsync(context, StatusCodes.Status400BadRequest, "INVALID_REQUEST", "Request is invalid.");
+            await GuardError( StatusCodes.Status400BadRequest, "INVALID_REQUEST", "Request is invalid.");
             return;
         }
 
@@ -121,9 +122,13 @@ public static class LocalAuthenticationEndpoints
             (!context.Request.Headers.TryGetValue("Origin", out origins) ||
              origins.Count != 1 || !string.Equals(origins[0], Origin, StringComparison.Ordinal)))
         {
-            await WriteErrorAsync(context, StatusCodes.Status403Forbidden, "REQUEST_REJECTED", "Request could not be accepted.");
+            await GuardError( StatusCodes.Status403Forbidden, "REQUEST_REJECTED", "Request could not be accepted.");
             return;
         }
+
+        Task GuardError(int status, string code, string message, CancellationToken? token = null) => artifactRequest
+            ? ArtifactEndpoints.Fail(context, status, Guid.NewGuid(), token)
+            : WriteErrorAsync(context, status, code, message, token ?? context.RequestAborted);
 
         var clientDisconnected = context.RequestAborted;
         using var deadline = CancellationTokenSource.CreateLinkedTokenSource(clientDisconnected);
@@ -136,7 +141,7 @@ public static class LocalAuthenticationEndpoints
         catch (OperationCanceledException) when (deadline.IsCancellationRequested && !clientDisconnected.IsCancellationRequested)
         {
             if (context.Response.HasStarted) { context.Abort(); return; }
-            await WriteErrorAsync(context, StatusCodes.Status503ServiceUnavailable,
+            await GuardError( StatusCodes.Status503ServiceUnavailable,
                 "AUTHORITY_UNAVAILABLE", "Authentication authority is unavailable.", CancellationToken.None);
         }
         finally

@@ -52,7 +52,22 @@
           "Npgsql": "10.0.3"
         }
       },
+      "kordra.artifactmanagement.domain": {
+        "type": "Project"
+      },
       "kordra.buildingblocks.security": {
+        "type": "Project"
+      },
+      "kordra.modules.artifactmanagement": {
+        "type": "Project",
+        "dependencies": {
+          "Kordra.ArtifactManagement.Domain": "[1.0.0, )",
+          "Kordra.Modules.ArtifactManagement.Contracts": "[1.0.0, )",
+          "Microsoft.EntityFrameworkCore.Relational": "[10.0.11, )",
+          "Npgsql.EntityFrameworkCore.PostgreSQL": "[10.0.3, )"
+        }
+      },
+      "kordra.modules.artifactmanagement.contracts": {
         "type": "Project"
       },
       "kordra.modules.auditcompliance": {

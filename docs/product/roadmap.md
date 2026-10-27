@@ -2,10 +2,14 @@
 id: PROD-ROADMAP
 status: proposed
 owner: unassigned
-last_reviewed: 2026-10-24
+last_reviewed: 2026-10-25
 ---
 
 # Delivery roadmap & architecture maturity
+
+## Current T10 decision boundary — 2026-10-25
+
+T09 Nomad and Kubernetes source is now present on main b70def19f69d460d4d9dcac099fa46a56978718d after #18; Kubernetes live T09.1e, Helm, OBS and complete OP-P0 remain separately qualified. The next T10 deliverable is a digest-first project artifact catalog for the selected private OCI/Docker Distribution registry. [ADR-0018](../decisions/0018-project-artifact-registration.md) / [Artifact registration v1](../contracts/artifact-registration-v1.md) specify proposed T10.1a–f and ART10 acceptance, including required IAM/SEC extensions. Exact design approval precedes implementation; none is implemented by this document. T11 release/approval and later deployment/worker decisions remain their own gates. Existing earlier dated progress below is historical.
 
 ## T08 credential design ready for owner decision — 2026-10-23
 
@@ -197,3 +201,15 @@ T09.2a–d code, synthetic transport/projection and actual-owner U/C/D HTTPS tes
 ## T09 provider implementation status — 2026-10-24
 
 FEAT-INV-001 with IAM/SEC/AUD now implements accepted ADR-0016 T09.1a–d in existing projects: immutable private namespace trust, pinned bounded six-GET transport, Pod/Deployment/StatefulSet/DaemonSet projections, configured workloads route and current U/C/D with freshness caps. Nomad T09.2 remains a separate adapter; metadata and legacy authority serialization are preserved. Exact source/test mappings are in the INV owner feature, wire artifacts in Kubernetes workloads v1 and operator custody/rollback in the runbook. Current-session evidence is private under .amr-local/t09/kubernetes/; final gates and PR/CI/review identities remain distinct. No checkpoint replay, local AI review, new package/project, Clients change, production operation or ADR approval is performed. Kubernetes live T09.1e, Helm/OBS health and complete OP-P0 remain outside implementation acceptance; do not report the entire broader T09 vision as qualified.
+
+## T10.1a–f approved for implementation — 2026-10-25
+
+NukeGeng accepted the exact ADR-0018 / Artifact registration v1 proposal. This resolves the current T10 design gate above, with ART/registry slice custody and IAM/PRJ/SEC/AUD dependencies. Next is T10.1a, followed by covered slices b–f; implementation/ART10 execution/PR/merge remain pending. T10.1g and T11–T14 keep their own target/design gates. No repeat Sol review or design approval is required for the already-covered scope.
+
+## T10.1a local code progress — 2026-10-25
+
+The approved ART identity/store/migration slice now has local source and targeted evidence (111 Domain, 31 owner persistence/boundary, 6 architecture cases; zero-warning build). Final applicable gates remain separate current-source evidence. This is not completed artifact registration: project authorization, registry credential scope, bounded provider verification, API/disclosure/recovery and conformance T10.1b–f remain next. No live registry or real installation migration is enabled.
+
+## T10.1a–f local implementation — 2026-10-27
+
+The approved project artifact catalog, registry verification, current authorization, local HTTPS surface and stopped recovery are implemented in the feature worktree. The local gate passed 218 tooling and 1,158 Product tests; one live Nomad test was skipped. The [contract evidence map](../contracts/artifact-registration-v1.md#t101f-local-conformance-evidence-map--2026-10-27) describes test coverage. Feature PR CI, Codex Auto PR Review and the maintainer's merge decision remain pending; this is not a statement that the feature is on `main`. Live registry qualification T10.1g and later release/deployment features require their own approved scope.

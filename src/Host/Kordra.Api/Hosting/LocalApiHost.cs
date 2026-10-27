@@ -113,7 +113,8 @@ public static class LocalApiHost
             options.PasswordPolicy);
         LocalAuthenticationEndpoints.AddServices(builder.Services);
         builder.Services.AddLocalResourceAuthority(options.RuntimeConnectionString);
-        if (options.NomadTrust is not null || options.KubernetesTrust is not null)
+        if (options.NomadTrust is not null || options.KubernetesTrust is not null ||
+            options.ArtifactRegistries?.Registries.Any(r => r.AuthMode != "anonymous") == true)
         {
             if (options.CredentialAccess is null) throw new InvalidOperationException("Provider requires explicit credential access.");
             if (options.NomadTrust is not null) builder.Services.AddSingleton(new NomadObservationRegistry(options.NomadTrust));
@@ -121,6 +122,8 @@ public static class LocalApiHost
             builder.Services.AddSingleton(options.CredentialAccess);
             builder.Services.AddSingleton<Kordra.Modules.ConnectionManagement.CredentialBroker>();
         }
+        if (options.ArtifactConnectionString is not null)
+            builder.Services.AddLocalArtifacts(options.ArtifactConnectionString, options.ArtifactRegistries);
 
         var app = builder.Build();
         app.Use(LocalAuthenticationEndpoints.RequestGuard("localhost:5128"));
@@ -146,6 +149,7 @@ public static class LocalApiHost
         EnvironmentV2Endpoints.Map(app);
         if (options.NomadTrust is not null) NomadWorkloadEndpoints.Map(app);
         if (options.KubernetesTrust is not null) KubernetesWorkloadEndpoints.Map(app);
+        if (options.ArtifactConnectionString is not null) ArtifactEndpoints.Map(app);
         app.MapFallback((RequestDelegate)(context =>
         {
             context.Response.StatusCode = StatusCodes.Status404NotFound;

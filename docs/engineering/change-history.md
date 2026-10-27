@@ -2,7 +2,7 @@
 id: ENG-HISTORY
 status: proposed
 owner: unassigned
-last_reviewed: 2026-10-24
+last_reviewed: 2026-10-26
 ---
 
 # Feature change log and release-note discipline
@@ -228,3 +228,45 @@ FEAT-INV-001 with IAM/SEC/AUD now implements accepted ADR-0016 T09.1a–d in exi
 ## PR17-INV-NAME-001 — Kubernetes workload-name compatibility, 2026-10-25
 
 Codex PR17 P2 identified that the projection incorrectly reused the 63-character DNS-label bound for workload-name segments. The repair uses Kubernetes DNS1123 subdomain syntax with the existing 253-character total bound, retaining nonempty/alphanumeric segment boundaries, lowercase ASCII and duplicate/namespace checks. Namespace and container-name limits remain 63. Regression coverage includes 64/253-character names for all four kinds, long dotted segments, malformed/254-character names, unchanged container/namespace limits and actual-owner HTTPS U/C/D disclosure of long Deployment/DaemonSet names. No schema, permission, provider operation, dependency or accepted ADR changed. Before-fix reproduction: all eight valid long-name cases failed. Final gates/commit/remote review remain separately recorded under .amr-local/pr17-name-fix/; the original finding is not marked independently cleared before current-head follow-up.
+
+## 2026-10-25 — T10 bounded artifact registration design proposal
+
+FEAT-ART-001 with IAM/TEN/PRJ/SEC/AUD: inspected main b70def1, existing digest/runtime/contracts and private checkpoint; recorded the owner's private OCI/Docker Distribution preference. Added proposed ADR-0018/Artifact registration v1, owner acknowledgments and T10.1a–f handoff/ART10-01–16 acceptance. Specifies project identity/permissions, typed SEC/global native-reference allocation, fixed-origin bounded content checks, ART-only EF persistence and durable current-authority receipts/recovery. Wider release, tag, CI, deploy and live registry/Keychain work remain outside scope. No accepted ADR, runtime source/package/permission, AMR routing, checkpoint, Clients or infrastructure change; no debt added/closed. Documentation checks and exact proposal hashes are private .amr-local/t10-design evidence; no routine Product suite, AI review or PR action in this Architect task.
+
+## 2026-10-25 — Exact T10.1a–f design acceptance and reusable session instruction
+
+NukeGeng approved ADR-0018 / Artifact registration v1 after the exact T10.1a–f question. Verified all 14 frozen proposal-file hashes, saved original bytes/decision privately, then annotated acceptance and owner/index/handoff/status records without substantive design changes. Added a reusable current-session Developer instruction in the existing handoff; no new CLI runner, service, scheduler, model switch or AMR policy change. Covered slices need no repeated design approval or extra Sol review. No Product code/test execution, credential/registry access, migration, checkpoint replay, commit or PR action; no debt added/closed.
+
+## 2026-10-25 — T10.1a pure identity and staged receipt implementation
+
+FEAT-ART-001 / MOD-ART under accepted ADR-0018. Added immutable validated identity/platform/manual declaration, explicit canonical business/scoped-idempotency hashing and staged terminal receipt guards in existing Domain/tests, with no new dependency/project or role/network capability. Native Sol 6.1 Medium is explicitly authorized by the active GOAL. Local Domain 111/111, existing architecture 5/5 and project format passed; source is uncommitted and the complete T10.1a–f/ART10 acceptance remains pending. Existing AMR child plan stays pending because its current-session completion supports Luna only; real Medium observations are recorded without model substitution or checkpoint replay. No debt added/closed, additional AI review, PR, real registry/Keychain or database operation.
+
+## 2026-10-25 — T10.1a ART persistence and offline migration
+
+Added approved ART Contracts/runtime/tests with EF 10.0.11/Npgsql 10.0.3, own history/migration, immutable SQL and exact-scope deferred claim FK, and a store that only stages into the caller transaction. Added the guarded artifact-management offline migrator/locator regression and exact shared solution/assembly/project graph; restored lockfiles add only the ART project closure. Targeted 31 ART plus 6 architecture tests and zero-warning Release build passed. Synthetic SQL row work is rolled back in kordra_test. Real installation DDL, artifact HTTP/current authority/SEC/provider integration, T10.1b–f completion and feature publication remain pending. No accepted architecture/routing change, extra AI review or debt change.
+
+## 2026-10-25 — T10.1b current project authority and shared capacity
+
+Added exact project artifact actions without default grants, PRJ current identity lookup denying inactive/ambiguous IDs, Host owner-port adapters and IAM partial current-authority digest/expiry validation. Extracted one technical capacity pool into existing Security and kept inventory using it; no legacy hash/wire change. Refreshed only T09 OpenAPI source bindings. Targeted 100 IAM/admission/role, 4 PRJ owner and 31 T09 HTTP/schema tests passed; these are not completed artifact U/C/M/D or full ART10 evidence. Native Medium is explicitly authorized; no extra AI review, schema migration, product endpoint, infrastructure operation or debt change.
+
+## 2026-10-26 — T10.1c typed SEC and offline registry administration
+
+FEAT-SEC-001 / MOD-SEC under ADR-0018 adds typed registry metadata/global native reference allocation, metadata-only backfill and exact typed-owner constraints. Both writers participate atomically; old inventory digest/native IPC stays unchanged. Existing broker shares helper capacity across kinds. Added stopped-API registry-credential inspect/apply with current tenant/project revision and SEC/IAM-floor/AUD receipt reconciliation. Targeted 15 metadata/broker and 16 command/migration tests passed; actual isolated schema rollback/deletion verified. Full gates/publication and T10.1d–f remain separate. No real provider/secret operation, model-policy change, additional review or debt.
+
+## 2026-10-26 — T10.1d ART verifier core
+
+FEAT-ART-001 / MOD-ART adds strict private registry trust, fixed-origin bounded TLS GET/direct-auth transport and a manifest/index/config content projector under accepted ADR-0018. Synthetic public-verifier TLS plus negative transport/trust/protocol tests bring the ART module to 135 passing cases. Added a SEC migration conflict-history rejection case in a disposable UUID schema; three migration cases pass. Checkpoints and unrelated drafts remain unchanged. No HTTP artifact route, current-authority mutation orchestration, real provider access, extra AI review or debt change; T10.1e–f/publication remain pending.
+
+## 2026-10-26 — T10.1e query/transaction components
+
+Added ART cursor/detail/key queries, Host current project/registry/SEC binding digest and atomic ART/AUD/floor transaction, project-specific query U/D and one-use caller-bound pre-header response commitment. Added actual commit-phase observation to existing AUD transaction, exact Host ART graph/lock updates and 44 targeted owner/component regressions. Real commit/ACK tests retain only fresh UUID synthetic append-only history in kordra_test. No endpoint activation, real provider/secret/provisioning, new architecture decision, AI review or debt change. Registration U/C/M/D, activation/readiness, actual HTTP/recovery and final conformance/publication remain active approved scope.
+
+## 2026-10-26 — T10.1e registration core and schema/rollback guards
+
+FEAT-ART-001 / MOD-ART with Host/SEC/AUD adds exact Pending ownership, current U/C/M/D registration orchestration, bounded cancellation/failure bookkeeping, per-attempt verification/declaration persistence and fresh historical replay. Added metadata-only minimum v1 ART/SEC capability checks; ART Down refuses catalog/history deletion. The existing ART test assembly references Host for component fixtures; no friend assembly or provider bypass flag was added. Provider-unavailable versus content-mismatch classification preserves safe 503/422 behavior. Twenty-two synthetic PostgreSQL/TLS component cases passed; positive authenticated native/HTTP/recovery and final conformance/publication remain pending. No real target/secret/provisioning, new accepted ADR, review session or debt change.
+
+## 2026-10-27 — T10.1e HTTP and stopped recovery
+
+Wired project-scoped artifact HTTP, strict request parsing and optional local runtime configuration. Added synthetic real-session/Keychain-helper and exact-plan stopped-recovery tests, including actual lost commit ACK and inconsistent audit evidence. Added local runbook and source-bound wire artifacts. No actual installation migration, existing secret or live registry operation was performed. Final feature validation and PR remain pending.
+
+The first full T10 gate exposed ten existing resource-policy HTTP tests whose source hash still pointed to the previous authentication guard. All ten reported the same hash mismatch; the source-bound resource-policy snapshot was refreshed without changing its schemas, and a representative actual-owner compatibility test passed. Recovery's offline command now acquires the same installation lock without loading the API TLS key, registry configuration or Keychain. Eleven recovery tests passed, including a live synthetic helper and custody lock isolation. The full gates must be rerun on the final tree.

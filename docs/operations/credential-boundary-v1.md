@@ -2,7 +2,7 @@
 id: OPS-CREDENTIAL-BOUNDARY-V1
 status: proposed
 owner: NukeGeng
-last_reviewed: 2026-10-24
+last_reviewed: 2026-10-26
 ---
 
 # Local credential boundary — installation and verification
@@ -48,3 +48,16 @@ Record exact fixture identity, source/gate digest, native result and deletion st
 ## Known startup failure versus unresolved helper
 
 A known failure to start the configured helper (for example, missing execute permission) reports unavailable and releases its helper slot while unrelated metadata reads/authority operations remain usable. Correct the installation executable permissions/identity under the existing maintenance procedure; never fall back to another executable or credential. A launch still in progress at its deadline or an owned process whose exit cannot be confirmed remains unknown and closes admission as before. Tests inject the known startup failure and verify repeated attempts do not exhaust the two-slot bound or close the shared gate.
+
+## T10 registry metadata administration — local implementation
+
+Accepted ADR-0018 / Artifact registration v1 adds separate stopped-API commands:
+
+```sh
+dotnet run --project src/Host/Kordra.Api -- registry-credential inspect PRIVATE_MANIFEST PRIVATE_ADMIN_LOCATOR
+dotnet run --project src/Host/Kordra.Api -- registry-credential apply PRIVATE_MANIFEST PRIVATE_ADMIN_LOCATOR APPROVED_SHA256
+```
+
+Use schemaVersion 1 RegistryCredentialManifest with installationId/tenantId/projectId/registryId/repository, fixed artifact.registry.read.v1 consumer and artifact.register operation. The explicit canonical manifest includes expected binding/revision, new binding/profile/reference/locator IDs and UTC validity for create/rotate; revoke omits new profile/reference/locator/validity values. Inspect returns a nonsecret hash/current binding/revision; apply requires that exact approved hash and exclusive installation custody. Tenant and PRJ current active identity must agree; caller fields never establish membership. No credential payload is accepted. These commands use existing private locator validation and do not look up/import Keychain items or contact a registry.
+
+Apply the additive SEC allocation migration only after separate real-installation authorization, backup and stopped-writer checks. It backfills inventory metadata, then constrains every native installation/reference ID to one typed tenant/profile. Existing references, including revoked ones, remain allocated. Conflicting/invalid history stops migration; do not guess ownership, delete allocation or use Keychain contents to resolve it. Code rollback must disable incompatible legacy credential writers; Down deliberately refuses to erase allocations/history. Tests cover nonempty migration and transaction rollback only in isolated kordra_test; this is not evidence of real provisioning.

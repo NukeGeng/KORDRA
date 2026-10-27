@@ -57,8 +57,6 @@ public sealed class ProtectedReadAdmission(FairAsyncReaderWriterAdmissionGate ga
     IAuthorityClock clock, IProtectedReadDependencyReader? dependencies = null)
 {
     private readonly FairAsyncReaderWriterAdmissionGate _gate = gate;
-    private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<FairAsyncReaderWriterAdmissionGate, SemaphoreSlim> Capacities = new();
-    private readonly SemaphoreSlim _capacity = Capacities.GetValue(gate, _ => new(16, 16));
     private sealed record Binding(CurrentSubject Subject, ScopedGrant Grant, TargetAuthority Target,
         ResourcePolicyAuthority Policy, string Digest, DateTimeOffset ValidUntil, ReadDependencySnapshot? Dependency);
 
@@ -74,7 +72,8 @@ public sealed class ProtectedReadAdmission(FairAsyncReaderWriterAdmissionGate ga
     {
         if (subject is null || targetId == Guid.Empty || read is null && credentialRead is null || response is null || !plan.IsValid ||
             credentialRead is not null && !plan.IsCredential) return ProtectedReadStatus.Denied;
-        if (!_capacity.Wait(0)) return ProtectedReadStatus.Unavailable;
+        using var capacity = ProtectedInvocationCapacity.TryReserve(_gate);
+        if (capacity is null) return ProtectedReadStatus.Unavailable;
         using var invocation = CancellationTokenSource.CreateLinkedTokenSource(ct); invocation.CancelAfter(TimeSpan.FromSeconds(10));
         using var provider = CancellationTokenSource.CreateLinkedTokenSource(invocation.Token); // five-second budget starts at U
         var invocationId = Guid.NewGuid(); Task<PrivateReadBuffer>? pendingRead = null;
@@ -131,7 +130,6 @@ public sealed class ProtectedReadAdmission(FairAsyncReaderWriterAdmissionGate ga
             if (pendingRead is { IsCompleted: false }) { _gate.Close(); response.Abort(); Observe(pendingRead); }
             boundary?.Stop();
             reservation?.Dispose();
-            _capacity.Release();
         }
     }
 
