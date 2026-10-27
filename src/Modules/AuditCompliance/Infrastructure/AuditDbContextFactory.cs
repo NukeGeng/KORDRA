@@ -81,6 +81,14 @@ public sealed class AuditDbContextFactory : IDesignTimeDbContextFactory<AuditDbC
         return CreateOptions(connection);
     }
 
+    /// <summary>Neutral receipt inspection on the stopped owner's approved shared connection; never grants a runtime append.</summary>
+    public static DbContextOptions<AuditDbContext> CreateOfflineReceiptReadOptions(System.Data.Common.DbConnection connection,
+        Kordra.Modules.AuditCompliance.Contracts.IOfflineAuditLease custody)
+    {
+        custody.RequireHeld();
+        return CreateOfflineTransactionOptions(connection);
+    }
+
     private static DbContextOptions<AuditDbContext> CreateOptions(string connectionString)
     {
         var options = new DbContextOptionsBuilder<AuditDbContext>();

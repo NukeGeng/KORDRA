@@ -2,7 +2,7 @@
 id: OPS-LOCAL-POSTGRESQL
 status: verified
 owner: engineering-maintainers
-last_reviewed: 2026-10-19
+last_reviewed: 2026-10-25
 ---
 
 # Kordra local PostgreSQL setup
@@ -71,3 +71,17 @@ Owner histories prj_ef_migrations_history/inv_ef_migrations_history revoke PUBLI
 ## T08 SEC migration boundary — 2026-10-24
 
 The offline connection-management command uses KORDRA_CREDENTIAL_MIGRATION_CONNECTION_STRING and the same canonical installation custody/API-stopped requirements. It validates exact loopback kordra/kordra_admin before connecting. SEC-specific migrations explicitly remove generic runtime DML on SEC metadata and deny runtime access to command receipts/migration history; runtime gets only the SELECT metadata required by the broker. Existing generic default grants above do not override these narrower owner grants. Local validation migrated only kordra_test and checked actual catalog privileges. No live kordra migration or adoption of the PostgreSQL Keychain entries is authorized by the synthetic T08 fixture. See [credential installation/verification](credential-boundary-v1.md).
+
+## ART T10 offline migration — implemented command, activation separately authorized
+
+Accepted ADR-0018 adds the artifact-management owner migration command. It reads the private KORDRA_ARTIFACT_MIGRATION_CONNECTION_STRING, requires exactly loopback 127.0.0.1:5432 database kordra/user kordra_admin, and runs only inside the existing stopped-API installation custody held by Kordra.DbMigrator. Do not copy a locator/password into Git or logs. After exact operational approval and the existing custody setup, the command is:
+
+```bash
+dotnet run --project src/Host/Kordra.DbMigrator -- artifact-management
+```
+
+This command has not been run against kordra. Local T10.1a tests migrate only isolated kordra_test; their synthetic row transactions roll back. ART owns app.art_artifacts, app.art_registration_receipts, app.art_provenance_claims and art_ef_migrations_history. Runtime rights are SELECT/INSERT plus only receipt outcome-column UPDATE; identity/claim UPDATE/DELETE/TRUNCATE and receipt deletion are denied. No app DDL permission is added. Disable registration before compatible rollback; do not execute destructive Down, delete immutable history or downgrade a credential writer. KORDRA_ARTIFACT_CONNECTION_STRING is the accepted later runtime locator; API wiring/admission remains T10.1b–e, so setting it alone does not enable registration.
+
+### T10 atomic-commit fixture evidence
+
+T10 query-store tests use uncommitted synthetic rows and rollback. T10 Host transaction/ACK-loss and query U/D durability tests must commit to prove atomic ART/AUD/IAM-floor behavior; they retain bounded, fresh UUID-scoped synthetic rows in kordra_test as append-only evidence. No real user, registry, secret or installation state is copied. Do not disable immutable triggers or delete receipts/artifacts to clean these tests. This fixture behavior does not authorize real kordra migration or production writes; live/provider checks retain their separate operational gates.

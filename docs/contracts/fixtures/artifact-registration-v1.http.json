@@ -1,0 +1,101 @@
+{
+  "contractId": "CTR-ARTIFACT-REGISTRATION-V1",
+  "schemaVersion": 1,
+  "schemaFields": {
+    "Platform": [
+      "os",
+      "architecture",
+      "variant"
+    ],
+    "SourceClaim": [
+      "sourceRepository",
+      "sourceCommit",
+      "buildRef"
+    ],
+    "RegistrationRequest": [
+      "schemaVersion",
+      "correlationId",
+      "registryId",
+      "repository",
+      "digest",
+      "platform",
+      "sourceClaim"
+    ],
+    "Artifact": [
+      "artifactId",
+      "projectId",
+      "registryId",
+      "repository",
+      "rootDigest",
+      "platform",
+      "rootMediaType",
+      "rootSizeBytes",
+      "selectedManifestDigest",
+      "selectedManifestSizeBytes",
+      "selectedManifestMediaType",
+      "configDigest",
+      "configSizeBytes",
+      "observedPlatform",
+      "variantEvidence",
+      "verifierProfile",
+      "verifiedAtUtc",
+      "createdAtUtc",
+      "contentVerification",
+      "layerAvailability",
+      "signatureVerification"
+    ],
+    "Registration": [
+      "registrationId",
+      "status",
+      "createdAtUtc",
+      "completedAtUtc",
+      "attemptVerifiedAtUtc",
+      "safeReason",
+      "artifact",
+      "sourceClaim",
+      "provenance"
+    ],
+    "ArtifactSummary": [
+      "artifactId",
+      "registryId",
+      "repository",
+      "rootDigest",
+      "platform",
+      "createdAtUtc",
+      "contentVerification"
+    ],
+    "RegistrySelector": [
+      "registryId",
+      "displayName",
+      "repository",
+      "authRequired"
+    ],
+    "RegistrationEnvelope": [
+      "schemaVersion",
+      "correlationId",
+      "registration"
+    ],
+    "ArtifactEnvelope": [
+      "schemaVersion",
+      "correlationId",
+      "artifact"
+    ],
+    "ArtifactListEnvelope": [
+      "schemaVersion",
+      "correlationId",
+      "items",
+      "nextAfterArtifactId"
+    ],
+    "RegistryListEnvelope": [
+      "schemaVersion",
+      "correlationId",
+      "items"
+    ],
+    "ErrorEnvelope": [
+      "schemaVersion",
+      "correlationId",
+      "code",
+      "registration"
+    ]
+  }
+}

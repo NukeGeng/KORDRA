@@ -2,7 +2,7 @@
 id: FEAT-SEC-001
 status: proposed
 owner: NukeGeng
-last_reviewed: 2026-10-24
+last_reviewed: 2026-10-26
 module_id: MOD-SEC
 feature_id: FEAT-SEC-001
 phase: MVP
@@ -183,3 +183,25 @@ Host composes the existing SEC broker/native child with the accepted post-C Noma
 ## T09.1 Kubernetes composition compatibility — 2026-10-24
 
 Accepted ADR-0016 now has an independent configured INV consumer/registry/route. The shared Host dependency reader validates either registered provider’s exact installation/tenant/target/scope/digest while retaining the original SEC snapshot digest and existing U/C/D. Installed configuration may enable Kubernetes, Nomad or both; metadata/default behavior, owner permissions, helper fencing, accepted ADRs and historical checkpoints are preserved. Synthetic current-owner conformance and final source-bound gates are recorded separately; no live Kubernetes/company permission or merge authority is inferred.
+
+## T10 typed registry credential proposal — 2026-10-25
+
+Proposed [ADR-0018](../../../decisions/0018-project-artifact-registration.md) / [Artifact registration v1](../../../contracts/artifact-registration-v1.md) adds a distinct project/registry/repository selection for artifact.registry.read.v1/artifact.register, additive SEC registry metadata/current heads, and global native reference allocation shared with inventory. Existing target tuples/digest bytes and helper protocol remain unchanged. Existing CredentialBroker/helper slots are shared, not duplicated; all reference writers must maintain typed allocation uniqueness. Direct Basic/static Bearer has a narrowly specified post-C managed-header exception requiring exact acceptance, not inherited T09 authority. No registry binding, existing Keychain read or migration is performed. ART10-03/06/07/08/13/14 and old T08/T09 regressions are required after implementation; native/live use is separately scoped.
+
+### Exact T10.1a–f acceptance — 2026-10-25
+
+NukeGeng approved exact ADR-0018 and Artifact registration v1, including this owner’s bounded design dependencies and NukeGeng’s ART/registry slice custody. This supersedes pending-approval language in the T10 proposal above only; wider feature/module status, existing accepted contracts and historical evidence remain unchanged. Implementation, ART10 tests, native/live scope, real provisioning and PR/merge evidence are still separate. No repeat design approval or extra Sol review is needed for covered T10.1a–f work.
+
+## T10.1c implementation scope — 2026-10-25
+
+Accepted ADR-0018 / Artifact registration v1; owner MOD-SEC, custodian NukeGeng, actor trusted project registration caller and separately authorized stopped-API operator. Exact selection is installation/tenant/project/registry/repository for artifact.registry.read.v1/artifact.register. Implement typed metadata/current heads/offline receipt and one global typed reference-allocation relation, metadata-only legacy backfill and both writers’ transactional allocation. Reuse one CredentialBroker/helper protocol/two slots; keep target v1 fields/digest bytes unchanged and require current C before consumer use. Scoped source/test list is private t10c-scope.json; tests use synthetic kordra_test rows and fake/native-isolated helpers only within existing authorizations. No actual registry, existing Keychain, runtime credential HTTP endpoint or company/production change.
+
+## T10.1c local implementation — 2026-10-26
+
+Added typed registry selection/snapshot/manifest, SEC-owned profiles/references/heads/history/receipts and a global installation/reference allocation shared by both writers. Additive migration backfills inventory metadata before exact typed-owner FKs; runtime metadata remains SELECT-only and command receipts inaccessible. Downgrade refuses allocation/history deletion. Old inventory tuples/digest encodings and native request schema stay unchanged.
+
+Existing CredentialBroker now exposes a typed registry callback while retaining one shared two-slot helper pool, confirmed-exit-before-C ordering, cleared owned buffers and unknown-helper fencing. Offline registry-credential inspect/apply uses the stopped-API lease, trusted active tenant/project identity, exact manifest hash, monotonic SEC revisions and atomic SEC/IAM floor/AUD commit. Project revision/expiry changes during staging roll back; pre-commit setup failure leaves admission usable, while uncertain attempted commit closes it for exact receipt reconciliation. No online credential administration or provider access is added.
+
+Targeted evidence: 15 registry metadata/broker tests and 16 offline-command/migration cases passed locally. Migration tests generate the real old/new scripts in a fresh UUID schema inside kordra_test, retain nonempty legacy row bytes, inject transactional failure, verify explicit rerun after rollback and confirm schema removal. These do not prove full artifact HTTP U/C/M/D, managed Authorization transport or ART10 conformance; those remain T10.1d–f. Full current-tree gates and publication are recorded separately. No real installation migration, existing Keychain or registry access; no debt added/closed.
+
+T10.1e composition observes Reservation.HasUnresolvedHelper to retain the shared invocation slot when native helper quiescence is unknown. This is read-only technical lifecycle evidence, not permission or an extra lookup. Existing helper protocol, two-slot pool and inventory digest behavior remain unchanged.

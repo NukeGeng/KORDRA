@@ -25,6 +25,7 @@ public static class FoundationPermissions
             "org.read" or "org.manage" or "membership.assign-role" or "audit.read" => rule.ScopeKind == "organization",
             "project.read" or "project.manage" => rule.ScopeKind is "organization" or "project",
             "target.read" or "target.manage" => rule.ScopeKind is "project" or "environment",
+            "artifact.read" or "artifact.register" => rule.ScopeKind == "project",
             _ => false
         };
 

@@ -2,7 +2,7 @@
 id: FEAT-TEN-001
 status: proposed
 owner: NukeGeng
-last_reviewed: 2026-10-23
+last_reviewed: 2026-10-25
 module_id: MOD-TEN
 feature_id: FEAT-TEN-001
 phase: MVP
@@ -116,3 +116,11 @@ Current TEN membership and exact-scope grants remain authoritative at U/D. T07 s
 ### T08 shared implementation consumer — 2026-10-24
 
 Accepted ADR-0015 adds the SEC owner runtime/Contracts/test graph and scoped Host/offline migration composition. The existing source/test mappings above cover the shared solution, authority/HTTP/audit/architecture consumers changed in the same increment. [FEAT-SEC-001](../../connection-secrets/features/secret-binding.md#t08-local-implementation--2026-10-24) owns exact new paths and local evidence. IAM neutral dependencies/current C intent do not add a circular SEC runtime edge; AUD keeps v1 stages/schema, metadata wire v1 and existing role permissions remain unchanged. Synthetic fixture/native proof does not authorize provider network access or change this module's business ownership.
+
+## T10.1a shared graph consumer — 2026-10-25
+
+Accepted ADR-0018 adds ART Contracts/runtime/tests to the root solution and ART to the existing offline DbMigrator. This owner’s shared solution/migrator/test lockfile and architecture checks acknowledge only those exact additive project edges. Existing IAM/TEN/INV behavior, role definitions, target policies, credentials, serialized hashes and routes remain unchanged; no artifact permission/endpoint is enabled by this graph increment. ART owns source/SQL acceptance in FEAT-ART-001. Relevant lockfile changes add only the ART project dependency closure at approved EF 10.0.11/Npgsql 10.0.3 pins; no provider, company or production access.
+
+## T10.1b explicit artifact action consumer — 2026-10-25
+
+Under accepted ADR-0018 the IAM validator now recognizes artifact.read and artifact.register only for exact project grants. TEN still owns current active organization/membership/assignment, revision, expiry and scope checks, with no role-name or platform fallback and no default/backfilled grant. Existing offline founding/definition mechanisms must explicitly provision any new action; ordinary grantor limits are unchanged. Isolated real-owner tests verify no artifact authority from project/target read, exact explicit read versus register separation and membership revocation. No TEN schema or command semantics change.

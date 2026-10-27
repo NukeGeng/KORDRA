@@ -3,8 +3,11 @@
     <Project Path="src/BuildingBlocks/Security/Kordra.BuildingBlocks.Security.csproj" />
   </Folder>
   <Folder Name="/ArtifactManagement/">
+    <Project Path="src/Modules/ArtifactManagement/Contracts/Kordra.Modules.ArtifactManagement.Contracts.csproj" />
     <Project Path="src/Modules/ArtifactManagement/Domain/Kordra.ArtifactManagement.Domain.csproj" />
+    <Project Path="src/Modules/ArtifactManagement/Kordra.Modules.ArtifactManagement.csproj" />
     <Project Path="tests/ArtifactManagement.Domain.Tests/ArtifactManagement.Domain.Tests.csproj" />
+    <Project Path="tests/ArtifactManagement.Tests/ArtifactManagement.Tests.csproj" />
   </Folder>
   <Folder Name="/AuditCompliance/">
     <Project Path="src/Modules/AuditCompliance/Contracts/Kordra.Modules.AuditCompliance.Contracts.csproj" />

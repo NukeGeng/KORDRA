@@ -36,6 +36,9 @@ public sealed class AuditTransactionContext : IAsyncDisposable
     private bool _completed;
     private bool _commitAttempted;
 
+    /// <summary>True only after the actual enlisted transaction's commit was invoked, not setup/staging.</summary>
+    public bool CommitAttempted => _commitAttempted;
+
     private AuditTransactionContext(
         DbTransaction transaction, AuditDbContext auditContext, CancellationToken cancellationToken, TimeProvider timeProvider)
     {

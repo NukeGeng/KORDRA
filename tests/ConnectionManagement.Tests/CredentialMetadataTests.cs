@@ -67,20 +67,32 @@ public sealed class CredentialMetadataTests : IAsyncLifetime
         Assert.Null(await new CredentialBindingStore(db).ReadCurrentUnderAdmissionAsync(replacement.Selection with { TenantId = Guid.NewGuid() }));
     }
     [Theory]
-    [InlineData("tenant")][InlineData("target")][InlineData("expired")][InlineData("future")][InlineData("lease-too-long")][InlineData("reused-reference")]
+    [InlineData("tenant")]
+    [InlineData("target")]
+    [InlineData("expired")]
+    [InlineData("future")]
+    [InlineData("lease-too-long")]
+    [InlineData("reused-reference")]
     public async Task Wrong_scope_validity_and_reference_reuse_cannot_publish(string fault)
     {
         var first = Create(); Assert.Equal("success", (await Apply(first)).Status);
         var m = first with { ManifestId = Guid.NewGuid(), Action = "rotate", ExpectedBindingId = first.BindingId, ExpectedRevision = 1, ReferenceId = Guid.NewGuid() };
-        m = fault switch { "tenant" => m with { TenantId = Guid.NewGuid() }, "target" => m with { TargetId = Guid.NewGuid() },
-            "expired" => m with { ExpiresAtUtc = _clock.Now }, "future" => m with { NotBeforeUtc = _clock.Now.AddMinutes(1) },
-            "lease-too-long" => m with { ExpiresAtUtc = _clock.Now.AddDays(31) }, _ => m with { ReferenceId = first.ReferenceId } };
+        m = fault switch
+        {
+            "tenant" => m with { TenantId = Guid.NewGuid() },
+            "target" => m with { TargetId = Guid.NewGuid() },
+            "expired" => m with { ExpiresAtUtc = _clock.Now },
+            "future" => m with { NotBeforeUtc = _clock.Now.AddMinutes(1) },
+            "lease-too-long" => m with { ExpiresAtUtc = _clock.Now.AddDays(31) },
+            _ => m with { ReferenceId = first.ReferenceId }
+        };
         Assert.NotEqual("success", (await Apply(m)).Status);
         await using var db = await _sec.CreateDbContextAsync(); Assert.Equal(1, await db.Revisions.CountAsync(x => x.InstallationId == _installation));
         Assert.Equal(1, await db.Commands.CountAsync(x => x.InstallationId == _installation));
     }
     [Theory]
-    [InlineData(false)][InlineData(true)]
+    [InlineData(false)]
+    [InlineData(true)]
     public async Task Setup_failure_is_available_but_lost_commit_ACK_closes_and_exact_receipt_reconciles(bool lostAck)
     {
         var m = Create();
@@ -119,14 +131,14 @@ public sealed class CredentialMetadataTests : IAsyncLifetime
     [Fact]
     public async Task Contradictory_stored_result_never_becomes_a_successful_reconciliation()
     {
-        var m=Create();Assert.Equal("success",(await Apply(m)).Status);
-        await using(var db=await _sec.CreateDbContextAsync())
+        var m = Create(); Assert.Equal("success", (await Apply(m)).Status);
+        await using (var db = await _sec.CreateDbContextAsync())
         {
-            var receipt=await db.Commands.SingleAsync(x=>x.InstallationId==_installation&&x.ManifestId==m.ManifestId);
-            receipt.ResultJson=JsonSerializer.Serialize(new CredentialOperationResult("success",m.BindingId,1,Guid.NewGuid()));await db.SaveChangesAsync();
+            var receipt = await db.Commands.SingleAsync(x => x.InstallationId == _installation && x.ManifestId == m.ManifestId);
+            receipt.ResultJson = JsonSerializer.Serialize(new CredentialOperationResult("success", m.BindingId, 1, Guid.NewGuid())); await db.SaveChangesAsync();
         }
-        Assert.Equal("unknown",(await Apply(m)).Status);
-        await Assert.ThrowsAsync<InvalidOperationException>(async()=>{await using var held=await _gate.AcquireReadAsync();});
+        Assert.Equal("unknown", (await Apply(m)).Status);
+        await Assert.ThrowsAsync<InvalidOperationException>(async () => { await using var held = await _gate.AcquireReadAsync(); });
     }
     [Fact]
     public void Canonical_manifest_rejects_duplicates_unknown_missing_fields_submicrosecond_and_noncanonical_ids()
@@ -144,7 +156,7 @@ public sealed class CredentialMetadataTests : IAsyncLifetime
     {
         await using var db = await _sec.CreateDbContextAsync();
         await db.Heads.Where(x => x.InstallationId == _installation).ExecuteDeleteAsync(); await db.Revisions.Where(x => x.InstallationId == _installation).ExecuteDeleteAsync();
-        await db.References.Where(x => x.InstallationId == _installation).ExecuteDeleteAsync(); await db.Profiles.Where(x => x.InstallationId == _installation).ExecuteDeleteAsync();
+        await db.References.Where(x => x.InstallationId == _installation).ExecuteDeleteAsync(); await db.ReferenceAllocations.Where(x => x.InstallationId == _installation).ExecuteDeleteAsync(); await db.Profiles.Where(x => x.InstallationId == _installation).ExecuteDeleteAsync();
         await db.Commands.Where(x => x.InstallationId == _installation).ExecuteDeleteAsync();
         await using var a = new AuditDbContext(AuditDbContextFactory.CreateTestOptions(_locator));
         await a.Entries.Where(x => _manifests.Contains(x.InvocationId)).ExecuteDeleteAsync();
@@ -167,10 +179,10 @@ public sealed class CredentialMetadataTests : IAsyncLifetime
     }
     private sealed class AdvanceFactory(Action change) : IOfflinePolicyAuditTransactionFactory
     {
-        public async ValueTask<IOfflinePolicyAuditTransaction> EnlistAsync(DbConnection c, DbTransaction t, IOfflineAuditLease l, CancellationToken ct = default) => new Advanced(await new OfflinePolicyAuditTransactionFactory().EnlistAsync(c,t,l,ct),change);
+        public async ValueTask<IOfflinePolicyAuditTransaction> EnlistAsync(DbConnection c, DbTransaction t, IOfflineAuditLease l, CancellationToken ct = default) => new Advanced(await new OfflinePolicyAuditTransactionFactory().EnlistAsync(c, t, l, ct), change);
         private sealed class Advanced(IOfflinePolicyAuditTransaction inner, Action change) : IOfflinePolicyAuditTransaction
         {
-            public async Task<AuditTransactionStageOutcome> StageAsync(AuditIntent i, CancellationToken ct = default) { var r = await inner.StageAsync(i,ct); change(); return r; }
+            public async Task<AuditTransactionStageOutcome> StageAsync(AuditIntent i, CancellationToken ct = default) { var r = await inner.StageAsync(i, ct); change(); return r; }
             public Task<AuditAppendOutcome> CommitAsync(CancellationToken ct = default) => inner.CommitAsync(ct);
             public ValueTask DisposeAsync() => inner.DisposeAsync();
         }

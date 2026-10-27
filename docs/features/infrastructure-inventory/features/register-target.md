@@ -2,7 +2,7 @@
 id: FEAT-INV-001
 status: proposed
 owner: NukeGeng
-last_reviewed: 2026-10-24
+last_reviewed: 2026-10-25
 module_id: MOD-INV
 feature_id: FEAT-INV-001
 phase: MVP
@@ -315,3 +315,11 @@ FEAT-INV-001 owns the Kubernetes read adapter; IAM/SEC/AUD retain admission, cre
 ## PR17-INV-NAME-001 — Kubernetes workload-name compatibility, 2026-10-25
 
 Codex PR17 P2 identified that the projection incorrectly reused the 63-character DNS-label bound for workload-name segments. The repair uses Kubernetes DNS1123 subdomain syntax with the existing 253-character total bound, retaining nonempty/alphanumeric segment boundaries, lowercase ASCII and duplicate/namespace checks. Namespace and container-name limits remain 63. Regression coverage includes 64/253-character names for all four kinds, long dotted segments, malformed/254-character names, unchanged container/namespace limits and actual-owner HTTPS U/C/D disclosure of long Deployment/DaemonSet names. No schema, permission, provider operation, dependency or accepted ADR changed. Before-fix reproduction: all eight valid long-name cases failed. Final gates/commit/remote review remain separately recorded under .amr-local/pr17-name-fix/; the original finding is not marked independently cleared before current-head follow-up.
+
+## T10.1a shared graph consumer — 2026-10-25
+
+Accepted ADR-0018 adds ART Contracts/runtime/tests to the root solution and ART to the existing offline DbMigrator. This owner’s shared solution/migrator/test lockfile and architecture checks acknowledge only those exact additive project edges. Existing IAM/TEN/INV behavior, role definitions, target policies, credentials, serialized hashes and routes remain unchanged; no artifact permission/endpoint is enabled by this graph increment. ART owns source/SQL acceptance in FEAT-ART-001. Relevant lockfile changes add only the ART project dependency closure at approved EF 10.0.11/Npgsql 10.0.3 pins; no provider, company or production access.
+
+## T10.1b shared protected capacity compatibility — 2026-10-25
+
+Accepted ADR-0018 replaces ProtectedReadAdmission's private pool with the common technical sixteen-slot capacity per fair gate, shared with later artifact work. Target authority, serialized metadata v1/credential v2/configured v3 hashes, U/C/D and actual workload schemas/routes remain unchanged. Nomad/Kubernetes OpenAPI artifacts refresh only source-binding metadata and include the extracted capacity file. Targeted existing T09 HTTP/schema cases pass 31/31; no live fixture selected, no provider/credential/target mutation or wider OP-P0 completion claim.

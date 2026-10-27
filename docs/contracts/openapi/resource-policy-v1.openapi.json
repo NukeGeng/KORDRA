@@ -481,7 +481,7 @@
   "x-working-tree-source-sha256": {
     "src/Host/Kordra.Api/Endpoints/ProtectedMetadataEndpoints.cs": "4aca2bab2c723f508f2399174ce6d9feaa029c68bc05c0d9bc36974fcf3d3f12",
     "src/Host/Kordra.Api/Endpoints/EnvironmentV2Endpoints.cs": "9e36894b0f2c1d607414252430fb9e5c661460509f31c6ade7f2a4360d58f107",
-    "src/Host/Kordra.Api/Endpoints/LocalAuthenticationEndpoints.cs": "d373375273ca149c70be0070f90cebcf04f34b7dc613fed4d575d15b6205ed82",
+    "src/Host/Kordra.Api/Endpoints/LocalAuthenticationEndpoints.cs": "981e20def34e590369c61737d0ece1947810f51d1c5ad9106f725aaa87dddc55",
     "src/Host/Kordra.Api/Authorization/CurrentResourcePolicyReader.cs": "93446235d3d8ce0bb7f298a09c223fdb1df74be97812e16b82c65b85bb88ebe2",
     "src/Modules/ProjectEnvironment/Contracts/EnvironmentCreationV2.cs": "ee07f8812de6d8b7bd9b53e3cd5c95e0ccbf1b1752a5cb67e5b576a4fd0925f4",
     "src/Modules/IdentityAccess/Contracts/ResourcePolicies.cs": "5c004ddfe2f78ad7911625e00fd0151bd0afb32dd5309cc084613014c7375602",

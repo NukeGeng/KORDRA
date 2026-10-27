@@ -15,6 +15,14 @@ public sealed record ProjectOwnership(Guid TenantId, Guid ProjectId, long Projec
     string? Classification, long? PolicyRevision, PolicyBinding? PolicyBinding = null);
 public sealed record TargetAssociation(Guid TargetId, Guid TenantId, Guid ProjectId, Guid? EnvironmentId, long Revision);
 
+public sealed record ProjectIdentity(Guid TenantId, Guid ProjectId, long Revision);
+
+/// <summary>Current owner lookup with no caller tenant. Missing/inactive/ambiguous identity returns null.</summary>
+public interface IProjectIdentityReader
+{
+    Task<ProjectIdentity?> ReadCurrentProjectUnderAdmissionAsync(Guid projectId, CancellationToken ct = default);
+}
+
 /// <summary>Authoritative owner reads under the common admission gate; null is not environment absence.</summary>
 public interface IProjectOwnershipReader
 {

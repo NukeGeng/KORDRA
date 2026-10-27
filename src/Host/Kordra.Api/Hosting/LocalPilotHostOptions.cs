@@ -54,6 +54,8 @@ public sealed class LocalPilotHostOptions : IDisposable
     public KubernetesTrustConfiguration? KubernetesTrust { get; private init; }
     public NomadTrustConfiguration? NomadTrust { get; private init; }
     public KeychainAccessConfiguration? CredentialAccess { get; private init; }
+    public string? ArtifactConnectionString { get; private init; }
+    public Kordra.Modules.ArtifactManagement.Infrastructure.Registry.RegistryTrustConfiguration? ArtifactRegistries { get; private init; }
 
     public string RuntimeConnectionString { get; }
     public X509Certificate2 Certificate { get; }
@@ -114,7 +116,9 @@ public sealed class LocalPilotHostOptions : IDisposable
                 NomadTrustConfiguration? nomad = null;
                 KubernetesTrustConfiguration? kubernetes = null;
                 KeychainAccessConfiguration? access = null;
-                if (config.NomadTrustConfigurationFile is not null || config.KubernetesTrustConfigurationFile is not null)
+                var artifacts = ArtifactRuntimeConfiguration.LoadEnvironment(installationId);
+                if (config.NomadTrustConfigurationFile is not null || config.KubernetesTrustConfigurationFile is not null ||
+                    artifacts.Registries?.Registries.Any(r => r.AuthMode != "anonymous") == true)
                 {
                     if ((config.NomadTrustConfigurationFile is null) != (config.NomadTrustConfigurationSha256 is null) ||
                         (config.KubernetesTrustConfigurationFile is null) != (config.KubernetesTrustConfigurationSha256 is null) || config.CredentialExecutableFile is null ||
@@ -126,15 +130,17 @@ public sealed class LocalPilotHostOptions : IDisposable
                         kubernetes = KubernetesTrustConfiguration.Load(RequirePrivateFile(config.KubernetesTrustConfigurationFile), config.KubernetesTrustConfigurationSha256!, installationId);
                     access = new(installationId, config.CredentialExecutableFile, config.CredentialExecutableSha256, config.CredentialKeychainLocators);
                 }
-                else if (config.KubernetesTrustConfigurationSha256 is not null || config.NomadTrustConfigurationSha256 is not null || config.CredentialExecutableFile is not null ||
-                    config.CredentialExecutableSha256 is not null || config.CredentialKeychainLocators is not null)
+                else if (config.KubernetesTrustConfigurationSha256 is not null || config.NomadTrustConfigurationSha256 is not null ||
+                    artifacts.ConnectionString is null && (config.CredentialExecutableFile is not null ||
+                    config.CredentialExecutableSha256 is not null || config.CredentialKeychainLocators is not null))
                     throw new InvalidOperationException("Credential access requires explicit provider trust configuration.");
                 return new LocalPilotHostOptions(
                     connectionString,
                     certificate,
                     new LocalAuthenticationConfiguration(installationId, Guid.NewGuid()),
                     denylist,
-                    processLock) { NomadTrust = nomad, KubernetesTrust = kubernetes, CredentialAccess = access };
+                    processLock) { NomadTrust = nomad, KubernetesTrust = kubernetes, CredentialAccess = access,
+                        ArtifactConnectionString = artifacts.ConnectionString, ArtifactRegistries = artifacts.Registries };
             }
             catch { certificate.Dispose(); throw; }
         }
@@ -200,7 +206,7 @@ public sealed class LocalPilotHostOptions : IDisposable
         return fullPath;
     }
 
-    private static void RequirePrivateDirectory(string path)
+    internal static void RequirePrivateDirectory(string path)
     {
         var info = new DirectoryInfo(Path.GetFullPath(path));
         if (!info.Exists || (info.Attributes & FileAttributes.ReparsePoint) != 0)

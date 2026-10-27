@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <IsTestProject>true</IsTestProject>
+    <IsPackable>false</IsPackable>
+    <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="../IdentityAccess.Tests/LocalAuthenticationTestHost.cs" Link="Fixtures/LocalAuthenticationTestHost.cs" />
+    <Compile Include="../IdentityAccess.Tests/TestDatabaseConfiguration.cs" Link="Fixtures/TestDatabaseConfiguration.cs" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="18.10.1" PrivateAssets="all" />
+    <PackageReference Include="xunit" Version="2.9.3" PrivateAssets="all" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="3.1.5" PrivateAssets="all" />
+    <ProjectReference Include="../../src/Modules/ArtifactManagement/Kordra.Modules.ArtifactManagement.csproj" />
+    <ProjectReference Include="../../src/Host/Kordra.DbMigrator/Kordra.DbMigrator.csproj" />
+    <ProjectReference Include="../../src/Host/Kordra.Api/Kordra.Api.csproj" />
+  </ItemGroup>
+</Project>

@@ -2,7 +2,7 @@
 id: FEAT-IAM-002
 status: accepted
 owner: NukeGeng
-last_reviewed: 2026-10-23
+last_reviewed: 2026-10-25
 module_id: MOD-IAM
 feature_id: FEAT-IAM-002
 phase: Foundation / M1-A
@@ -167,3 +167,11 @@ Accepted ADR-0017 adds optional private Nomad trust/helper fields to the stopped
 ## T09.1 Kubernetes composition compatibility — 2026-10-24
 
 Accepted ADR-0016 now has an independent configured INV consumer/registry/route. The shared Host dependency reader validates either registered provider’s exact installation/tenant/target/scope/digest while retaining the original SEC snapshot digest and existing U/C/D. Installed configuration may enable Kubernetes, Nomad or both; metadata/default behavior, owner permissions, helper fencing, accepted ADRs and historical checkpoints are preserved. Synthetic current-owner conformance and final source-bound gates are recorded separately; no live Kubernetes/company permission or merge authority is inferred.
+
+## T10.1a shared graph consumer — 2026-10-25
+
+Accepted ADR-0018 adds ART Contracts/runtime/tests to the root solution and ART to the existing offline DbMigrator. This owner’s shared solution/migrator/test lockfile and architecture checks acknowledge only those exact additive project edges. Existing IAM/TEN/INV behavior, role definitions, target policies, credentials, serialized hashes and routes remain unchanged; no artifact permission/endpoint is enabled by this graph increment. ART owns source/SQL acceptance in FEAT-ART-001. Relevant lockfile changes add only the ART project dependency closure at approved EF 10.0.11/Npgsql 10.0.3 pins; no provider, company or production access.
+
+## T10.1b technical capacity consumer — 2026-10-25
+
+Accepted ADR-0018 extracts protected invocation capacity into existing Security; target/inventory and later artifact consumers share the original sixteen slots per fair gate. Self/authentication admission, fair reader/writer behavior, audit fencing and boot/session rules are unchanged. Mixed saturation and idempotent lease disposal tests pass; no artifact authority is carried in a cookie or session claim. The new project-fact resolver is not a standalone registration permit or an enabled HTTP endpoint.

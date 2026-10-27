@@ -2,7 +2,7 @@
 id: ENG-LUNA-IMPLEMENTATION-HANDOFF
 status: proposed
 owner: NukeGeng
-last_reviewed: 2026-10-24
+last_reviewed: 2026-10-26
 ---
 
 # Luna Max implementation handoff — approved direction, decision-gated execution
@@ -153,3 +153,52 @@ The explicit Sol Medium implementation exception remains in force and was verifi
 ## T09.1 continuation implementation — 2026-10-24
 
 FEAT-INV-001 with IAM/SEC/AUD now implements accepted ADR-0016 T09.1a–d in existing projects: immutable private namespace trust, pinned bounded six-GET transport, Pod/Deployment/StatefulSet/DaemonSet projections, configured workloads route and current U/C/D with freshness caps. Nomad T09.2 remains a separate adapter; metadata and legacy authority serialization are preserved. Exact source/test mappings are in the INV owner feature, wire artifacts in Kubernetes workloads v1 and operator custody/rollback in the runbook. Current-session evidence is private under .amr-local/t09/kubernetes/; final gates and PR/CI/review identities remain distinct. No checkpoint replay, local AI review, new package/project, Clients change, production operation or ADR approval is performed. Kubernetes live T09.1e, Helm/OBS health and complete OP-P0 remain outside implementation acceptance; do not report the entire broader T09 vision as qualified.
+
+## T10 exact design handoff — proposed 2026-10-25
+
+Current verified source base is main b70def19f69d460d4d9dcac099fa46a56978718d: Nomad #16 and Kubernetes #17 integrated through merged #18. #18 head f69e3081d41b60ba2e693b450108049ad04ccaf2 passed docs-integrity/artifact-domain/clients-pin and automatic Codex review; main's tree matches the reviewed final Kubernetes fix. This supersedes older provider implementation-pending notes above, without claiming Kubernetes live T09.1e, Helm, OBS health or whole OP-P0 qualification. The retained historical GOAL checkpoint is unchanged; this is not its replay/completion receipt.
+
+Owner selected a private OCI/Docker Distribution registry. [ADR-0018](../decisions/0018-project-artifact-registration.md) and [Artifact registration v1](../contracts/artifact-registration-v1.md) are the reviewable proposed T10 package. Exact acceptance must cover ART persistence, new project permissions/fixed eligibility, typed SEC registry selection/global native-reference allocation, direct-auth/header/TLS residuals and transactional receipt/recovery semantics. NukeGeng is proposed slice custodian. Registry preference alone does not supply this approval; proposed release-execution v1/ADR-0005 stay unadopted.
+
+Developer sequence is T10.1a store/identity → b current project authority → c SEC allocation/broker seam → d bounded verifier → e guarded API/recovery → f conformance/docs/feature PR, with the exact planned files and ART10-01–16 matrix in the contract. Preserve existing Domain tests and T01–T09 consumers; no fake authorizer, new runtime service, extra model session, broad refactor or Clients change. Configure no real registry and read no existing credential merely to make tests pass. Live T10.1g and new native fixture access need separate exact scope. Targeted tests during slices; required Product gates at implementation/PR boundaries; Codex Auto PR Review then human merge.
+
+This bounded design changes Markdown only. It does not dispatch/accept a GOAL task, run Product suites/migrations/providers or trigger AI/PR review. Exact model evidence for this turn is gpt-6.1-sol/max, not a claimed high invocation; private receipts preserve it. Before implementation, verify the Developer turn's actual gpt-6-luna/max or an explicit scoped exception. Save proposal hashes/snapshots and document-check receipts privately under .amr-local/t10-design; human decision annotations must bind the reviewed content. Sol's bounded design ends at that handoff.
+
+## T10.1a–f accepted handoff — 2026-10-25
+
+NukeGeng approved exact ADR-0018 and Artifact registration v1 after the frozen proposal. All 14 proposal hashes matched before annotation; original ADR/contract hashes and the explicit decision are recorded in ADR-0018 and private .amr-local/approvals/adr-0018-t10/acceptance.json. This supersedes pending-approval language in the T10 proposal only. No design content changed; no covered-slice repeat approval/Sol review is needed. Start T10.1a with actual verified Developer invocation evidence and an owner-mapped current-session task. There is no T10 execution checkpoint yet: preserve the historical Foundation checkpoint, inspect its retained evidence once, and prepare an explicit approved T10 plan rather than relabeling/replaying it.
+
+### Reusable Product Developer session instruction
+
+Paste the following into the Product chat at the start/resumption of a Developer session; it is an instruction to the active agent, not a shell/native background GOAL command:
+
+```text
+Tiếp tục GOAL KORDRA Product theo AMR v4 trong phiên hiện tại.
+Đọc checkpoint/evidence hiện có và handoff mới nhất; chọn task eligible tiếp theo có thiết kế đã duyệt. Nếu chưa có plan cho feature đó, tạo plan giới hạn, owner-mapped trong AMR hiện có; giữ nguyên lịch sử cũ, không reset/replay hoặc xin duyệt lại phần đã được duyệt.
+Xác minh model/effort native của phiên Developer. Tự thực hiện tuần tự các task đã được duyệt: code, targeted tests, cập nhật tài liệu/checkpoint; chạy đầy đủ gate tại ranh giới validation/PR và tái sử dụng evidence chỉ khi còn hợp lệ.
+Feature hoàn chỉnh thì commit theo feature, push và tạo PR theo workflow; không đưa phần dở dang/ngoài scope vào commit. Codex Auto PR Review là reviewer; xử lý findings theo BIR, không tự gọi thêm Sol review hoặc subagent. Human maintainer quyết định merge.
+Chỉ dừng khi hết phạm vi đã duyệt, thiếu quyết định thiết kế/model chính xác, có blocker thực sự hoặc cần quyền cho thao tác nhạy cảm. Không tự duyệt ADR, mở rộng quyền, dùng secret/hạ tầng thật hoặc chuyển sang milestone chưa được duyệt.
+Không thao tác Clients/Website. Báo task đã hoàn thành, checkpoint/evidence và bước tiếp theo.
+```
+
+For the next session the selected feature is FEAT-ART-001, accepted T10.1a–f; begin T10.1a. The instruction continues later tasks only when their own designs are approved. Local CLI supports step/finish/reconciliation, not an unattended multi-session loop: no goal run/--auto command exists. An active session must perform implementation between step and finish, generate real private context/evidence and honor the native model/user merge/production boundaries. Nothing here starts a scheduled job or promises execution after the chat/host stops.
+
+## T10.1a retained local implementation — 2026-10-25
+
+Authorized native Sol 6.1 Medium has implemented immutable Domain values/receipt candidates plus ART Contracts/runtime/store/migration/tests and offline command/graph. The original 48 Domain tests remain within 111 passing Domain cases; new owner/boundary tests pass 31/31, actual architecture checks 6/6 and Release build 0 warnings/errors. Use the current private persistence-progress/gate receipts after final formatting/docs, not a stale pre-graph test receipt. Store staging is not authorization or a confirmed commit; T10.1b current project authority, T10.1c SEC seam, T10.1d verifier and T10.1e/f API/recovery/conformance are still required. No real migration/provider read or PR has occurred.
+
+The CLI child plan remains pending because current-session completion admits only Luna Max; actual Medium evidence is retained under .amr-local/t10-implementation without forging another profile or terminal receipt. This tool limitation does not revoke the owner's explicit Medium implementation authorization or require design approval again. Preserve the historical Foundation checkpoint; continue the covered source work, and reconcile supported checkpoint evidence honestly at finalization.
+
+## T10.1b retained current-authority source — 2026-10-25
+
+Accepted b scope now has project-only artifact actions, current PRJ owner lookup/Host adapters, IAM invocation-bound partial eligibility snapshots and a common capacity16 lease used by legacy protected reads. Targeted 100 IAM/admission/role, 4 real-owner PRJ and 31 synthetic T09 HTTP/schema cases passed. Use current private t10b evidence/gates at the validation boundary; old T10.1a gates are historical after these code changes. There is no artifact route or independent positive permit. Next T10.1c must add the typed SEC registry selection/global allocation and reuse the existing broker/helper slots; then verifier and actual guarded U/C/M/D/HTTP/recovery/conformance remain d–f. Do not ask design approval again or launch Sol review. Preserve the CLI pending/honest Medium evidence limitation instead of manufacturing a terminal receipt.
+
+## T10 current implementation handoff — 2026-10-26
+
+Use existing foundation-t03 worktree/branch and approved T10.1a–f; do not replay historical checkpoints or ask for covered design approval again. T10.1a–b and SEC metadata/broker/offline seam have source-bound local gates; latest full pre-verifier gates passed 218 tooling/924 Product, one explicitly excluded live Nomad case skipped. Verifier additions subsequently passed all 135 ART tests; full current-tree gates remain due at the final feature boundary. Added SEC conflicting-history migration case passed separately (three migration cases). Evidence is private .amr-local/t10-implementation/t10c-validation.json and t10d-validation.json; CLI goal finish is not fabricated for the owner's authorized Medium exception.
+
+Next eligible scope is T10.1e: compose current project/session/TEN/IAM/registry/SEC evidence U→helper→C→provider→M→D, durable Pending/terminal receipts and atomic ART/AUD/floor under existing gate/capacity; exact own status/detail/list/selectors; stopped metadata-only recovery. Verify provider facts against original/current expiry/config/SEC revisions before M/D and preserve confirmed M if disclosure is denied. Use approved APIs/budgets and existing owner ports; no runtime startup DDL, task takeover/replay, permissive fixture in production or existing secret/provider access. T10.1f owns final conformance/fixtures/OpenAPI/runbook, complete feature commit/push/PR and native Auto PR Review; human merge remains separate.
+
+## T10 current implementation handoff — 2026-10-27
+
+The owner explicitly selected `gpt-6.1-terra` for this continuation; native turn metadata records `gpt-6.1-terra/xhigh`. T10.1e HTTP, synthetic authenticated Keychain integration and stopped exact-plan recovery have source and targeted evidence; inspect the latest private evidence instead of assuming completion. Finish the ART10-01–16 matrix against actual tests, remaining negative/compatibility cases, current full gates and feature publication. The CLI's Luna-only completion restriction is not evidence of another model or a reason to replay work. Preserve the historical checkpoint and unrelated drafts.

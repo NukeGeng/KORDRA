@@ -32,6 +32,7 @@ public sealed class CredentialBindingStore(CredentialDbContext db) : ICredential
     {
         custody.RequireHeld(); if (!m.IsValid() || !m.IsActiveAt(now)) return null;
         var s = m.Selection;
+        if (m.Action != "revoke" && await db.ReferenceAllocations.AnyAsync(x => x.InstallationId == s.InstallationId && x.ReferenceId == m.ReferenceId, ct)) return null;
         var head = await db.Heads.SingleOrDefaultAsync(x => x.InstallationId == s.InstallationId && x.TenantId == s.TenantId && x.TargetId == s.TargetId && x.ConsumerId == s.ConsumerId && x.Operation == s.Operation, ct);
         var previous = head is null ? null : await ReadCurrentUnderAdmissionAsync(s, ct);
         if (head is null ? m.ExpectedRevision != 0 || m.ExpectedBindingId is not null || m.Action != "create" : previous is null || head.BindingId != m.ExpectedBindingId || head.Revision != m.ExpectedRevision) return null;
@@ -55,11 +56,26 @@ public sealed class CredentialBindingStore(CredentialDbContext db) : ICredential
         {
             reference = m.ReferenceId!.Value;
             if (await db.References.AnyAsync(x => x.InstallationId == s.InstallationId && x.ReferenceId == reference, ct)) return null;
+            db.ReferenceAllocations.Add(new() { InstallationId = s.InstallationId, ReferenceId = reference, TenantId = s.TenantId, OwnerKind = "inventory", InventoryProfileId = profile });
             db.References.Add(new() { InstallationId = s.InstallationId, TenantId = s.TenantId, ProfileId = profile, ReferenceId = reference, LocatorId = m.LocatorId!.Value });
             from = m.NotBeforeUtc!.Value; until = m.ExpiresAtUtc!.Value; state = "active";
         }
-        db.Revisions.Add(new() { InstallationId = s.InstallationId, TenantId = s.TenantId, TargetId = s.TargetId, ConsumerId = s.ConsumerId, Operation = s.Operation,
-            BindingId = m.BindingId, Revision = revision, ProfileId = profile, ReferenceId = reference, State = state, NotBeforeUtc = from, ExpiresAtUtc = until, ManifestId = m.ManifestId });
+        db.Revisions.Add(new()
+        {
+            InstallationId = s.InstallationId,
+            TenantId = s.TenantId,
+            TargetId = s.TargetId,
+            ConsumerId = s.ConsumerId,
+            Operation = s.Operation,
+            BindingId = m.BindingId,
+            Revision = revision,
+            ProfileId = profile,
+            ReferenceId = reference,
+            State = state,
+            NotBeforeUtc = from,
+            ExpiresAtUtc = until,
+            ManifestId = m.ManifestId
+        });
         if (head is null) { head = new() { InstallationId = s.InstallationId, TenantId = s.TenantId, TargetId = s.TargetId, ConsumerId = s.ConsumerId, Operation = s.Operation }; db.Heads.Add(head); }
         head.BindingId = m.BindingId; head.Revision = revision;
         return new(1, s, m.BindingId, revision, profile, reference, "macos-keychain-file-v1", "opaque-bytes-v1", state, from, until);
