@@ -175,3 +175,7 @@ Accepted ADR-0018 adds ART Contracts/runtime/tests to the root solution and ART 
 ## T10.1b technical capacity consumer — 2026-10-25
 
 Accepted ADR-0018 extracts protected invocation capacity into existing Security; target/inventory and later artifact consumers share the original sixteen slots per fair gate. Self/authentication admission, fair reader/writer behavior, audit fencing and boot/session rules are unchanged. Mixed saturation and idempotent lease disposal tests pass; no artifact authority is carried in a cookie or session claim. The new project-fact resolver is not a standalone registration permit or an enabled HTTP endpoint.
+
+## T11.0 shared solution/architecture acknowledgment — 2026-10-27
+
+The accepted ADR-0005 T11.0 adds a BCL-only ApprovalGovernance Domain project and its test project to Kordra.slnx and the actual architecture graph. Existing feature behavior, permissions, schema and API are unchanged by this shared graph update. APR policy persistence, commands and complete feature validation remain in progress.

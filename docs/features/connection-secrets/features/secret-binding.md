@@ -205,3 +205,7 @@ Existing CredentialBroker now exposes a typed registry callback while retaining 
 Targeted evidence: 15 registry metadata/broker tests and 16 offline-command/migration cases passed locally. Migration tests generate the real old/new scripts in a fresh UUID schema inside kordra_test, retain nonempty legacy row bytes, inject transactional failure, verify explicit rerun after rollback and confirm schema removal. These do not prove full artifact HTTP U/C/M/D, managed Authorization transport or ART10 conformance; those remain T10.1d–f. Full current-tree gates and publication are recorded separately. No real installation migration, existing Keychain or registry access; no debt added/closed.
 
 T10.1e composition observes Reservation.HasUnresolvedHelper to retain the shared invocation slot when native helper quiescence is unknown. This is read-only technical lifecycle evidence, not permission or an extra lookup. Existing helper protocol, two-slot pool and inventory digest behavior remain unchanged.
+
+## T11.0 shared solution/architecture acknowledgment — 2026-10-27
+
+The accepted ADR-0005 T11.0 adds a BCL-only ApprovalGovernance Domain project and its test project to Kordra.slnx and the actual architecture graph. Existing feature behavior, permissions, schema and API are unchanged by this shared graph update. APR policy persistence, commands and complete feature validation remain in progress.

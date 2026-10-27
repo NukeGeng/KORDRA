@@ -1,4 +1,11 @@
 <Solution>
+  <Folder Name="/ApprovalGovernance/">
+    <Project Path="src/Modules/ApprovalGovernance/Contracts/Kordra.Modules.ApprovalGovernance.Contracts.csproj" />
+    <Project Path="src/Modules/ApprovalGovernance/Kordra.Modules.ApprovalGovernance.csproj" />
+    <Project Path="src/Modules/ApprovalGovernance/Domain/Kordra.ApprovalGovernance.Domain.csproj" />
+    <Project Path="tests/ApprovalGovernance.Domain.Tests/ApprovalGovernance.Domain.Tests.csproj" />
+    <Project Path="tests/ApprovalGovernance.Tests/ApprovalGovernance.Tests.csproj" />
+  </Folder>
   <Folder Name="/BuildingBlocks/">
     <Project Path="src/BuildingBlocks/Security/Kordra.BuildingBlocks.Security.csproj" />
   </Folder>

@@ -171,3 +171,9 @@ Artifact routes and optional runtime composition use the existing owner services
 Targeted local evidence for this increment: 217 artifact tests passed before the additional real-owner/concurrency cases; five real HTTPS owner-state denials and one concurrent distinct-key registration test then passed. Recovery tests independently exercised matching Registered M evidence, missing M audit, pre-commit failure and actual lost commit acknowledgement. These are local results for the current worktree; final full-gate and PR evidence are recorded separately.
 
 The local full gate on 2026-10-27 passed 218 tooling tests and 1,158 Product tests; one separately scoped live Nomad test was skipped. The [ART10 evidence map](../../../contracts/artifact-registration-v1.md#t101f-local-conformance-evidence-map--2026-10-27) separates local coverage from hosted review and merge.
+
+## T11 proposed consumer seam — 2026-10-27
+
+ART consumer acknowledgment for [Release and approval v1](../../../contracts/release-approval-v1.md) / [ADR-0005](../../../decisions/0005-immutable-release.md), awaiting exact human acceptance. Add a neutral owner Contract/reader for exact trusted tenant/project/artifactId, returning only the closed immutable T10 ArtifactV1 facts. Do not borrow another registration provenance receipt, access SEC/registry or reverify historical records. Qualification remains manifest/config hash evidence with unattested provenance; layer/signature availability remains unverified.
+
+This is planned additive scope, not implemented source/test evidence or a change to the accepted T01–T10 baseline. Preserve current source/test mappings; Developer adds precise new paths and negative/compatibility tests only when the owning slice exists. R11-02/03/10/12/15 are required as applicable. No real database/provider/secret operation is authorized.

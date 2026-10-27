@@ -52,12 +52,17 @@ public static class Program
                 return await LocalRegistryCredentialCommand.RunAsync(args[1..], options);
             }
 
+            if (args is ["approval-policy", "inspect", _, _] || args is ["approval-policy", "apply", _, _, _])
+            {
+                return await LocalApprovalPolicyCommand.RunAsync(args[1..]);
+            }
+
             if (args is ["artifact-recovery", "inspect", _, _] || args is ["artifact-recovery", "apply", _, _, _])
             {
                 return await LocalArtifactRecoveryCommand.RunAsync(args[1..]);
             }
 
-            Console.Error.WriteLine("Usage: Kordra.Api [--profile local-pilot | identity enroll-user|recover-user|disable-user | policy inspect <private-manifest> <private-admin-locator> | policy apply <private-manifest> <private-admin-locator> <approved-sha256> | credential inspect <private-manifest> <private-admin-locator> | credential apply <private-manifest> <private-admin-locator> <approved-sha256> | registry-credential inspect <private-manifest> <private-admin-locator> | registry-credential apply <private-manifest> <private-admin-locator> <approved-sha256> | artifact-recovery inspect <private-plan> <private-admin-locator> | artifact-recovery apply <private-plan> <private-admin-locator> <approved-sha256>]");
+            Console.Error.WriteLine("Usage: Kordra.Api [--profile local-pilot | identity enroll-user|recover-user|disable-user | policy inspect <private-manifest> <private-admin-locator> | policy apply <private-manifest> <private-admin-locator> <approved-sha256> | credential inspect <private-manifest> <private-admin-locator> | credential apply <private-manifest> <private-admin-locator> <approved-sha256> | registry-credential inspect <private-manifest> <private-admin-locator> | registry-credential apply <private-manifest> <private-admin-locator> <approved-sha256> | approval-policy inspect <private-manifest> <private-admin-locator> | approval-policy apply <private-manifest> <private-admin-locator> <approved-sha256> | artifact-recovery inspect <private-plan> <private-admin-locator> | artifact-recovery apply <private-plan> <private-admin-locator> <approved-sha256>]");
             return 2;
         }
         catch

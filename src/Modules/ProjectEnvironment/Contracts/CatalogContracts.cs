@@ -45,3 +45,14 @@ public interface IEnvironmentPolicyReader
 {
     Task<bool> IsApplicableAsync(Guid tenantId, Guid projectId, string classification, long policyRevision, CancellationToken cancellationToken = default);
 }
+
+/// <summary>Neutral owner facts for a release policy binding; never an authorization or provider permit.</summary>
+public sealed record ReleasePolicyEnvironment(Guid TenantId, Guid ProjectId, long ProjectRevision,
+    Guid EnvironmentId, long EnvironmentRevision, string Classification);
+
+public interface IReleasePolicyEnvironmentReader
+{
+    // Caller must hold shared admission or stopped installation custody.
+    Task<ReleasePolicyEnvironment?> ReadCurrentUnderAdmissionAsync(Guid tenantId, Guid projectId,
+        Guid environmentId, CancellationToken cancellationToken = default);
+}

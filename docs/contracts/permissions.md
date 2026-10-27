@@ -2,12 +2,28 @@
 id: CTR-PERMISSIONS
 status: proposed
 owner: unassigned
-last_reviewed: 2026-10-18
+last_reviewed: 2026-10-27
 ---
 
 # Permission catalog, role templates & scope matrix
 
 **Source of truth cho permission keys và scope.** Không authorize bằng tên role trong code. Role là cấu hình tổng hợp các permission. `platform/*` chỉ phục vụ quản trị nền tảng, không cấp implicit tenant resource access.
+
+## Exact T11 permission proposal — awaiting ADR-0005 approval
+
+The wider catalog and role templates below remain proposals; they are not runtime grants. Accepted T01–T10 contracts and the actual scoped action catalog continue to govern implementation. [Release and approval v1](release-approval-v1.md) proposes exactly these new runtime pairs, pending human acceptance; existing broader deployment actions are not aliases or adopted by T11:
+
+| Permission | Exact scope | T11 restriction |
+|---|---|---|
+| release.create | project | Draft creation; only its creator may replace/freeze with current permission and exact CAS/selection. |
+| release.read | project | Bounded release history/detail. |
+| release.retire | project | Explicit Frozen-to-Retired decision, no resurrection. |
+| release.request-approval | environment | Exact Frozen revision plus current release.read project. |
+| release.approval.read | environment | Queue/detail/full bounded frozen subject for that environment only. |
+| release.approve | environment | Grant/reject plus current approval-read; grant adds current original requester proof, SoD and qualification/TTL/window checks. |
+| release.approval.revoke | environment | Revoke plus current approval-read; no requester/role exemption. |
+
+Resolve each required action independently with existing complete denies and no scope inheritance. No default grant, backfill, deployment.approve/override, support bypass or policy-management HTTP permission. Policy provision is stopped trusted-maintainer custody. T11 approval always has executionAuthorized=false and only Development/Test pilot qualification. Example role labels below never authorize code or automatically provision these pairs.
 
 ## Permission keys
 | Permission | Scope(s) | Critical action | Notes |
