@@ -52,10 +52,25 @@
           "Npgsql": "10.0.3"
         }
       },
+      "kordra.approvalgovernance.domain": {
+        "type": "Project"
+      },
       "kordra.artifactmanagement.domain": {
         "type": "Project"
       },
       "kordra.buildingblocks.security": {
+        "type": "Project"
+      },
+      "kordra.modules.approvalgovernance": {
+        "type": "Project",
+        "dependencies": {
+          "Kordra.ApprovalGovernance.Domain": "[1.0.0, )",
+          "Kordra.Modules.ApprovalGovernance.Contracts": "[1.0.0, )",
+          "Microsoft.EntityFrameworkCore.Relational": "[10.0.11, )",
+          "Npgsql.EntityFrameworkCore.PostgreSQL": "[10.0.3, )"
+        }
+      },
+      "kordra.modules.approvalgovernance.contracts": {
         "type": "Project"
       },
       "kordra.modules.artifactmanagement": {

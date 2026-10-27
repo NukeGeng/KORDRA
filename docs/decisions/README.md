@@ -15,7 +15,7 @@ ADR tracks **why** a design was chosen; status initially `proposed`, so not a fi
 | [0002](0002-messaging-durability.md) | Wolverine + PostgreSQL durability first |
 | [0003](0003-tenant-authorization.md) | Accepted narrow permission/trusted-scope baseline; no IAM/login/storage runtime adoption |
 | [0004](0004-single-writer-reconciliation.md) | Single desired-state writer/controller owner |
-| [0005](0005-immutable-release.md) | Approval pinned to artifact/spec digest |
+| [0005](0005-immutable-release.md) | Proposed exact T11 release-intent/policy/approval decision; awaiting owner acceptance |
 | [0006](0006-driver-capabilities.md) | Adapter capability model |
 
 | [0007](0007-reference-testbed-not-product.md) | Reference environment is a bounded testbed, not product architecture |
@@ -49,3 +49,11 @@ Accepted scope update — 2026-10-24: NukeGeng approved exact ADR-0016 and Kuber
 ## ADR-0018 accepted scope — 2026-10-25
 
 NukeGeng approved exact ADR-0018 and Artifact registration v1 for T10.1a–f. The decision resolves the design gate recorded above; original hashes/bytes and the explicit owner answer are preserved privately. No proposed wider ADR, live provider/secret use, real migration or implementation/merge is automatically accepted.
+
+## T11 exact proposal — 2026-10-27
+
+[ADR-0005](0005-immutable-release.md) and [Release and approval v1](../contracts/release-approval-v1.md) propose FEAT-APR-002 → FEAT-REL-001 → FEAT-APR-001. Main bc91c2a includes merged T10; no T11 source exists. Acceptance must explicitly cover release-intent rather than execution, Development/Test qualification, explicit SoD/TTL/windows, scoped permissions and owner persistence/transaction boundaries. No accepted ADR, infrastructure permission or merge authority changes before that decision.
+
+## T11 exact owner acceptance — 2026-10-27
+
+NukeGeng accepted ADR-0005, Release and approval v1 and FEAT-APR-002/REL-001/APR-001 for T11.0–T11.3. This supersedes pending-approval wording in the earlier T11 proposal, not historical evidence. Exact pre-annotation hashes and private acceptance receipt are recorded in ADR-0005. T11 runtime implementation and validation remain in progress; no deployment, real database/secret/target operation or merge is authorized by this design acceptance. The user explicitly selected gpt-6.1-terra/xhigh for T11; actual turn metadata and native model catalog confirm this profile.

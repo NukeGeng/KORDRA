@@ -12,3 +12,11 @@ public sealed class TenantOrganizationAuthority(IDbContextFactory<TenantDbContex
         return tenantId != Guid.Empty && await db.Organizations.AsNoTracking().AnyAsync(x => x.Id == tenantId && x.Status == "active", ct);
     }
 }
+
+/// <summary>Owner-controlled lookup using a caller-enlisted connection under stopped custody.</summary>
+public sealed class EnlistedTenantOrganizationAuthority(TenantDbContext db) : IPolicyTenantAuthority
+{
+    public Task<bool> IsActiveTenantUnderAdmissionAsync(Guid tenantId, CancellationToken ct = default) =>
+        tenantId == Guid.Empty ? Task.FromResult(false) :
+        db.Organizations.AsNoTracking().AnyAsync(x => x.Id == tenantId && x.Status == "active", ct);
+}

@@ -323,3 +323,9 @@ Accepted ADR-0018 adds ART Contracts/runtime/tests to the root solution and ART 
 ## T10.1b shared protected capacity compatibility — 2026-10-25
 
 Accepted ADR-0018 replaces ProtectedReadAdmission's private pool with the common technical sixteen-slot capacity per fair gate, shared with later artifact work. Target authority, serialized metadata v1/credential v2/configured v3 hashes, U/C/D and actual workload schemas/routes remain unchanged. Nomad/Kubernetes OpenAPI artifacts refresh only source-binding metadata and include the extracted capacity file. Targeted existing T09 HTTP/schema cases pass 31/31; no live fixture selected, no provider/credential/target mutation or wider OP-P0 completion claim.
+
+## T11 proposed consumer seam — 2026-10-27
+
+INV consumer acknowledgment for [Release and approval v1](../../../contracts/release-approval-v1.md) / [ADR-0005](../../../decisions/0005-immutable-release.md), awaiting exact human acceptance. Add a neutral registered-target identity Contract/reader with exact tenant/project/environment/kind/revision. Host requires agreement with current PRJ association; no provider observation, remote identity claim, target.read permit or credential load is needed for release intent.
+
+This is planned additive scope, not implemented source/test evidence or a change to the accepted T01–T10 baseline. Preserve current source/test mappings; Developer adds precise new paths and negative/compatibility tests only when the owning slice exists. R11-02/03/10/12/15 are required as applicable. No real database/provider/secret operation is authorized.

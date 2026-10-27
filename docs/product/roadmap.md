@@ -2,12 +2,18 @@
 id: PROD-ROADMAP
 status: proposed
 owner: unassigned
-last_reviewed: 2026-10-25
+last_reviewed: 2026-10-27
 ---
 
 # Delivery roadmap & architecture maturity
 
-## Current T10 decision boundary — 2026-10-25
+## Current T11 design boundary — 2026-10-27
+
+T10 PR #19 was human-merged at main bc91c2a66abcdb2156363f5fdbd3dc7f89046e67. Reviewed head 5969786f910081fa4df2c0ce808f5e8c551b7b88 passed docs-integrity/artifact-domain/clients-pin and automatic Codex review with no findings. Local evidence is 218 tooling and 1,159 Product passes, with one separately scoped live Nomad skip; this does not qualify a live registry or the whole Operator Pilot.
+
+T11 is now a bounded proposed package: [ADR-0005](../decisions/0005-immutable-release.md) and [Release and approval v1](../contracts/release-approval-v1.md), with APR policy → REL immutable release intent → APR queue/decisions. Source remains unimplemented pending exact human approval. Qualification is Development/Test pilot only and executionAuthorized=false; approved intent is useful review history, not deploy authority. T12/T13 still need full execution-plan, durable worker, provider and operational gates. No infrastructure setup, HA/HPA/placement expansion is adopted by T11. Earlier dated status paragraphs below are historical.
+
+## Historical T10 decision boundary — 2026-10-25
 
 T09 Nomad and Kubernetes source is now present on main b70def19f69d460d4d9dcac099fa46a56978718d after #18; Kubernetes live T09.1e, Helm, OBS and complete OP-P0 remain separately qualified. The next T10 deliverable is a digest-first project artifact catalog for the selected private OCI/Docker Distribution registry. [ADR-0018](../decisions/0018-project-artifact-registration.md) / [Artifact registration v1](../contracts/artifact-registration-v1.md) specify proposed T10.1a–f and ART10 acceptance, including required IAM/SEC extensions. Exact design approval precedes implementation; none is implemented by this document. T11 release/approval and later deployment/worker decisions remain their own gates. Existing earlier dated progress below is historical.
 
@@ -213,3 +219,11 @@ The approved ART identity/store/migration slice now has local source and targete
 ## T10.1a–f local implementation — 2026-10-27
 
 The approved project artifact catalog, registry verification, current authorization, local HTTPS surface and stopped recovery are implemented in the feature worktree. The local gate passed 218 tooling and 1,158 Product tests; one live Nomad test was skipped. The [contract evidence map](../contracts/artifact-registration-v1.md#t101f-local-conformance-evidence-map--2026-10-27) describes test coverage. Feature PR CI, Codex Auto PR Review and the maintainer's merge decision remain pending; this is not a statement that the feature is on `main`. Live registry qualification T10.1g and later release/deployment features require their own approved scope.
+
+## T11 exact owner acceptance — 2026-10-27
+
+NukeGeng accepted ADR-0005, Release and approval v1 and FEAT-APR-002/REL-001/APR-001 for T11.0–T11.3. This supersedes pending-approval wording in the earlier T11 proposal, not historical evidence. Exact pre-annotation hashes and private acceptance receipt are recorded in ADR-0005. T11 runtime implementation and validation remain in progress; no deployment, real database/secret/target operation or merge is authorized by this design acceptance. The user explicitly selected gpt-6.1-terra/xhigh for T11; actual turn metadata and native model catalog confirm this profile.
+
+## T11.0 local policy implementation — 2026-10-27
+
+FEAT-APR-002 is implemented locally under accepted ADR-0005: exact approval policy/manifest, neutral owner seams, least-privilege migration and guarded offline policy transaction/reconciliation. The current-source full gate passed 218 tooling and 1,220 Product cases, one separate live Nomad skip; hosted review/CI and human merge are pending. The prior intermittent synthetic Keychain failure passed on the subsequent full run but has no confirmed root cause. T11.1 Release, T11.2 Approval decisions and T11.3 milestone conformance remain outstanding. Real installation operations are separately authorized.

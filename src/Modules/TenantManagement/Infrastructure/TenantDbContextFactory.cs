@@ -48,6 +48,15 @@ public sealed class TenantDbContextFactory : IDesignTimeDbContextFactory<TenantD
         return options.Options;
     }
 
+    public static DbContextOptions<TenantDbContext> CreateOfflineEnlistedOptions(System.Data.Common.DbConnection connection)
+    {
+        var parsed = new NpgsqlConnectionStringBuilder(connection.ConnectionString);
+        if (parsed.Database == "kordra_test") ValidateTarget(connection.ConnectionString, "kordra_test", "kordra_test");
+        else ValidateTarget(connection.ConnectionString, "kordra", "kordra_admin");
+        return new DbContextOptionsBuilder<TenantDbContext>().UseNpgsql(connection,
+            postgres => postgres.MigrationsHistoryTable(TenantDbContext.HistoryTable, "app").CommandTimeout(2)).Options;
+    }
+
     private static void ValidateTarget(string connectionString, string expectedDatabase, string expectedUser)
     {
         if (string.IsNullOrWhiteSpace(connectionString))

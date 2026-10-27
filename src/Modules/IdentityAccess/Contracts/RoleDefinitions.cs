@@ -26,6 +26,9 @@ public static class FoundationPermissions
             "project.read" or "project.manage" => rule.ScopeKind is "organization" or "project",
             "target.read" or "target.manage" => rule.ScopeKind is "project" or "environment",
             "artifact.read" or "artifact.register" => rule.ScopeKind == "project",
+            "release.create" or "release.read" or "release.retire" => rule.ScopeKind == "project",
+            "release.request-approval" or "release.approval.read" or "release.approve" or "release.approval.revoke" =>
+                rule.ScopeKind == "environment",
             _ => false
         };
 

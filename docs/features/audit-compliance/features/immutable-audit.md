@@ -148,3 +148,9 @@ Under accepted ADR-0018, Host atomically enlists ART/IAM-floor/AUD and must dist
 ## T10 stopped artifact recovery — 2026-10-27
 
 The artifact recovery increment uses a stopped-custody AUD receipt reader on a guarded owner connection and appends its outcome in the same transaction as the ART state and IAM clock floor. The reader grants no HTTP audit-query authority. Plan/hash, quiescence and ambiguous-outcome behavior are specified in [artifact registration v1](../../../contracts/artifact-registration-v1.md).
+
+## T11 proposed consumer seam — 2026-10-27
+
+AUD consumer acknowledgment for [Release and approval v1](../../../contracts/release-approval-v1.md) / [ADR-0005](../../../decisions/0005-immutable-release.md), awaiting exact human acceptance. Compose release/policy/approval writes and command receipts with existing enlisted AUD and IAM floor on one connection. Use safe subject/result hashes, owner IDs and fixed codes, never canonical subject bytes, raw key/body or session. Existing audit intent bounds and true commit uncertainty rules remain; no integration event, audit-bypassing recovery or second commit.
+
+This is planned additive scope, not implemented source/test evidence or a change to the accepted T01–T10 baseline. Preserve current source/test mappings; Developer adds precise new paths and negative/compatibility tests only when the owning slice exists. R11-02/03/10/12/15 are required as applicable. No real database/provider/secret operation is authorized.

@@ -22,6 +22,26 @@ public sealed class DefinitionRuleTests
     public void Foundation_rules_are_exact_and_reject_unsupported_catalog_entries(string permission, string scope, string effect, bool valid) =>
         Assert.Equal(valid, FoundationPermissions.IsValid(new(permission, scope, effect)));
 
+    [Theory]
+    [InlineData("release.create", "project")]
+    [InlineData("release.read", "project")]
+    [InlineData("release.retire", "project")]
+    [InlineData("release.request-approval", "environment")]
+    [InlineData("release.approval.read", "environment")]
+    [InlineData("release.approve", "environment")]
+    [InlineData("release.approval.revoke", "environment")]
+    public void Release_permissions_are_exact_scope_and_deny_wins(string permission, string scope)
+    {
+        Assert.True(FoundationPermissions.IsValid(new(permission, scope)));
+        Assert.True(FoundationPermissions.IsValid(new(permission, scope, "deny")));
+        foreach (var other in new[] { "organization", "project", "environment", "platform" }.Where(x => x != scope))
+            Assert.False(FoundationPermissions.IsValid(new(permission, other)));
+        var definition = new RoleDefinitionSnapshot(Guid.NewGuid(), 1, "Admin", [new(permission, scope), new(permission, scope, "deny")]);
+        Assert.False(FoundationPermissions.Allows(definition, permission, scope));
+        Assert.False(FoundationPermissions.Allows(definition with { Rules = [] }, permission, scope));
+        Assert.False(FoundationPermissions.Allows(definition with { Rules = [new(permission, scope)] }, "deployment.approve", scope));
+    }
+
     [Fact]
     public void Explicit_deny_and_scope_mismatch_override_role_label()
     {

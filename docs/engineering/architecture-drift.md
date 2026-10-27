@@ -30,3 +30,7 @@ DRIFT-T09-001: accepted ADR-0016 specifies Kubernetes while the owner now report
 
 ## KPIs
 Số drift đang mở, số ngày đến lúc phân loại, số drift tái phát, tỉ lệ PR source changes không có feature mapping. Không đo bằng lượng tài liệu viết ra.
+
+## T11 proposal refinement — 2026-10-27
+
+DRIFT-T11-001, design ambiguity / medium / NukeGeng: the unaccepted 2026-10-20 release-execution sketch included unadopted driver/configuration/health and deployment.approve in T11; actual main bc91c2a has ART manifest/config verification but no REL/APR runtime or worker/execution plan. Calling that partial subject deployment approval would risk accepting later fields without review. Proposed ADR-0005/Release and approval v1 distinguishes exact release-intent-v1 from later separately approved execution, adds APR policy before REL, and defines acyclic neutral owner ports rather than the old proposed REL/APR logical dependency cycle. Awaiting exact owner acceptance. No accepted-contract/code drift is legitimized, no runtime fix/closure or production authority claimed.

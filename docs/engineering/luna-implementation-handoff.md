@@ -2,12 +2,27 @@
 id: ENG-LUNA-IMPLEMENTATION-HANDOFF
 status: proposed
 owner: NukeGeng
-last_reviewed: 2026-10-26
+last_reviewed: 2026-10-27
 ---
 
 # Luna Max implementation handoff — approved direction, decision-gated execution
 
-## Readiness and authority
+## Current T11 design handoff — 2026-10-27
+
+Baseline main bc91c2a66abcdb2156363f5fdbd3dc7f89046e67 contains human-merged PR #19. Reviewed T10 head 5969786f910081fa4df2c0ce808f5e8c551b7b88 passed all three required CI checks and one native automatic Codex review without findings. This supersedes historical starting-base/pending T10 publication language below; it does not rewrite historical evidence.
+
+[ADR-0005](../decisions/0005-immutable-release.md), [Release and approval v1](../contracts/release-approval-v1.md), FEAT-APR-002/REL-001/APR-001 are proposed exact T11 design, not implementation authority yet. Human decision must include release-intent-v1 (executionAuthorized=false), Development/Test-only qualification, explicit independent/self_allowed business policy, lifetime/window caps and new scoped release permissions. No T11 product source exists. Native Architect context for this proposal was gpt-6.1-sol/high, turn 01a17b39-eae6-7341-9da3-bbec9117958f; no Developer model is inferred from it.
+
+After exact acceptance, record the approved content hashes and proceed in the existing single-agent AMR coordinator without another Sol design/review loop:
+
+1. T11.0 / FEAT-APR-002: real APR policy persistence, stopped inspect/apply/reconciliation, neutral PRJ environment port and exact IAM permission catalog. Complete policy tests/migration/ACLs/docs and feature PR first. No fake production positive policy.
+2. T11.1a–b / FEAT-REL-001: neutral ART/PRJ/INV owner ports, REL core/migration/exact canonical bytes, then actual guarded HTTPS preview/freeze/retire/read and stopped receipt recovery. Complete REL feature commit/PR.
+3. T11.2a–b / FEAT-APR-001: real REL dependency, requests/immutable decisions/current eligibility, then guarded queue/detail/grant/reject/revoke and recovery. Complete APR feature commit/PR.
+4. T11.3: source-bound R11-01–16 conformance, compatibility, exact gates/CI and Codex Auto PR Review; human merge separately. No additional AI milestone review.
+
+For each slice declare exact planned owner paths from the feature, current actor/permissions/scope, targeted tests and accepted contracts before code. Use own Domain/BCL Contracts/runtime, existing locked EF/Npgsql only and grouped Host folders. Map actual files only after creation. Preserve private historical checkpoints; use existing reconciliation/continue mechanisms where eligible, never replay old work or manufacture a completed native checkpoint. Reverify actual Developer model/effort and separately authorized fixture identity. No real installation migration/provisioning, provider/secret access, dispatch, Client edits or production action follows from design approval. Publish fixtures/OpenAPI/runbook with each real feature; planned tests are not evidence. Remaining T12/T13 need separately approved execution plan/worker authority.
+
+## Historical Foundation readiness and authority
 
 Overall direction and the exact ADR-0012 Foundation scope were approved by the maintainer on 2026-10-20. ADR-0012, local-authentication-v1, authority-admission-v1 and owner slices T01–T07 are accepted for implementation. The delivery design and roadmap retain the full objective and progress state; this handoff is not a second executor/checkpoint or permission to access infrastructure. T08–T14 remain separately decision-gated.
 
@@ -32,7 +47,7 @@ Statuses here are readiness rules, **not execution evidence**. Each row belongs 
 | T08 — credential boundary | SEC-001; T06 | Opaque per-target profile/reference/binding and rotation/revoke semantics; resolve only for approved consumer; no browser secret | SEC provider/key-custody/TLS/bootstrap/RBAC decision before actual provider dependency or secret read |
 | T09 — OP-P0 Kubernetes/Helm | INV-001, OBS-001; T07,T08 | Adapter with exact resources/fields, trusted provider identity, freshness/timeout; fake conformance then separately authorized live read; client fixtures | Provider SDK/CLI/version and safe operation/field allowlist approved; no real LAB target implicit |
 | T10 — artifact registration | ART-001; T05,T06,T08 | Existing digest plus tenant/project provenance, registry checks, immutable record and duplicate handling | Registry/SSRF/credential policy and persistence contract accepted |
-| T11 — release then approval | REL-001 then APR-001; T10 | Frozen canonical spec/hash, explicit transitions, approval queue/reject/revoke/expiry and SoD; golden vectors/consumer fixtures | ADR-0005 and owner release-execution v1 adoption; no source-state-machine adoption from this proposed table alone |
+| T11 — policy, release, approval | APR-002 → REL-001 → APR-001; merged T10 | Exact T11.0–T11.3 in Release and approval v1; immutable release-intent, explicit queue/decisions and no execution grant | Exact ADR-0005/contract/three-feature acceptance pending; future worker/execution separate |
 | T12 — durable transport/workflow | MSG-001 then WFL-001; T11 | Atomic state/outbox, inbox, persisted recovery/Unknown path, separate ControlWorker and Mac-close proof | ADR-0001/0002 scoped adoption, package pins, worker identity/authority, lease/recovery protocol accepted |
 | T13 — Helm sandbox deployment | DRV-001, DEP-001, OBS-001 separate tasks; T12 | Typed plan/execute/observe, provider-safe writer exclusion, verified deployment/history, separately authorized rollback | ADR-0004/0006 and exact provider conformance design; approved isolated target, immutable spec, rollback and operational approval |
 | T14 — release qualification | Applicable features; T09,T13 and actual client integration | Clean second install, migration/restore and failure drills, supported matrix, license/publication decision and Beta checklist | No Beta/production claim from local tests; no cloud/Enterprise expansion by default |
@@ -202,3 +217,7 @@ Next eligible scope is T10.1e: compose current project/session/TEN/IAM/registry/
 ## T10 current implementation handoff — 2026-10-27
 
 The owner explicitly selected `gpt-6.1-terra` for this continuation; native turn metadata records `gpt-6.1-terra/xhigh`. T10.1e HTTP, synthetic authenticated Keychain integration and stopped exact-plan recovery have source and targeted evidence; inspect the latest private evidence instead of assuming completion. Finish the ART10-01–16 matrix against actual tests, remaining negative/compatibility cases, current full gates and feature publication. The CLI's Luna-only completion restriction is not evidence of another model or a reason to replay work. Preserve the historical checkpoint and unrelated drafts.
+
+## T11 exact owner acceptance — 2026-10-27
+
+NukeGeng accepted ADR-0005, Release and approval v1 and FEAT-APR-002/REL-001/APR-001 for T11.0–T11.3. This supersedes pending-approval wording in the earlier T11 proposal, not historical evidence. Exact pre-annotation hashes and private acceptance receipt are recorded in ADR-0005. T11 runtime implementation and validation remain in progress; no deployment, real database/secret/target operation or merge is authorized by this design acceptance. The user explicitly selected gpt-6.1-terra/xhigh for T11; actual turn metadata and native model catalog confirm this profile.

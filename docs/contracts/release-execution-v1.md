@@ -2,10 +2,12 @@
 id: CTR-RELEASE-EXECUTION-V1
 status: proposed
 owner: NukeGeng
-last_reviewed: 2026-10-20
+last_reviewed: 2026-10-27
 ---
 
-# Release, approval and execution v1 — cross-owner proposal
+# Release, approval and execution v1 — future cross-owner proposal
+
+**T11 scope refinement, proposed 2026-10-27:** [Release and approval v1](release-approval-v1.md) / [ADR-0005](../decisions/0005-immutable-release.md) now specify the exact release-intent-v1 proposal. Their T11 routes/states/permissions/hashes take precedence over this older unaccepted sketch upon exact acceptance. T11 grants cannot authorize the full execution plan below. Driver/configuration/secret/health/distributed authority still need separately versioned plans and approval at T12/T13. Accepted T10 Artifact registration v1 governs ART; this document cannot adopt tag resolution or new verification evidence.
 
 This defines milestone behavior for ART/REL/APR/MSG/WFL/DEP/DRV/OBS/AUD. It is not an implemented API/state machine or acceptance of ADR-0002/0004/0005/0006. Owner feature sections link here for shared binding/compatibility; each owner retains its business transitions. The [Luna handoff](../engineering/luna-implementation-handoff.md) lists adoption gates before dependent source. Later worker-authority/persistence and provider details need exact approval and conformance evidence; the single-process OP-P0 gate is never reused as a distributed guarantee.
 
@@ -21,9 +23,9 @@ Initial limits proposed for validation: immutable spec at most 64 KiB; safe comm
 
 | Owner | Proposed state / transition | Invariant |
 |---|---|---|
-| ART | Verified immutable record; retirement marks availability but never changes identity | Same project/repository/platform/digest registration is idempotent; tags resolve once to digest, mismatches reject |
+| ART | Accepted T10 digest-first record, not a newly adopted transition here | See artifact-registration-v1; no tag resolution or signature/layer verification is added by this proposal |
 | REL | Draft → Frozen; superseding revision creates a new identity; retire does not rewrite bytes | An approved frozen revision cannot be PATCHed; another resource/spec uses another revision/hash |
-| APR | Pending → Granted or Rejected; Granted → Revoked or Expired | Approval binds requester, approver, exact release/spec/target, action, policy/definition revisions and exclusive expiry; no resurrection |
+| APR | T11 release-intent states follow release-approval-v1; future execution approvals remain unadopted | Expired/Invalidated eligibility must not masquerade as an append-only decision or worker permit |
 | WFL | Pending → Preflight → AwaitingDispatch → Dispatched → Observing → Completed/Failed; any ambiguous dispatched stage → Unknown → Reconciling | Persist before sending; a workflow result is not independently the deployment outcome |
 | DEP | Requested → Running → Verifying → Verified/Failed; ambiguous effect → Unknown | Only observed evidence under the health policy yields Verified; safe pre-effect cancellation differs from unknown partial execution |
 | Rollback / DEP | New requested operation referencing prior verified immutable revision | Fresh `deployment.rollback`, scope/policy/approval where required, current target ownership and capability; no database/schema rollback implied |
@@ -35,9 +37,9 @@ Transitions are adopted only with owner ADR/contracts and executable transition 
 | Operation | Owner / route candidate | Permission and behavior |
 |---|---|---|
 | Register artifact | ART `POST /api/v1/projects/{project}/artifacts` | `artifact.register` project; immutable digest/provenance verification and idempotency |
-| Freeze release | REL `POST /api/v1/projects/{project}/releases` | `release.create` project; resolve actual tenant/artifact/target chain |
+| Freeze release intent | REL exact routes in release-approval-v1 | T11 proposal uses release.create project plus creator/CAS/current selection, not a deployment request |
 | Request deployment | DEP `POST /api/v1/environments/{environment}/deployments` | `deployment.request` environment; durable intent, 202 + operationId/status reference |
-| Grant/reject/revoke approval | APR `/api/v1/deployments/{operation}/approvals` | `deployment.approve` exact environment plus policy; requester cannot self-approve when SoD applies |
+| Future execution approval | APR route/schema requires T12/T13 adoption | deployment.approve is not an alias for the T11 release.approve action; bind the complete future execution plan |
 | Read status | DEP `GET /api/v1/deployments/{operation}` | Scoped catalog-approved read permission and trusted resource owner; sanitized status/history |
 | Request rollback | DEP `POST /api/v1/deployments/{operation}/rollback` | Separate `deployment.rollback`; a new operation, never blind retry |
 
