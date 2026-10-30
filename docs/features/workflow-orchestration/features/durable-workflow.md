@@ -60,3 +60,8 @@ Crash at each transition leads to one logical deployment operation and consisten
 - Test files: **unmapped** (`test_paths: []`).
 - Evidence: `PENDING` — link PR / commit / test report when implemented.
 - Open decisions: `NEEDS-DECISION` for any policy-specific variant not covered by accepted ADR.
+
+
+## T12 bounded design — 2026-10-30
+
+[Thiết kế T12 tiếng Việt](../../../engineering/t12-design.vi.md) và [ADR-0019](../../../decisions/0019-durable-transport-workflow-bootstrap.md) đề xuất compatibility/fault PoC trước runtime adoption. T12.0 chỉ kiểm chứng MSG bằng test-only PostgreSQL fixture; không hoàn tất WFL, distributed authorization hoặc Mac-close. Source/test mappings vẫn chưa implemented. Chưa có package, process, permission hoặc technology adoption nào được cấp quyền bởi ghi chú này.

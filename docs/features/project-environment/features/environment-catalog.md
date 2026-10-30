@@ -227,3 +227,8 @@ IReleaseCatalogReader reads active same-tenant project, application, environment
 ### T11 approval environment identity consumer
 
 The additive internal IApprovalEnvironmentIdentityReader port resolves only PRJ-owned active environment/project facts from a unique environment ID, with no caller-supplied tenant or project. Existing scoped owner validation rejects collisions even when another tenant copy is inactive. Approval Host consumes the port under shared admission/capacity and independently resolves permission. Two isolated PostgreSQL owner/adapter cases pass. Existing catalog HTTP schemas and accepted ownership remain unchanged.
+
+
+### Shared solution integration — T12.0 (2026-10-30)
+
+The shared `Kordra.slnx` adds only the test-owned Messaging.Durability.Tests compatibility/fault spike accepted by [ADR-0019](../../../decisions/0019-durable-transport-workflow-bootstrap.md). This feature's production source, package pins, contracts, permission model and owner persistence remain unchanged. New messaging evidence belongs to FEAT-MSG-001 and does not establish runtime messaging adoption for this owner.

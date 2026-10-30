@@ -136,3 +136,8 @@ T11.0 adds a TEN-owned active-organization lookup on an already enlisted, guarde
 ## T11.1 shared graph acknowledgment — 2026-10-27
 
 The accepted ADR-0005 Release slice adds a BCL-only REL Domain and test project to the solution and architecture graph. This does not alter this owner’s runtime behavior or authorize a release. Full REL feature implementation remains in progress.
+
+
+### Shared solution integration — T12.0 (2026-10-30)
+
+The shared `Kordra.slnx` adds only the test-owned Messaging.Durability.Tests compatibility/fault spike accepted by [ADR-0019](../../../decisions/0019-durable-transport-workflow-bootstrap.md). This feature's production source, package pins, contracts, permission model and owner persistence remain unchanged. New messaging evidence belongs to FEAT-MSG-001 and does not establish runtime messaging adoption for this owner.

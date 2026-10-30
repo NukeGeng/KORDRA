@@ -6,8 +6,9 @@ last_reviewed: 2026-10-20
 module_id: MOD-MSG
 feature_id: FEAT-MSG-001
 phase: MVP
-source_paths: []
-test_paths: []
+source_paths: ["Kordra.slnx"]
+test_paths: ["tests/Messaging.Durability.Tests/"]
+planned_test_paths: ["tests/Messaging.Durability.Tests/"]
 ---
 
 # FEAT-MSG-001 — Durable command delivery and recovery
@@ -54,7 +55,64 @@ No lost committed command in tested crashes; duplicate transport delivery does n
 - Add tracing/audit and update technical-debt / runbook if unresolved risk.
 
 ## Source & test traceability
-- Source files: **unmapped** (`source_paths: []`).
-- Test files: **unmapped** (`test_paths: []`).
+- Source files for the scoped T12.0 PoC: `Kordra.slnx` integration; no production MSG runtime.
+- Test files: `tests/Messaging.Durability.Tests/` (approved test-only spike).
 - Evidence: `PENDING` — link PR / commit / test report when implemented.
 - Open decisions: `NEEDS-DECISION` for any policy-specific variant not covered by accepted ADR.
+
+
+## T12 bounded design — 2026-10-30
+
+[Thiết kế T12 tiếng Việt](../../../engineering/t12-design.vi.md) và [ADR-0019](../../../decisions/0019-durable-transport-workflow-bootstrap.md) đề xuất compatibility/fault PoC trước runtime adoption. T12.0 chỉ kiểm chứng MSG bằng test-only PostgreSQL fixture; không hoàn tất WFL, distributed authorization hoặc Mac-close. Source/test mappings vẫn chưa implemented. Chưa có package, process, permission hoặc technology adoption nào được cấp quyền bởi ghi chú này.
+
+
+## T12.0 scoped owner approval — 2026-10-30
+
+NukeGeng đã duyệt [ADR-0019](../../../decisions/0019-durable-transport-workflow-bootstrap.md) chỉ cho PoC T12.0; NukeGeng là custodian của spike. Planned test root là tests/Messaging.Durability.Tests/, chưa có executable/source mapping hoặc kết quả test. Phần runtime MSG/WFL và các quyết định T12 tiếp theo vẫn proposed. Developer phải giữ case ACL chưa đạt nếu chỉ có database-owner role; không tự tạo role hoặc tuyên bố compatibility đã kiểm chứng. Không có dependency/runtime/schema nào đã được tạo bởi approval annotation.
+
+
+## T12.0 first Developer increment — 2026-10-30
+
+The approved test-only Messaging.Durability.Tests project restores Wolverine 6.59.0 together with unchanged EF 10.0.11/Npgsql EF 10.0.3 and records a package lock. Eight target-guard tests pass without opening a database connection: exact loopback test target, case schema naming, redacted diagnostics and rejection of wrong host/port/database/role/search-path/session options. NuGet's transitive vulnerability query reports no vulnerable package entries at this observation; this is not a full security assessment. No Wolverine message/transaction/recovery behavior is established by these guards. Runtime, producer/consumer fault cases and ACL acceptance remain outstanding; no database role/schema or provider operation was performed.
+
+
+## T12.0 transaction probe — 2026-10-30
+
+Added real PostgreSQL commit/rollback probes using two EF DbContexts on the same connection/transaction: synthetic owner state, audit and floor plus Wolverine durable envelope are invisible to a separate reader before commit and all commit/rollback together. The candidate's default Dynamic startup fails without a runtime compiler package; no fourth dependency was added. The current no-consumer publisher probe uses supported Static mode. This does not prove generated consumer loading, two-process delivery, inbox/ACK recovery or runtime DDL denial. Fixture setup may create tables only in each newly allocated UUID schema; cleanup is confined to that schema after stopping its own host, including error teardown.
+
+The separately approved fixed role/schema has not been created: preflight found PUBLIC CONNECT on other databases, so per-role GRANT/REVOKE alone cannot enforce the approved database-only boundary. A concrete exact-role-only temporary HBA proposal is pending separate owner permission; no authentication configuration, pre-existing role/schema or Product database was changed.
+
+
+## T12.0 isolated ACL probe — 2026-10-30
+
+The owner separately authorized the exact disposable role/schema and four role-specific temporary HBA rules. The PostgreSQL probe allowed DML on its synthetic fixture table and denied schema/database DDL, foreign owner reads/writes and connections to other databases. The role had no privileged flags. Cleanup removed only that fixture role/schema/block, reloaded without restart and restored the original HBA SHA-256; all cleanup checks passed. This supersedes the earlier pending-HBA observation. Private evidence: `restricted-runtime-acl-receipt.json` under `.amr-local/t12-design/`.
+
+This proves the database ACL boundary only. Wolverine startup with migrations disabled and actual restricted consumer execution remain unverified; the full PoC is still in progress. No production runtime, company infrastructure or existing data was changed.
+
+
+## T12.0 two-process Developer evidence — 2026-10-30
+
+The test executable now pre-generates Wolverine handlers in Static mode using only the approved package graph. Regenerate from `tests/Messaging.Durability.Tests` with `dotnet run -p:T12CodegenBootstrap=true -- codegen write`, then build normally; the bootstrap property excludes stale generated source only during regeneration. It does not bypass runtime tests. Native queue and envelope schemas are both explicitly UUID-scoped (see DRIFT-T12-001).
+
+Real process probes verified normal delivery, producer crash before commit (no state/envelope), producer crash after commit before flush (outbox recovery), consumer crash before effect and after durable effect before ACK, restart, and different-envelope/same-logical-key dedup. Short fixture node-health/reassignment periods (1 s polling, 3 s stale timeout) are explicit; they are not production defaults. A loopback PostgreSQL wire proxy drops the server's actual COMMIT response: the client fails, while a new direct connection finds the committed logical key without replay.
+
+Five rejection/retry cases passed before the later isolation/serializer changes: wrong case, tenant, schema version and expired deadline reach DLQ after one attempt with no logical effect; transient failure reaches DLQ after five attempts with measured 1/5/15/60 s delays. Current-content rerun remains required. Default inbox retention is explicitly 10 minutes; a separate shortened retention fixture must verify cleanup without manually deleting inbox rows. Closed fixture serialization rejects unknown fields (including synthetic secret fields), duplicate keys, wrong type, bodies over 16 KiB and depth over eight. These tests do not establish a trusted production service identity.
+
+The corrected restricted-role probe starts Wolverine with AutoCreate.None, handles one synthetic message, denies DDL and leaves relation inventory unchanged. Exact role/schema/HBA cleanup passed. Private receipts/logs remain under `.amr-local/t12-design/`; the initial default-schema failure and residual-object debt are retained rather than erased.
+
+Remaining acceptance: current-content fault/retry/serializer/retention results, consumer inbox/state/output transaction analysis, unknown-type quarantine behavior, final deterministic gates, residual-object disposition and complete-feature publication. Producer multi-context atomicity and synthetic effect dedup do not prove atomic production consumer state/inbox/output or distributed authorization. No runtime MSG/WFL/ControlWorker adoption or T12 completion is claimed.
+
+
+## Current PoC report — 2026-10-30
+
+[Tiếng Việt: kết quả T12.0 và gate adoption](../../../engineering/t12-poc-results.vi.md) records the full acceptance matrix, actual candidate configuration, corrected consumer inbox/state/result transaction, retention, unknown serialized type and queued expiry. Earlier notes above are dated progress observations. DRIFT-T12-001 residual cleanup was explicitly authorized and verified; no default-schema relation remains. Full gates and publication are still pending until exact-content evidence is recorded.
+
+
+The shared architecture suite now explicitly validates this accepted test-only solution addition and its pinned, Product-isolated package graph. Canonical gate testing needs an explicit bounded 600-second serial budget for the expanded suite; the 300-second timeout failure remains recorded, never promoted to success. The native macOS artifact test additionally requires the pre-approved synthetic `KORDRA_CREDENTIAL_KEYCHAIN_FIXTURE_ROOT`, not access to existing Keychain items.
+
+
+## Final local validation — 2026-10-30
+
+Canonical `gates --base 69c5d86f3bc85a23636a475a8785543f1641df84 --product-test-timeout 600 --validation-context <private-nonsecret-epoch>` passed with stable source: docs, scope, 220 tooling tests, Clients pin metadata only, locked restore, Release build, serial Product tests and source mapping. Product result: 1,594 passed, zero failed, one existing T09 live Nomad test skipped; all 34 T12.0 tests passed with zero skips. No existing Keychain item, VM or real provider was accessed to replace the skipped test.
+
+The full PoC implementation is locally validated. Hosted CI, exact PR review evidence and human merge remain separate. T12.1–T12.4/runtime adoption is still unapproved. Earlier partial/failing receipts remain retained, including default-schema escape, initial unknown-type fixture error, missing graph entry, missing synthetic fixture-root environment and the 300-second serial-suite timeout. The corrected final run used the approved isolated synthetic Keychain root, explicit bounded timeout and a rotated fixture epoch after interruption. Existing historical GOAL checkpoints were not rewritten or replayed. A pending bounded CLI plan is not represented as completed native execution for the user-authorized Medium session; actual coordinator/model/source/test receipts are retained separately.

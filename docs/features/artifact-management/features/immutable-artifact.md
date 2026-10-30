@@ -185,3 +185,8 @@ Accepted ADR-0005 adds a BCL-only REL Domain and test project to the solution an
 ## T11.1 neutral release artifact port — local increment
 
 A BCL-only ART-owned IReleaseArtifactReader delegates to the existing exact tenant/project immutable artifact projection. It returns no declaration/provenance claim and performs no registry or credential access; the caller must hold admission and independently authorize release selection. Actual source and synthetic PostgreSQL tests remain owned by this feature; T11.1 remains incomplete.
+
+
+### Shared solution integration — T12.0 (2026-10-30)
+
+The shared `Kordra.slnx` adds only the test-owned Messaging.Durability.Tests compatibility/fault spike accepted by [ADR-0019](../../../decisions/0019-durable-transport-workflow-bootstrap.md). This feature's production source, package pins, contracts, permission model and owner persistence remain unchanged. New messaging evidence belongs to FEAT-MSG-001 and does not establish runtime messaging adoption for this owner.

@@ -34,3 +34,15 @@ Số drift đang mở, số ngày đến lúc phân loại, số drift tái phá
 ## T11 proposal refinement — 2026-10-27
 
 DRIFT-T11-001, design ambiguity / medium / NukeGeng: the unaccepted 2026-10-20 release-execution sketch included unadopted driver/configuration/health and deployment.approve in T11; actual main bc91c2a has ART manifest/config verification but no REL/APR runtime or worker/execution plan. Calling that partial subject deployment approval would risk accepting later fields without review. Proposed ADR-0005/Release and approval v1 distinguishes exact release-intent-v1 from later separately approved execution, adds APR policy before REL, and defines acyclic neutral owner ports rather than the old proposed REL/APR logical dependency cycle. Awaiting exact owner acceptance. No accepted-contract/code drift is legitimized, no runtime fix/closure or production authority claimed.
+
+
+## DRIFT-T12-001 — test transport schema escape (2026-10-30)
+
+Owner: NukeGeng / FEAT-MSG-001. Expected: all fixture persistence and queue objects are confined to the newly allocated UUID schema. Observed: the first probes configured only envelope persistence; Wolverine native transport used its default `wolverine_queues` schema. The restricted-role run exposed the mismatch with SQLSTATE 42501. Earlier passing delivery results establish behavior but do not establish the approved schema isolation. This was a local test-fixture scope defect, not a Product runtime change.
+
+Containment: stopped those runs, removed the exact authorized temporary role/schema/HBA block and verified the original HBA hash. ConfigureStorage now explicitly binds both transport and envelope storage to the case schema, with a regression assertion. Restricted startup/delivery must be rerun. Existing default-schema objects are retained for read-only attribution; do not drop or modify them without establishing ownership and separate cleanup authority. No claim is made that earlier UUID cleanup removed the default transport objects. Private logs and restricted-runtime receipts retain the failed attempt. Closure requires successful bounded rerun and disposition of residual objects.
+
+
+### DRIFT-T12-001 cleanup disposition — 2026-10-30
+
+NukeGeng separately authorized deletion of exactly the two T12 native queue tables and their dependent indexes. Read-only attribution found one technical DeliveryProbe matching the approved fixed case and an empty scheduled queue. With no active fixture children, cleanup acquired table locks in a bounded transaction and dropped the two exact tables without CASCADE. Verification confirms the schema was retained and has zero relations. No HBA change or other object deletion occurred. Private receipt: `residual-default-transport-cleanup-receipt.json`. Residual-object DEBT-T12-001 is closed for cleanup; schema isolation regression and corrected restricted-runtime evidence remain part of final PoC validation, not automatic T12/runtime acceptance.
