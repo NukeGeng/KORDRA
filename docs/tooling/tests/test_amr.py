@@ -962,6 +962,29 @@ class Gates(unittest.TestCase):
                               if x.args[0][0]=='dotnet' and x.args[0][1]!='--info'],['restore'])
             self.assertEqual(result['local_status'],'failed')
 
+    def test_explicit_longer_product_budget_preserves_other_limits_and_timeout_failure(self):
+        with tempfile.TemporaryDirectory() as d:
+            root=Path(d);(root/'Kordra.slnx').write_text('<Solution />')
+            def command(cmd,**kwargs):
+                if cmd==['dotnet','--info']:return subprocess.CompletedProcess(cmd,0,'stable SDK','')
+                if cmd[:2]==['dotnet','test']:
+                    if kwargs['timeout']<360:raise subprocess.TimeoutExpired(cmd,kwargs['timeout'])
+                else:self.assertEqual(kwargs['timeout'],90)
+                return subprocess.CompletedProcess(cmd,0,'passed','')
+            with patch.object(amr.subprocess,'run',side_effect=command):
+                failed=amr.gates(root)
+                passed=amr.gates(root,product_test_timeout=600)
+            self.assertEqual(failed['local_status'],'failed')
+            self.assertEqual(passed['local_status'],'passed')
+            self.assertEqual(passed['product_test_timeout_seconds'],600)
+            self.assertEqual(next(x for x in failed['checks'] if x['name']=='product-test')['reason'],'timeout')
+
+    def test_invalid_product_timeout_never_executes_any_command(self):
+        for value in [0,-1,1801,True,1.5,'600',None]:
+            with self.subTest(value=value), patch.object(amr.subprocess,'run') as run:
+                with self.assertRaises(ValueError):amr.gates(Path('.'),product_test_timeout=value)
+                run.assert_not_called()
+
     def test_real_failing_commands_cannot_pass(self):
         with tempfile.TemporaryDirectory() as d:
             result=amr.gates(Path(d))

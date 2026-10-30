@@ -55,3 +55,13 @@ The owner-requested coordinator efficiency correction removes the default need f
 ## Checkpoint reconciliation defect — 2026-10-22
 
 FEAT-AMR-001 reproduced a contradictory `dict`/`str` check that made the documented reconciliation CLI unusable. The repair accepts its evidence reference, retains an exact private snapshot, and gives new preparations digest-bound protected-file manifests. Historical records without per-file baselines remain explicit limitations; their original hashes are not reset. Reconciliation captures known findings so recovery cannot hide unresolved provider defects. DEBT-AMR-003 remains open for native Goal-control/authenticated-caller limitations. This bounded tooling repair does not clear the six product findings on PR #10.
+
+
+## DEBT-T12-001 — residual default transport fixture objects
+
+FEAT-MSG-001 / NukeGeng / operational-gap / open. See DRIFT-T12-001 in [architecture drift](architecture-drift.md). Early PoC runs accidentally used the candidate's default transport schema outside their UUID schema. New runs bind both schemas explicitly. Preserve existing objects until read-only attribution and owner-authorized cleanup; do not silently delete a shared/default schema or label the PoC fully isolated. Exit: verify case-local transport under restricted runtime, attribute residual objects and record approved exact cleanup or an explicit retained-artifact disposition.
+
+
+### DRIFT-T12-001 cleanup disposition — 2026-10-30
+
+NukeGeng separately authorized deletion of exactly the two T12 native queue tables and their dependent indexes. Read-only attribution found one technical DeliveryProbe matching the approved fixed case and an empty scheduled queue. With no active fixture children, cleanup acquired table locks in a bounded transaction and dropped the two exact tables without CASCADE. Verification confirms the schema was retained and has zero relations. No HBA change or other object deletion occurred. Private receipt: `residual-default-transport-cleanup-receipt.json`. Residual-object DEBT-T12-001 is closed for cleanup; schema isolation regression and corrected restricted-runtime evidence remain part of final PoC validation, not automatic T12/runtime acceptance.

@@ -61,3 +61,8 @@ The Product-only solution test command in amr.py now uses MSBuild -m:1 to serial
 ## Shared gate budget compatibility — 2026-10-24
 
 T08 increases only the serial Product test stage timeout in docs/tooling/amr.py to 300 seconds, with a deterministic regression. Clients pin validation and exclusion of recursive frontend scans/tests remain unchanged; all other check timeouts remain 90 seconds. This co-owner acknowledgment covers the shared Product tool only and performs no Clients worktree or configuration change.
+
+
+### Shared gate runner timeout option — 2026-10-30
+
+The co-owned amr.py gate runner adds an explicit bounded product-test timeout (default 300 seconds; permitted 1..1800), with timeout still failing. Clients pin checking, frontend isolation, provider settings and submodule ownership are unchanged; this option does not recursively test Clients.

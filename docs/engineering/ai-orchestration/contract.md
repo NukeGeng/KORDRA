@@ -181,3 +181,8 @@ After existing task/source/route and applicable design-review/triage checks, `am
 A completed native turn proves terminal execution identity, not objective fulfillment. The contributor must inspect actual artifacts/tests and any blocking terminal summary before acceptance. A no-op or failed implementation cannot be accepted merely because existing tests and advisory review are green. Reconcile unknown work before explicit continuation; do not automatically replay. Terminal-error detail loss in ephemeral sessions remains DEBT-AMR-004.
 
 PR #11 continuation correction: a schemaVersion-2 coordinator continuation may record a null artifact identity only for an absent declared write path (a deletion tombstone). Existing context/output files still require their exact current hash. The inspected recovery input, successor receipt and immutable origin checks remain required; historical schemaVersion-1 recovery obligations are unchanged.
+
+
+## Bounded product-test timeout — 2026-10-30
+
+T12.0's real serial crash/retry fixtures exposed the canonical product-test stage's fixed 300-second ceiling. `gates --product-test-timeout <seconds>` now permits an explicit integer 1..1800; the default stays 300, all other command limits stay 90, and timeout remains a failed gate. The receipt records the chosen bound as additive metadata; existing schemaVersion 1 receipts/checkpoints remain readable. No model routing, review trigger, human approval or gate-reuse rule changed. Regression cases verify a suite exceeding the default can finish under an explicit bounded budget, invalid/unbounded values execute nothing, and expiry still fails. Fourteen gate tests passed locally.

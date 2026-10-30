@@ -162,3 +162,8 @@ Accepted ADR-0005 adds a BCL-only REL Domain and test project to the solution an
 ## T11.1 local receipt verification — 2026-10-27
 
 Accepted ADR-0005 covers a neutral AUD owner reader that compares an exact mutation receipt hash and scope against immutable AUD facts. It does not grant permission or query access. REL uses it only as a candidate for a future fresh disclosure, and fences on missing or contradictory evidence. The transaction component and synthetic PostgreSQL tests are local and not yet wired to HTTP; complete T11 validation and operational recovery remain pending.
+
+
+### Shared solution integration — T12.0 (2026-10-30)
+
+The shared `Kordra.slnx` adds only the test-owned Messaging.Durability.Tests compatibility/fault spike accepted by [ADR-0019](../../../decisions/0019-durable-transport-workflow-bootstrap.md). This feature's production source, package pins, contracts, permission model and owner persistence remain unchanged. New messaging evidence belongs to FEAT-MSG-001 and does not establish runtime messaging adoption for this owner.

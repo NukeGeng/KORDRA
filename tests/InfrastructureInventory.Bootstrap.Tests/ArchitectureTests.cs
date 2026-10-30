@@ -53,6 +53,7 @@ public sealed class ArchitectureTests
     private const string ArtifactTests = "tests/ArtifactManagement.Domain.Tests/ArtifactManagement.Domain.Tests.csproj";
     private const string IdentityTests = "tests/IdentityAccess.Tests/IdentityAccess.Tests.csproj";
     private const string AuditTests = "tests/AuditCompliance.Tests/AuditCompliance.Tests.csproj";
+    private const string MessagingSpikeTests = "tests/Messaging.Durability.Tests/Messaging.Durability.Tests.csproj";
 
     [Fact]
     public void ProductProjects_EnforceActualXmlGraphAndRestoredDependencies()
@@ -75,7 +76,7 @@ public sealed class ArchitectureTests
         var solutionProjects = solution.Descendants("Project")
             .Select(element => Absolute(root, RequiredAttribute(element, "Path"))).Order().ToArray();
         Assert.Equal(graph.Keys.Concat([
-            Absolute(root, BootstrapTests), Absolute(root, ArtifactTests), Absolute(root, IdentityTests),
+            Absolute(root, BootstrapTests), Absolute(root, ArtifactTests), Absolute(root, IdentityTests), Absolute(root, MessagingSpikeTests),
             Absolute(root, ReleaseRuntimeTests), Absolute(root, ReleaseDomainTests), Absolute(root, ApprovalDomainTests), Absolute(root, ApprovalRuntimeTests), Absolute(root, AuditTests), Absolute(root, TenantTests), Absolute(root, ProjectTests), Absolute(root, CredentialTests), Absolute(root, ArtifactRuntimeTests)
         ]).Order(), solutionProjects);
         var solutionList = new ProcessStartInfo("dotnet")
@@ -156,6 +157,30 @@ public sealed class ArchitectureTests
         {
             Absolute(root, Host), Absolute(root, DbMigrator), Absolute(root, AuditCompliance), Absolute(root, AuditContracts)
         }.Order(), ReadProjectEdges(Absolute(root, AuditTests)).Order());
+    }
+
+    [Fact]
+    public void Messaging_spike_is_test_only_with_exact_candidate_pins_and_no_product_edges()
+    {
+        var root = RepositoryRoot(); var project = Absolute(root, MessagingSpikeTests);
+        var xml = XDocument.Load(project);
+        Assert.Empty(ReadProjectEdges(project));
+        AssertRestoredGraph(project, []);
+        Assert.Equal("true", xml.Descendants("IsTestProject").Single().Value);
+        Assert.Equal("false", xml.Descendants("IsPackable").Single().Value);
+        Assert.Equal("true", xml.Descendants("RestorePackagesWithLockFile").Single().Value);
+        var expected = new Dictionary<string, string>
+        {
+            ["Microsoft.NET.Test.Sdk"] = "18.10.1", ["xunit"] = "2.9.3", ["xunit.runner.visualstudio"] = "3.1.5",
+            ["Microsoft.EntityFrameworkCore"] = "10.0.11", ["Microsoft.EntityFrameworkCore.Design"] = "10.0.11",
+            ["Npgsql.EntityFrameworkCore.PostgreSQL"] = "10.0.3", ["WolverineFx"] = "6.59.0",
+            ["WolverineFx.EntityFrameworkCore"] = "6.59.0", ["WolverineFx.Postgresql"] = "6.59.0"
+        };
+        Assert.Equal(expected.OrderBy(x => x.Key), xml.Descendants("PackageReference").ToDictionary(
+            x => RequiredAttribute(x, "Include"), x => RequiredAttribute(x, "Version")).OrderBy(x => x.Key));
+        foreach (var reference in xml.Descendants("PackageReference").Where(x => new[]
+            { "Microsoft.NET.Test.Sdk", "xunit", "xunit.runner.visualstudio", "Microsoft.EntityFrameworkCore.Design" }.Contains(RequiredAttribute(x, "Include"))))
+            Assert.Equal("all", (string?)reference.Attribute("PrivateAssets"));
     }
 
     [Fact]

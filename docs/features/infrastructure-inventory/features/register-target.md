@@ -341,3 +341,13 @@ IReleaseTargetReader exposes only the current active registered target identity/
 ### T11 host composition compatibility
 
 Nomad/Kubernetes wire-source hashes now include the current local host after approval route composition. The response schemas are unchanged. The five affected T09 HTTP conformance cases pass with the refreshed host hashes; no provider or infrastructure operation was performed.
+
+
+### Shared solution integration — T12.0 (2026-10-30)
+
+The shared `Kordra.slnx` adds only the test-owned Messaging.Durability.Tests compatibility/fault spike accepted by [ADR-0019](../../../decisions/0019-durable-transport-workflow-bootstrap.md). This feature's production source, package pins, contracts, permission model and owner persistence remain unchanged. New messaging evidence belongs to FEAT-MSG-001 and does not establish runtime messaging adoption for this owner.
+
+
+### T12.0 test graph enforcement — 2026-10-30
+
+ArchitectureTests explicitly includes the accepted test-only Messaging.Durability.Tests project in the root solution graph. A new check asserts IsTestProject, non-packable/locked restore, zero Product project references and exact approved candidate/EF/Npgsql/test pins. Existing Product XML/restored/PE edge checks remain intact; no Product dependency is added. The initial missing-list failure is retained in the private full-gate receipt.

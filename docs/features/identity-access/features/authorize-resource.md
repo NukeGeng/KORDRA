@@ -562,3 +562,8 @@ The current local ADR-0005 increment adds the exact three project and four envir
 ## T11.1 shared graph acknowledgment — 2026-10-27
 
 Accepted ADR-0005 adds a BCL-only REL Domain and test project to the solution and actual architecture graph. This graph change does not alter this owner’s runtime behavior or grant release authority. T11.1 owner ports, persistence and HTTP remain in progress.
+
+
+### Shared architecture-test integration — T12.0 (2026-10-30)
+
+The co-owned ArchitectureTests.cs now includes the ADR-0019-approved Messaging.Durability.Tests solution project and checks its exact test-only package graph, locked restore and absence of Product project references. Existing IAM/tenant/Host graph checks and authorization contracts are unchanged. This adds no permission, authentication route or owner technology adoption.

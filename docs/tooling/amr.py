@@ -412,7 +412,9 @@ def reusable_gate(previous, name, command, signature, validation_context):
     return dict(old, execution='reused', reuse=origin)
 
 
-def gates(root, base=None, *, reuse=None, validation_context=None):
+def gates(root, base=None, *, reuse=None, validation_context=None, product_test_timeout=300):
+    if type(product_test_timeout) is not int or not 1 <= product_test_timeout <= 1800:
+        raise ValueError('product test timeout must be an integer from 1 to 1800 seconds')
     if validation_context is not None and (not isinstance(validation_context, str) or not validation_context.strip()):
         raise ValueError('validation context must be a nonempty, nonsecret fixture epoch')
     before_tree = tree_identity(root)
@@ -446,7 +448,7 @@ def gates(root, base=None, *, reuse=None, validation_context=None):
             results.append(cached)
             continue
         try:
-            p = subprocess.run(cmd, cwd=root, text=True, capture_output=True, timeout=300 if name == 'product-test' else 90)
+            p = subprocess.run(cmd, cwd=root, text=True, capture_output=True, timeout=product_test_timeout if name == 'product-test' else 90)
             results.append({'name': name, 'command': cmd, 'status': 'passed' if p.returncode == 0
                             else 'failed', 'exit_code': p.returncode,
                             'output': p.stdout+p.stderr})
@@ -460,6 +462,7 @@ def gates(root, base=None, *, reuse=None, validation_context=None):
     after = tree_identity(root)['digest']
     stable = before == after and signatures == gate_reuse_inputs(root, tree_identity(root)['files'], validation_context)
     return {'schemaVersion': 1, 'created_at': now(), 'content': before, 'source_stable': stable,
+            'product_test_timeout_seconds': product_test_timeout,
             'validation_context': validation_context,
             'checks': results, 'local_status': 'passed' if all(
                 x['status'] == 'passed' for x in results) and stable else 'failed',
@@ -751,6 +754,8 @@ def main():
     p = sub.add_parser('gates'); p.add_argument('--base')
     p.add_argument('--reuse', help='private prior gate receipt; never skip docs/scope/mapping')
     p.add_argument('--validation-context', help='nonsecret fixture epoch; rotate after DB/service changes')
+    p.add_argument('--product-test-timeout', type=int, default=300,
+                   help='bounded serial product-test timeout in seconds (1..1800; default 300); other gates stay unchanged')
     p = sub.add_parser('validate-bir', help='validate manual BIR PR ledger; never dispatch reviews')
     p.add_argument('--receipt', required=True, type=Path)
     p.add_argument('--head', required=True)
@@ -793,7 +798,8 @@ def main():
         result = {'status': 'current'}
     elif args.command == 'gates':
         previous = amr_goal.private_evidence(ROOT, args.reuse)[1] if args.reuse else None
-        result = gates(ROOT, args.base, reuse=previous, validation_context=args.validation_context)
+        result = gates(ROOT, args.base, reuse=previous, validation_context=args.validation_context,
+                       product_test_timeout=args.product_test_timeout)
         save_private(ROOT, 'gates.json', result)
         code = 1 if result['local_status'] != 'passed' else 0
     elif args.command == 'probe-models':

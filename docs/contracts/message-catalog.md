@@ -33,3 +33,8 @@ last_reviewed: 2026-10-15
 
 ## Event lifecycle changes
 Producer PR → new schema version + consumer inventory → integration tests → dual-read period → switch producer → deprecate old → record retirement date. No silent rename in active messages.
+
+
+## T12.0 synthetic fixture types (not a public/runtime contract)
+
+[ADR-0019](../decisions/0019-durable-transport-workflow-bootstrap.md) permits only test-owned technical messages. `DeliveryProbe` v1 has case/logical IDs, synthetic tenant, deadline and a closed transient-failure flag. The fixture serializer has no arbitrary payload/secret field; unknown members, duplicate keys, wrong CLR type, oversize/deep JSON are rejected. This adds no production command/event or public schema version and has no Product consumer migration. Claimed tenant/case values are synthetic validation inputs, not trusted authorization. Candidate inbox/outbox persistence and the native PostgreSQL queue transport must both use the case UUID schema. No `deployment.dispatch` handler is registered.
