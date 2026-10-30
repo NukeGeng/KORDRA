@@ -111,7 +111,14 @@ public sealed class ReleaseMutationTransaction(Guid installationId, IDbContextFa
                 if (current.Status is "owner_missing" or "owner_mismatch") return new("denied");
                 if (command.Action == "freeze")
                 {
-                    if (current.Status != "eligible" || current.Intent is null) return new("ineligible");
+                    if (current.Status != "eligible") return new(current.Status switch
+                    {
+                        "qualification_required" => "ineligible",
+                        "policy_missing" => "conflict",
+                        "policy_denied" => "denied",
+                        _ => "unavailable"
+                    });
+                    if (current.Intent is null) throw new InvalidDataException("Eligible release selection has no intent.");
                     frozenIntent = current.Intent;
                     policyExpiry = current.EligibilityExpiresAtUtc;
                 }

@@ -428,3 +428,8 @@ The exact temporary trust was removed immediately afterward. Native Basic and SS
 
 
 2026-10-30 — PR #21 hosted source mapping correction: FEAT-APR-002 now records the FEAT-APR-001 additions in its shared context/factory/snapshot, domain and offline source directories. The initial hosted mapping check failed on 14 stale-owner entries; no Product source, mapping rule, policy contract, ADR or test is changed. Revalidate the actual committed PR range after committing this owner documentation update; working-tree success alone did not establish that gate.
+
+
+## PR21-REL-POLICY-001 — freeze error classification
+
+Codex Auto PR Review identified that REL freeze flattened missing/expired/denying policy into qualification rejection. Four actual HTTPS regression cases reproduced three wrong 422 responses while the Staging qualification case correctly stayed 422. The scoped fix preserves missing policy as 409 conflict, expired/denying policy as 403 denial and qualification/profile rejection as 422; unrecognized eligibility failure stays unavailable. It does not create a revision mutation or extra command receipt on rejection. Policy bodies/hashes, permissions and ADR-0005 remain unchanged; the published wire schema and its existing source bindings remain unchanged; the HTTPS regressions verify the accepted error behavior. Current regression/gate evidence and hosted follow-up are recorded separately; the finding is not declared independently reviewed or resolved merely because a fix is present.

@@ -372,6 +372,51 @@ public sealed class ReleaseHttpTests : IAsyncLifetime
         using var foreign = await _client.GetAsync($"/api/v1/projects/{Guid.NewGuid():D}/releases"); Assert.Equal(HttpStatusCode.Forbidden, foreign.StatusCode);
     }
     [Theory]
+    [InlineData("missing", HttpStatusCode.Conflict, "conflict")]
+    [InlineData("expired", HttpStatusCode.Forbidden, "request_denied")]
+    [InlineData("denied", HttpStatusCode.Forbidden, "request_denied")]
+    [InlineData("qualification", HttpStatusCode.UnprocessableEntity, "qualification_required")]
+    public async Task FreezePreservesPolicyFailureCategoryOverHttps(string scenario, HttpStatusCode expected, string expectedCode)
+    {
+        if (scenario == "qualification")
+        {
+            await using var held = await _host.Services.GetRequiredService<FairAsyncReaderWriterAdmissionGate>().AcquireWriteAsync();
+            await using var catalog = await _host.Services.GetRequiredService<IDbContextFactory<ProjectDbContext>>().CreateDbContextAsync();
+            Assert.Equal(1, await catalog.Environments.Where(x => x.Id == _environment).ExecuteUpdateAsync(s =>
+                s.SetProperty(x => x.Classification, "Staging").SetProperty(x => x.Revision, x => x.Revision + 1)));
+        }
+        else if (scenario != "missing")
+            await SeedPolicy(effect: scenario == "denied" ? "deny" : "allow",
+                expiresAt: scenario == "expired" ? _host.Clock.GetUtcNow().AddMinutes(1) : null);
+        async Task<HttpResponseMessage> Send(string path, string key, object body, string? etag = null)
+        {
+            using var request = new HttpRequestMessage(HttpMethod.Post, path);
+            request.Headers.Add("Origin", LocalAuthenticationTestHost.Origin);
+            request.Headers.Add("Idempotency-Key", key);
+            request.Headers.Add("X-Kordra-CSRF", await _host.GetCsrfTokenAsync(_client));
+            if (etag is not null) request.Headers.TryAddWithoutValidation("If-Match", etag);
+            request.Content = new StringContent(JsonSerializer.Serialize(body), Encoding.UTF8, "application/json");
+            return await _client.SendAsync(request);
+        }
+        using var created = await Send(Root + "/releases", "synthetic-policy-category-create-1234", new
+        { schemaVersion = 1, correlationId = Guid.NewGuid(), label = "Synthetic policy category",
+            applicationId = _application, environmentId = _environment, targetId = _target, artifactId = _artifact });
+        Assert.Equal(HttpStatusCode.Created, created.StatusCode);
+        using var body = JsonDocument.Parse(await created.Content.ReadAsByteArrayAsync());
+        var revision = body.RootElement.GetProperty("revision"); var id = revision.GetProperty("releaseRevisionId").GetGuid();
+        var hash = revision.GetProperty("selectionHash").GetString() ?? new string('a', 64);
+        if (scenario == "expired") _host.Clock.Advance(TimeSpan.FromMinutes(1));
+        using var frozen = await Send(Root + $"/release-revisions/{id:D}/freeze", "synthetic-policy-category-freeze-1234",
+            new { schemaVersion = 1, correlationId = Guid.NewGuid(), expectedSelectionHash = hash }, created.Headers.ETag!.ToString());
+        Assert.Equal(expected, frozen.StatusCode);
+        using var error = JsonDocument.Parse(await frozen.Content.ReadAsByteArrayAsync());
+        AssertWire(error.RootElement, "ErrorEnvelope"); Assert.Equal(expectedCode, error.RootElement.GetProperty("code").GetString());
+        await using var db = await _host.Services.GetRequiredService<IDbContextFactory<ReleaseDbContext>>().CreateDbContextAsync();
+        var unchanged = await db.Revisions.AsNoTracking().SingleAsync(x => x.Id == id);
+        Assert.Equal("Draft", unchanged.State); Assert.Equal(1, unchanged.Version);
+        Assert.Equal(1, await db.Commands.CountAsync(x => x.ReleaseRevisionId == id));
+    }
+    [Theory]
     [InlineData("normal")]
     [InlineData("lost-reply")]
     [InlineData("grant-reject-race")]
@@ -708,14 +753,14 @@ public sealed class ReleaseHttpTests : IAsyncLifetime
     // The API fixture is stopped; these are explicit custody/process doubles, not proof of native installation custody.
     private sealed class RecoveryCustody : IOfflineProvisioningLease { public void RequireHeld() { } }
     private sealed class RecoveryProcesses(bool stopped) : IArtifactProcessQuiescence { public bool IsQuiescent(int processId) => stopped && processId == 12345; }
-    private async Task SeedPolicy()
+    private async Task SeedPolicy(string effect = "allow", DateTimeOffset? expiresAt = null)
     {
         var installation = _host.Services.GetRequiredService<LocalAuthenticationConfiguration>().InstallationId;
         var manifest = new { schemaVersion = 1, manifestId = Guid.NewGuid().ToString("D"), installationId = installation.ToString("D"),
             expectedDatabase = "kordra_test", expectedRole = "kordra_admin", tenantId = _tenant.ToString("D"), projectId = _project.ToString("D"),
             policyId = Guid.NewGuid().ToString("D"), expectedPolicyRevision = 0, payload = new { schemaVersion = 1,
-                purpose = "release-intent-v1", status = "active", effectiveFromUtc = "2026-10-27T00:00:00.000000Z", expiresAtUtc = (string?)null,
-                rules = new[] { new { classification = "Test", effect = "allow", separationOfDuties = "self_allowed", allowUnattestedProvenance = true,
+                purpose = "release-intent-v1", status = "active", effectiveFromUtc = "2026-10-27T00:00:00.000000Z", expiresAtUtc = expiresAt?.ToString("yyyy-MM-dd'T'HH:mm:ss.ffffff'Z'", System.Globalization.CultureInfo.InvariantCulture),
+                rules = new[] { new { classification = "Test", effect, separationOfDuties = effect == "allow" ? "self_allowed" : "independent", allowUnattestedProvenance = effect == "allow",
                     pendingLifetimeSeconds = 3600, grantLifetimeSeconds = 300, blockedWindowsUtc = Array.Empty<object>() } } },
             bindingChanges = new[] { new { environmentId = _environment.ToString("D"), expectedEnvironmentRevision = 1,
                 expectedBindingId = (string?)null, expectedBindingRevision = 0 } } };
