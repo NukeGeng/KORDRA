@@ -9,7 +9,7 @@ public sealed record ArtifactReplay(string Status, Guid RegistrationId);
 public sealed record ArtifactPage(IReadOnlyList<ArtifactSummaryV1> Items, Guid? NextAfterArtifactId);
 
 /// <summary>Owner-scoped bounded projections. Caller must enforce current project U/D; no provider/SEC dependency.</summary>
-public sealed class ArtifactQueryStore(ArtifactDbContext db)
+public sealed class ArtifactQueryStore(ArtifactDbContext db) : IReleaseArtifactReader
 {
     /// <summary>Minimum v1 write capability evidence from owner schema metadata, without history-table grants or DDL.</summary>
     public Task<bool> HasWriteSchemaV1Async(CancellationToken ct = default) => db.Database.SqlQueryRaw<bool>("""
@@ -45,6 +45,9 @@ public sealed class ArtifactQueryStore(ArtifactDbContext db)
         var row = await db.Artifacts.AsNoTracking().SingleOrDefaultAsync(a => a.TenantId == tenant && a.ProjectId == project && a.Id == artifact, ct);
         return row?.ToProjection();
     }
+
+    public Task<ArtifactV1?> ReadReleaseArtifactUnderAdmissionAsync(Guid tenantId, Guid projectId, Guid artifactId,
+        CancellationToken cancellationToken = default) => ReadDetailAsync(tenantId, projectId, artifactId, cancellationToken);
 
     /// <summary>A foreign/nonexistent cursor is absent, never a scope token. At most 51 rows are fetched.</summary>
     public async Task<ArtifactPage?> ReadPageAsync(Guid tenant, Guid project, int limit, Guid? after, CancellationToken ct = default)

@@ -150,6 +150,7 @@
           "Kordra.Modules.InfrastructureInventory": "[1.0.0, )",
           "Kordra.Modules.InfrastructureInventory.Contracts": "[1.0.0, )",
           "Kordra.Modules.ProjectEnvironment": "[1.0.0, )",
+          "Kordra.Modules.ReleaseManagement": "[1.0.0, )",
           "Kordra.Modules.TenantManagement": "[1.0.0, )"
         }
       },
@@ -242,6 +243,18 @@
       "kordra.modules.projectenvironment.contracts": {
         "type": "Project"
       },
+      "kordra.modules.releasemanagement": {
+        "type": "Project",
+        "dependencies": {
+          "Kordra.Modules.ReleaseManagement.Contracts": "[1.0.0, )",
+          "Kordra.ReleaseManagement.Domain": "[1.0.0, )",
+          "Microsoft.EntityFrameworkCore.Relational": "[10.0.11, )",
+          "Npgsql.EntityFrameworkCore.PostgreSQL": "[10.0.3, )"
+        }
+      },
+      "kordra.modules.releasemanagement.contracts": {
+        "type": "Project"
+      },
       "kordra.modules.tenantmanagement": {
         "type": "Project",
         "dependencies": {
@@ -253,6 +266,9 @@
         }
       },
       "kordra.modules.tenantmanagement.contracts": {
+        "type": "Project"
+      },
+      "kordra.releasemanagement.domain": {
         "type": "Project"
       }
     }

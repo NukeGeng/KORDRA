@@ -1,4 +1,11 @@
 <Solution>
+  <Folder Name="/ReleaseManagement/">
+    <Project Path="src/Modules/ReleaseManagement/Contracts/Kordra.Modules.ReleaseManagement.Contracts.csproj" />
+    <Project Path="src/Modules/ReleaseManagement/Kordra.Modules.ReleaseManagement.csproj" />
+    <Project Path="src/Modules/ReleaseManagement/Domain/Kordra.ReleaseManagement.Domain.csproj" />
+    <Project Path="tests/ReleaseManagement.Domain.Tests/ReleaseManagement.Domain.Tests.csproj" />
+    <Project Path="tests/ReleaseManagement.Tests/ReleaseManagement.Tests.csproj" />
+  </Folder>
   <Folder Name="/ApprovalGovernance/">
     <Project Path="src/Modules/ApprovalGovernance/Contracts/Kordra.Modules.ApprovalGovernance.Contracts.csproj" />
     <Project Path="src/Modules/ApprovalGovernance/Kordra.Modules.ApprovalGovernance.csproj" />

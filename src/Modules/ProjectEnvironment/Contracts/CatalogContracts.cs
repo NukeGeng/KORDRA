@@ -56,3 +56,21 @@ public interface IReleasePolicyEnvironmentReader
     Task<ReleasePolicyEnvironment?> ReadCurrentUnderAdmissionAsync(Guid tenantId, Guid projectId,
         Guid environmentId, CancellationToken cancellationToken = default);
 }
+
+/// <summary>Current PRJ facts for one release selection; no authorization or provider access is implied.</summary>
+public sealed record ReleaseCatalogSelection(Guid TenantId, Guid ProjectId, long ProjectRevision,
+    Guid ApplicationId, long ApplicationRevision, Guid EnvironmentId, long EnvironmentRevision,
+    string Classification, Guid TargetId, long AssociationRevision);
+
+public interface IReleaseCatalogReader
+{
+    Task<ReleaseCatalogSelection?> ReadUnderAdmissionAsync(Guid tenantId, Guid projectId, Guid applicationId,
+        Guid environmentId, Guid targetId, CancellationToken cancellationToken = default);
+}
+
+/// <summary>PRJ-owned environment identity with no caller-supplied tenant or project. Not an authorization.</summary>
+public interface IApprovalEnvironmentIdentityReader
+{
+    // Caller holds admission; missing, inactive or ambiguous IDs return null, owner failures propagate.
+    Task<ReleasePolicyEnvironment?> ReadCurrentUnderAdmissionAsync(Guid environmentId, CancellationToken cancellationToken = default);
+}

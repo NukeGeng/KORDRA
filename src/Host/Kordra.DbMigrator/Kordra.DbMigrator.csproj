@@ -22,4 +22,5 @@
   <ItemGroup><ProjectReference Include="../../Modules/ConnectionManagement/Kordra.Modules.ConnectionManagement.csproj" /></ItemGroup>
   <ItemGroup><ProjectReference Include="../../Modules/ArtifactManagement/Kordra.Modules.ArtifactManagement.csproj" /></ItemGroup>
   <ItemGroup><ProjectReference Include="../../Modules/ApprovalGovernance/Kordra.Modules.ApprovalGovernance.csproj" /></ItemGroup>
+  <ItemGroup><ProjectReference Include="../../Modules/ReleaseManagement/Kordra.Modules.ReleaseManagement.csproj" /></ItemGroup>
 </Project>
