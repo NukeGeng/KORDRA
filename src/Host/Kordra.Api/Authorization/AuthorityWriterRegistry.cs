@@ -27,7 +27,10 @@ public static class AuthorityWriterRegistry
         new("catalog.mutate", typeof(CatalogMutationCoordinator), nameof(CatalogMutationCoordinator.ExecuteAsync), false),
         new("catalog.environment-v2", typeof(CatalogMutationCoordinator), nameof(CatalogMutationCoordinator.ExecuteEnvironmentV2Async), false),
         new("sec.binding", typeof(OfflineCredentialCoordinator), nameof(OfflineCredentialCoordinator.ExecuteAsync), true),
-        new("policy.publish-bind", typeof(OfflineResourcePolicyCoordinator), nameof(OfflineResourcePolicyCoordinator.ExecuteAsync), true)
+        new("policy.publish-bind", typeof(OfflineResourcePolicyCoordinator), nameof(OfflineResourcePolicyCoordinator.ExecuteAsync), true),
+        new("approval.policy", typeof(OfflineApprovalPolicyCoordinator), nameof(OfflineApprovalPolicyCoordinator.ApplyAsync), true),
+        new("release.mutate", typeof(ReleaseMutationTransaction), nameof(ReleaseMutationTransaction.ExecuteAsync), false),
+        new("approval.mutate", typeof(ApprovalMutationTransaction), nameof(ApprovalMutationTransaction.ExecuteAsync), false)
     });
 
     public static void Validate()

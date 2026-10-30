@@ -179,3 +179,7 @@ Accepted ADR-0018 extracts protected invocation capacity into existing Security;
 ## T11.0 shared solution/architecture acknowledgment — 2026-10-27
 
 The accepted ADR-0005 T11.0 adds a BCL-only ApprovalGovernance Domain project and its test project to Kordra.slnx and the actual architecture graph. Existing feature behavior, permissions, schema and API are unchanged by this shared graph update. APR policy persistence, commands and complete feature validation remain in progress.
+
+## T11.1 shared graph acknowledgment — 2026-10-27
+
+The accepted ADR-0005 Release slice adds a BCL-only REL Domain and test project to the solution and architecture graph. This does not alter this owner’s runtime behavior or authorize a release. Full REL feature implementation remains in progress.

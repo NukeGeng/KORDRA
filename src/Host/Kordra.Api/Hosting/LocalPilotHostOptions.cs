@@ -55,6 +55,7 @@ public sealed class LocalPilotHostOptions : IDisposable
     public NomadTrustConfiguration? NomadTrust { get; private init; }
     public KeychainAccessConfiguration? CredentialAccess { get; private init; }
     public string? ArtifactConnectionString { get; private init; }
+    public ReleaseRuntimeConfiguration? Releases { get; private init; }
     public Kordra.Modules.ArtifactManagement.Infrastructure.Registry.RegistryTrustConfiguration? ArtifactRegistries { get; private init; }
 
     public string RuntimeConnectionString { get; }
@@ -117,6 +118,7 @@ public sealed class LocalPilotHostOptions : IDisposable
                 KubernetesTrustConfiguration? kubernetes = null;
                 KeychainAccessConfiguration? access = null;
                 var artifacts = ArtifactRuntimeConfiguration.LoadEnvironment(installationId);
+                var releases = ReleaseRuntimeConfiguration.LoadEnvironment();
                 if (config.NomadTrustConfigurationFile is not null || config.KubernetesTrustConfigurationFile is not null ||
                     artifacts.Registries?.Registries.Any(r => r.AuthMode != "anonymous") == true)
                 {
@@ -140,7 +142,7 @@ public sealed class LocalPilotHostOptions : IDisposable
                     new LocalAuthenticationConfiguration(installationId, Guid.NewGuid()),
                     denylist,
                     processLock) { NomadTrust = nomad, KubernetesTrust = kubernetes, CredentialAccess = access,
-                        ArtifactConnectionString = artifacts.ConnectionString, ArtifactRegistries = artifacts.Registries };
+                        ArtifactConnectionString = artifacts.ConnectionString, ArtifactRegistries = artifacts.Registries, Releases = releases };
             }
             catch { certificate.Dispose(); throw; }
         }

@@ -397,8 +397,8 @@
     "src/Host/Kordra.Api/Endpoints/NomadWorkloadEndpoints.cs": "80ec97f66bfcd65878f9497dc4b5543b0390bc6a3d8ef0c1e7ea9bdae9f915de",
     "src/Modules/IdentityAccess/Contracts/AuthorityAdmission.cs": "91d364ff5a67a021aa350bbb7e10a101f4a135e6db70b06ad46f2c4e57fd2f8f",
     "src/Modules/IdentityAccess/Authorization/ProtectedReadAdmission.cs": "c56d4f870f03f2efa35a04c0f419d8674a83cce3e52cefdb0a83942f0465cc20",
-    "src/Host/Kordra.Api/Hosting/LocalApiHost.cs": "9e7337037375836beeca26b9a6685eb42f8f3ebf9ba930a4bdbc142ae3e50999",
-    "src/Host/Kordra.Api/Hosting/LocalPilotHostOptions.cs": "a634b24e6fe17d64e33bddc08caeba5a982fca0a62ca52f6221a4b60d5a4d092",
+    "src/Host/Kordra.Api/Hosting/LocalApiHost.cs": "8369f86a8b9fa5febae64c8c0e1182e97d47db3be803897de407b6c17a8b2fbf",
+    "src/Host/Kordra.Api/Hosting/LocalPilotHostOptions.cs": "42b4310494396302600c64425421e7feb948f04a4bdf4fa1ecd375c0afc49739",
     "src/Host/Kordra.Api/Authorization/CurrentCredentialDependencyReader.cs": "0e7c0f8a3f297e13ee051216c9c54d88075163b37adc06fd8d83394a90e73a71",
     "src/Host/Kordra.Api/Authorization/CredentialTargetRead.cs": "fd60513dbe7e160ffb58a638817666c0634784b1269f995759e4a60fdf82bab1",
     "src/BuildingBlocks/Security/ProtectedInvocationCapacity.cs": "11b8c4f9a57079d477ec9751bb6426c3028b8ac9c6ade4063ee230f309d0c8b6"

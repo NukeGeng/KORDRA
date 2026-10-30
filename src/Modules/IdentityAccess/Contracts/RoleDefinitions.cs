@@ -10,6 +10,13 @@ public interface IRoleDefinitionReader
     Task<bool> IsActivePrincipalAsync(Guid principalId, CancellationToken cancellationToken = default);
 }
 
+public enum DurableRoleEvidenceStatus { Current, Invalidated, Unavailable }
+public sealed record DurableRoleEvidence(DurableRoleEvidenceStatus Status, RoleDefinitionSnapshot? Definition = null);
+public interface IDurableRoleEvidenceReader
+{
+    Task<DurableRoleEvidence> ReadExactUnderAdmissionAsync(Guid definitionId, long revision, CancellationToken cancellationToken = default);
+}
+
 /// <summary>Trusted offline composition must retain the installation OS lock, with API stopped.</summary>
 public interface IOfflineProvisioningLease
 {

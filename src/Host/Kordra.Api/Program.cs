@@ -62,7 +62,17 @@ public static class Program
                 return await LocalArtifactRecoveryCommand.RunAsync(args[1..]);
             }
 
-            Console.Error.WriteLine("Usage: Kordra.Api [--profile local-pilot | identity enroll-user|recover-user|disable-user | policy inspect <private-manifest> <private-admin-locator> | policy apply <private-manifest> <private-admin-locator> <approved-sha256> | credential inspect <private-manifest> <private-admin-locator> | credential apply <private-manifest> <private-admin-locator> <approved-sha256> | registry-credential inspect <private-manifest> <private-admin-locator> | registry-credential apply <private-manifest> <private-admin-locator> <approved-sha256> | approval-policy inspect <private-manifest> <private-admin-locator> | approval-policy apply <private-manifest> <private-admin-locator> <approved-sha256> | artifact-recovery inspect <private-plan> <private-admin-locator> | artifact-recovery apply <private-plan> <private-admin-locator> <approved-sha256>]");
+            if (args is ["approval-recovery", "inspect", _, _] || args is ["approval-recovery", "apply", _, _, _])
+            {
+                return await LocalApprovalRecoveryCommand.RunAsync(args[1..]);
+            }
+
+            if (args is ["release-recovery", "inspect", _, _] || args is ["release-recovery", "apply", _, _, _])
+            {
+                return await LocalReleaseRecoveryCommand.RunAsync(args[1..]);
+            }
+
+            Console.Error.WriteLine("Usage: Kordra.Api [--profile local-pilot | identity enroll-user|recover-user|disable-user | policy inspect <private-manifest> <private-admin-locator> | policy apply <private-manifest> <private-admin-locator> <approved-sha256> | credential inspect <private-manifest> <private-admin-locator> | credential apply <private-manifest> <private-admin-locator> <approved-sha256> | registry-credential inspect <private-manifest> <private-admin-locator> | registry-credential apply <private-manifest> <private-admin-locator> <approved-sha256> | approval-policy inspect <private-manifest> <private-admin-locator> | approval-policy apply <private-manifest> <private-admin-locator> <approved-sha256> | artifact-recovery inspect <private-plan> <private-admin-locator> | artifact-recovery apply <private-plan> <private-admin-locator> <approved-sha256> | approval-recovery inspect <private-plan> <private-admin-locator> | approval-recovery apply <private-plan> <private-admin-locator> <approved-sha256> | release-recovery inspect <private-plan> <private-admin-locator> | release-recovery apply <private-plan> <private-admin-locator> <approved-sha256>]");
             return 2;
         }
         catch

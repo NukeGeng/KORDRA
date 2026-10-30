@@ -1,0 +1,1898 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Kordra Release Approval v1",
+    "version": "1.0.0"
+  },
+  "servers": [
+    {
+      "url": "https://localhost:5128"
+    }
+  ],
+  "x-implementation-status": "in-progress",
+  "x-working-tree-source-sha256": {
+    "src/Host/Kordra.Api/Composition/Approvals/ApprovalEligibilityReader.cs": "9617ae9862fd9a7860573777da33dab992b302de9fc0abdbf6025fda90956b61",
+    "src/Host/Kordra.Api/Composition/Approvals/ApprovalEnvironmentAuthorityReader.cs": "a7ea6c4d2992995d1e10072d313b6009d562457ce090efecd571c82a49100e13",
+    "src/Host/Kordra.Api/Composition/Approvals/ApprovalMutationDisclosure.cs": "2ab7b5384cd55b893dd476edbf575f87cb88f6d0a94c9dda81791d2b44456408",
+    "src/Host/Kordra.Api/Composition/Approvals/ApprovalMutationExecutionCoordinator.cs": "d6b4e5f7923189f5c0f46033f4b9ff6f52c7608b8fdfe391d9bebd21eaa4b60e",
+    "src/Host/Kordra.Api/Composition/Approvals/ApprovalMutationTransaction.cs": "69ffc6475e29511fa0d9a0ccf9df1f4888ae39adf3b16d1c5494832e1be9ab6d",
+    "src/Host/Kordra.Api/Composition/Approvals/ApprovalPayloadBuilder.cs": "efff37e28d64dade44fe911686f90f79cfad76469297e75ac5f741f84b8bf63b",
+    "src/Host/Kordra.Api/Composition/Approvals/ApprovalReadCoordinator.cs": "f03b758c76bde91e7cfd28476981726bec9184c84af69b9a1ea7e1d9d4bcaa23",
+    "src/Host/Kordra.Api/Composition/Approvals/ApprovalRuntimeServices.cs": "191845fd620429815dea4b70942f0f28d577aad9ba8890e293564c2371e74502",
+    "src/Host/Kordra.Api/Composition/Approvals/ApprovalSchemaReadiness.cs": "474a69b9c2506e0dc42690f8e4b01c486896a21db323ce34f9cc91c1c1cce969",
+    "src/Host/Kordra.Api/Composition/Approvals/ApprovalSubjectReader.cs": "01f3208ee646adeeedae2910a7bfff3583353ec39e073ec06824b12412e0c3d6",
+    "src/Host/Kordra.Api/Composition/Approvals/ApprovalUseAdmission.cs": "e426d99d41472381a0b2b9da19206aeb0e4e620f043e86dc250c26bbb2969e9a",
+    "src/Host/Kordra.Api/Endpoints/Approvals/ApprovalCallerBoundResponseCommitter.cs": "6010da495b5701a40bbeee2d67837afd5dfff8400994a91fb50b6194c5bfc9a1",
+    "src/Host/Kordra.Api/Endpoints/Approvals/ApprovalEndpoints.cs": "dd3839efd9b39b4beea9e8a247ae27ba06b3c7e5ac1cab71660caa5a726f4cf5",
+    "src/Host/Kordra.Api/Endpoints/Approvals/ApprovalRequestParser.cs": "f71ed087f355c17abb9cf5a1a51fabbeb8eb7ae2bd0802c6c12909e005ba3576",
+    "src/Host/Kordra.Api/Hosting/LocalApiHost.cs": "8369f86a8b9fa5febae64c8c0e1182e97d47db3be803897de407b6c17a8b2fbf",
+    "src/Host/Kordra.Api/Composition/Releases/ReleaseRuntimeServices.cs": "2cd3bbc37cba885ff6d9d7b373e5dffe8852204ebf82a1223c6b47b6880334c3"
+  },
+  "paths": {
+    "/api/v1/environments/{environmentId}/release-approvals": {
+      "post": {
+        "operationId": "RequestReleaseApproval",
+        "parameters": [
+          {
+            "name": "environmentId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^(?!00000000-0000-0000-0000-000000000000$)[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 16,
+              "maxLength": 128,
+              "pattern": "^[A-Za-z0-9._-]+$"
+            }
+          },
+          {
+            "name": "X-Kordra-CSRF",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RequestApproval"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Fresh authorized response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApprovalEnvelope"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Safe bounded error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Safe bounded error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Safe bounded error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Safe bounded error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Safe bounded error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "412": {
+            "description": "Safe bounded error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Safe bounded error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Safe bounded error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Safe bounded error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "201": {
+            "description": "Fresh authorized response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApprovalEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "localSession": []
+          }
+        ],
+        "x-max-body-bytes": 16384
+      },
+      "get": {
+        "operationId": "ListReleaseApprovals",
+        "parameters": [
+          {
+            "name": "environmentId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^(?!00000000-0000-0000-0000-000000000000$)[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 50,
+              "default": 50
+            }
+          },
+          {
+            "name": "afterId",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^(?!00000000-0000-0000-0000-000000000000$)[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Fresh authorized response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApprovalListEnvelope"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Safe bounded error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Safe bounded error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Safe bounded error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Safe bounded error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Safe bounded error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "412": {
+            "description": "Safe bounded error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Safe bounded error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Safe bounded error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Safe bounded error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "localSession": []
+          }
+        ]
+      }
+    },
+    "/api/v1/environments/{environmentId}/release-approvals/{requestId}/grant": {
+      "post": {
+        "operationId": "GrantReleaseApproval",
+        "parameters": [
+          {
+            "name": "environmentId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^(?!00000000-0000-0000-0000-000000000000$)[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+            }
+          },
+          {
+            "name": "requestId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^(?!00000000-0000-0000-0000-000000000000$)[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 16,
+              "maxLength": 128,
+              "pattern": "^[A-Za-z0-9._-]+$"
+            }
+          },
+          {
+            "name": "X-Kordra-CSRF",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "If-Match",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^\"apr-v1:[0-9a-f-]{36}:[1-9][0-9]*\"$"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GrantApproval"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Fresh authorized response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApprovalEnvelope"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Safe bounded error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Safe bounded error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Safe bounded error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Safe bounded error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Safe bounded error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "412": {
+            "description": "Safe bounded error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Safe bounded error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Safe bounded error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Safe bounded error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "localSession": []
+          }
+        ],
+        "x-max-body-bytes": 16384
+      }
+    },
+    "/api/v1/environments/{environmentId}/release-approvals/{requestId}/reject": {
+      "post": {
+        "operationId": "RejectReleaseApproval",
+        "parameters": [
+          {
+            "name": "environmentId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^(?!00000000-0000-0000-0000-000000000000$)[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+            }
+          },
+          {
+            "name": "requestId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^(?!00000000-0000-0000-0000-000000000000$)[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 16,
+              "maxLength": 128,
+              "pattern": "^[A-Za-z0-9._-]+$"
+            }
+          },
+          {
+            "name": "X-Kordra-CSRF",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "If-Match",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^\"apr-v1:[0-9a-f-]{36}:[1-9][0-9]*\"$"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RejectApproval"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Fresh authorized response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApprovalEnvelope"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Safe bounded error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Safe bounded error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Safe bounded error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Safe bounded error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Safe bounded error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "412": {
+            "description": "Safe bounded error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Safe bounded error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Safe bounded error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Safe bounded error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "localSession": []
+          }
+        ],
+        "x-max-body-bytes": 16384
+      }
+    },
+    "/api/v1/environments/{environmentId}/release-approvals/{requestId}/revoke": {
+      "post": {
+        "operationId": "RevokeReleaseApproval",
+        "parameters": [
+          {
+            "name": "environmentId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^(?!00000000-0000-0000-0000-000000000000$)[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+            }
+          },
+          {
+            "name": "requestId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^(?!00000000-0000-0000-0000-000000000000$)[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 16,
+              "maxLength": 128,
+              "pattern": "^[A-Za-z0-9._-]+$"
+            }
+          },
+          {
+            "name": "X-Kordra-CSRF",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "If-Match",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^\"apr-v1:[0-9a-f-]{36}:[1-9][0-9]*\"$"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RevokeApproval"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Fresh authorized response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApprovalEnvelope"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Safe bounded error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Safe bounded error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Safe bounded error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Safe bounded error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Safe bounded error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "412": {
+            "description": "Safe bounded error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Safe bounded error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Safe bounded error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Safe bounded error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "localSession": []
+          }
+        ],
+        "x-max-body-bytes": 16384
+      }
+    },
+    "/api/v1/environments/{environmentId}/release-approvals/{requestId}": {
+      "get": {
+        "operationId": "ReadReleaseApproval",
+        "parameters": [
+          {
+            "name": "environmentId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^(?!00000000-0000-0000-0000-000000000000$)[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+            }
+          },
+          {
+            "name": "requestId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^(?!00000000-0000-0000-0000-000000000000$)[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Fresh authorized response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApprovalEnvelope"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Safe bounded error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Safe bounded error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Safe bounded error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Safe bounded error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Safe bounded error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "412": {
+            "description": "Safe bounded error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Safe bounded error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Safe bounded error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Safe bounded error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "localSession": []
+          }
+        ]
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "localSession": {
+        "type": "apiKey",
+        "in": "cookie",
+        "name": "__Host-kordra.session"
+      }
+    },
+    "schemas": {
+      "RequestApproval": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "schemaVersion": {
+            "const": 1
+          },
+          "correlationId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^(?!00000000-0000-0000-0000-000000000000$)[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+          },
+          "releaseRevisionId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^(?!00000000-0000-0000-0000-000000000000$)[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+          }
+        },
+        "required": [
+          "schemaVersion",
+          "correlationId",
+          "releaseRevisionId"
+        ]
+      },
+      "GrantApproval": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "schemaVersion": {
+            "const": 1
+          },
+          "correlationId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^(?!00000000-0000-0000-0000-000000000000$)[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+          },
+          "reasonCode": {
+            "const": "approved"
+          }
+        },
+        "required": [
+          "schemaVersion",
+          "correlationId",
+          "reasonCode"
+        ]
+      },
+      "RejectApproval": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "schemaVersion": {
+            "const": 1
+          },
+          "correlationId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^(?!00000000-0000-0000-0000-000000000000$)[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+          },
+          "reasonCode": {
+            "enum": [
+              "changes_required",
+              "incorrect_artifact",
+              "incorrect_target",
+              "policy_denied"
+            ]
+          }
+        },
+        "required": [
+          "schemaVersion",
+          "correlationId",
+          "reasonCode"
+        ]
+      },
+      "RevokeApproval": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "schemaVersion": {
+            "const": 1
+          },
+          "correlationId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^(?!00000000-0000-0000-0000-000000000000$)[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+          },
+          "reasonCode": {
+            "enum": [
+              "obsolete",
+              "requester_cancelled",
+              "owner_cancelled"
+            ]
+          }
+        },
+        "required": [
+          "schemaVersion",
+          "correlationId",
+          "reasonCode"
+        ]
+      },
+      "ReleaseIntent": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "schemaVersion": {
+            "const": 1
+          },
+          "subjectKind": {
+            "const": "release-intent-v1"
+          },
+          "tenantId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^(?!00000000-0000-0000-0000-000000000000$)[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+          },
+          "project": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^(?!00000000-0000-0000-0000-000000000000$)[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+              },
+              "revision": {
+                "type": "integer",
+                "minimum": 1
+              }
+            },
+            "required": [
+              "id",
+              "revision"
+            ]
+          },
+          "application": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^(?!00000000-0000-0000-0000-000000000000$)[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+              },
+              "revision": {
+                "type": "integer",
+                "minimum": 1
+              }
+            },
+            "required": [
+              "id",
+              "revision"
+            ]
+          },
+          "environment": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^(?!00000000-0000-0000-0000-000000000000$)[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+              },
+              "revision": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "classification": {
+                "enum": [
+                  "Development",
+                  "Test"
+                ]
+              }
+            },
+            "required": [
+              "id",
+              "revision",
+              "classification"
+            ]
+          },
+          "target": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^(?!00000000-0000-0000-0000-000000000000$)[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+              },
+              "kind": {
+                "type": "string"
+              },
+              "revision": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "associationRevision": {
+                "type": "integer",
+                "minimum": 1
+              }
+            },
+            "required": [
+              "id",
+              "kind",
+              "revision",
+              "associationRevision"
+            ]
+          },
+          "artifact": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "artifactId": {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^(?!00000000-0000-0000-0000-000000000000$)[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+              },
+              "projectId": {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^(?!00000000-0000-0000-0000-000000000000$)[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+              },
+              "registryId": {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^(?!00000000-0000-0000-0000-000000000000$)[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+              },
+              "repository": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 255
+              },
+              "rootDigest": {
+                "type": "string",
+                "pattern": "^(sha256:[0-9a-f]{64}|sha512:[0-9a-f]{128})$"
+              },
+              "platform": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "os": {
+                    "const": "linux"
+                  },
+                  "architecture": {
+                    "enum": [
+                      "amd64",
+                      "arm64"
+                    ]
+                  },
+                  "variant": {
+                    "enum": [
+                      null,
+                      "v8"
+                    ]
+                  }
+                },
+                "required": [
+                  "os",
+                  "architecture",
+                  "variant"
+                ]
+              },
+              "rootMediaType": {
+                "type": "string"
+              },
+              "rootSizeBytes": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "selectedManifestDigest": {
+                "type": "string",
+                "pattern": "^(sha256:[0-9a-f]{64}|sha512:[0-9a-f]{128})$"
+              },
+              "selectedManifestSizeBytes": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "selectedManifestMediaType": {
+                "type": "string"
+              },
+              "configDigest": {
+                "type": "string",
+                "pattern": "^(sha256:[0-9a-f]{64}|sha512:[0-9a-f]{128})$"
+              },
+              "configSizeBytes": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "observedPlatform": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "os": {
+                    "const": "linux"
+                  },
+                  "architecture": {
+                    "enum": [
+                      "amd64",
+                      "arm64"
+                    ]
+                  },
+                  "variant": {
+                    "enum": [
+                      null,
+                      "v8"
+                    ]
+                  }
+                },
+                "required": [
+                  "os",
+                  "architecture",
+                  "variant"
+                ]
+              },
+              "variantEvidence": {
+                "enum": [
+                  "none",
+                  "config",
+                  "descriptor"
+                ]
+              },
+              "verifierProfile": {
+                "const": "artifact-registry-v1"
+              },
+              "verifiedAtUtc": {
+                "type": "string",
+                "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}\\.\\d{6}Z$"
+              },
+              "createdAtUtc": {
+                "type": "string",
+                "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}\\.\\d{6}Z$"
+              },
+              "contentVerification": {
+                "const": "manifest_config_hash_verified"
+              },
+              "layerAvailability": {
+                "const": "not_checked"
+              },
+              "signatureVerification": {
+                "const": "not_checked"
+              }
+            },
+            "required": [
+              "artifactId",
+              "projectId",
+              "registryId",
+              "repository",
+              "rootDigest",
+              "platform",
+              "rootMediaType",
+              "rootSizeBytes",
+              "selectedManifestDigest",
+              "selectedManifestSizeBytes",
+              "selectedManifestMediaType",
+              "configDigest",
+              "configSizeBytes",
+              "observedPlatform",
+              "variantEvidence",
+              "verifierProfile",
+              "verifiedAtUtc",
+              "createdAtUtc",
+              "contentVerification",
+              "layerAvailability",
+              "signatureVerification"
+            ]
+          },
+          "approvalPolicy": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "policyId": {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^(?!00000000-0000-0000-0000-000000000000$)[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+              },
+              "policyRevision": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "payloadHash": {
+                "type": "string",
+                "pattern": "^[0-9a-f]{64}$"
+              },
+              "bindingId": {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^(?!00000000-0000-0000-0000-000000000000$)[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+              },
+              "bindingRevision": {
+                "type": "integer",
+                "minimum": 1
+              }
+            },
+            "required": [
+              "policyId",
+              "policyRevision",
+              "payloadHash",
+              "bindingId",
+              "bindingRevision"
+            ]
+          },
+          "qualification": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "profile": {
+                "const": "pilot"
+              },
+              "provenanceClass": {
+                "const": "unattested"
+              },
+              "executionAuthorized": {
+                "const": false
+              }
+            },
+            "required": [
+              "profile",
+              "provenanceClass",
+              "executionAuthorized"
+            ]
+          }
+        },
+        "required": [
+          "schemaVersion",
+          "subjectKind",
+          "tenantId",
+          "project",
+          "application",
+          "environment",
+          "target",
+          "artifact",
+          "approvalPolicy",
+          "qualification"
+        ]
+      },
+      "Decision": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "decisionId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^(?!00000000-0000-0000-0000-000000000000$)[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+          },
+          "action": {
+            "enum": [
+              "grant",
+              "reject",
+              "revoke"
+            ]
+          },
+          "actorPrincipalId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^(?!00000000-0000-0000-0000-000000000000$)[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+          },
+          "occurredAtUtc": {
+            "type": "string",
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}\\.\\d{6}Z$"
+          },
+          "reasonCode": {
+            "enum": [
+              "approved",
+              "changes_required",
+              "incorrect_artifact",
+              "incorrect_target",
+              "policy_denied",
+              "obsolete",
+              "requester_cancelled",
+              "owner_cancelled"
+            ]
+          }
+        },
+        "required": [
+          "decisionId",
+          "action",
+          "actorPrincipalId",
+          "occurredAtUtc",
+          "reasonCode"
+        ]
+      },
+      "Approval": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "requestId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^(?!00000000-0000-0000-0000-000000000000$)[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+          },
+          "version": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "purpose": {
+            "const": "release-intent-v1"
+          },
+          "releaseId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^(?!00000000-0000-0000-0000-000000000000$)[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+          },
+          "releaseRevisionId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^(?!00000000-0000-0000-0000-000000000000$)[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+          },
+          "projectId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^(?!00000000-0000-0000-0000-000000000000$)[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+          },
+          "environmentId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^(?!00000000-0000-0000-0000-000000000000$)[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+          },
+          "targetId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^(?!00000000-0000-0000-0000-000000000000$)[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+          },
+          "specHash": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "requesterPrincipalId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^(?!00000000-0000-0000-0000-000000000000$)[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+          },
+          "approverPrincipalId": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^(?!00000000-0000-0000-0000-000000000000$)[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "recordedState": {
+            "enum": [
+              "Pending",
+              "Granted",
+              "Rejected",
+              "Revoked"
+            ]
+          },
+          "effectiveState": {
+            "enum": [
+              "Pending",
+              "Granted",
+              "Rejected",
+              "Revoked",
+              "Expired",
+              "Invalidated"
+            ]
+          },
+          "createdAtUtc": {
+            "type": "string",
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}\\.\\d{6}Z$"
+          },
+          "pendingExpiresAtUtc": {
+            "type": "string",
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}\\.\\d{6}Z$"
+          },
+          "grantedAtUtc": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}\\.\\d{6}Z$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "grantExpiresAtUtc": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}\\.\\d{6}Z$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "policy": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "policyId": {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^(?!00000000-0000-0000-0000-000000000000$)[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+              },
+              "policyRevision": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "payloadHash": {
+                "type": "string",
+                "pattern": "^[0-9a-f]{64}$"
+              },
+              "bindingId": {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^(?!00000000-0000-0000-0000-000000000000$)[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+              },
+              "bindingRevision": {
+                "type": "integer",
+                "minimum": 1
+              }
+            },
+            "required": [
+              "policyId",
+              "policyRevision",
+              "payloadHash",
+              "bindingId",
+              "bindingRevision"
+            ]
+          },
+          "subject": {
+            "$ref": "#/components/schemas/ReleaseIntent"
+          },
+          "decisions": {
+            "type": "array",
+            "maxItems": 2,
+            "items": {
+              "$ref": "#/components/schemas/Decision"
+            }
+          },
+          "eligibilityReasonCode": {
+            "enum": [
+              "eligible",
+              "rejected",
+              "revoked",
+              "policy_missing",
+              "policy_denied",
+              "qualification_required",
+              "selection_changed",
+              "release_retired",
+              "subject_changed",
+              "policy_changed",
+              "principal_inactive",
+              "assignment_changed",
+              "expired",
+              "approval_window_blocked"
+            ]
+          },
+          "executionAuthorized": {
+            "const": false
+          }
+        },
+        "required": [
+          "requestId",
+          "version",
+          "purpose",
+          "releaseId",
+          "releaseRevisionId",
+          "projectId",
+          "environmentId",
+          "targetId",
+          "specHash",
+          "requesterPrincipalId",
+          "approverPrincipalId",
+          "recordedState",
+          "effectiveState",
+          "createdAtUtc",
+          "pendingExpiresAtUtc",
+          "grantedAtUtc",
+          "grantExpiresAtUtc",
+          "policy",
+          "subject",
+          "decisions",
+          "eligibilityReasonCode",
+          "executionAuthorized"
+        ]
+      },
+      "ApprovalListItem": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "requestId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^(?!00000000-0000-0000-0000-000000000000$)[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+          },
+          "version": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "releaseRevisionId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^(?!00000000-0000-0000-0000-000000000000$)[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+          },
+          "projectId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^(?!00000000-0000-0000-0000-000000000000$)[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+          },
+          "environmentId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^(?!00000000-0000-0000-0000-000000000000$)[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+          },
+          "targetId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^(?!00000000-0000-0000-0000-000000000000$)[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+          },
+          "specHash": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "requesterPrincipalId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^(?!00000000-0000-0000-0000-000000000000$)[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+          },
+          "approverPrincipalId": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^(?!00000000-0000-0000-0000-000000000000$)[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "recordedState": {
+            "enum": [
+              "Pending",
+              "Granted",
+              "Rejected",
+              "Revoked"
+            ]
+          },
+          "effectiveState": {
+            "enum": [
+              "Pending",
+              "Granted",
+              "Rejected",
+              "Revoked",
+              "Expired",
+              "Invalidated"
+            ]
+          },
+          "createdAtUtc": {
+            "type": "string",
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}\\.\\d{6}Z$"
+          },
+          "pendingExpiresAtUtc": {
+            "type": "string",
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}\\.\\d{6}Z$"
+          },
+          "grantExpiresAtUtc": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}\\.\\d{6}Z$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "eligibilityReasonCode": {
+            "enum": [
+              "eligible",
+              "rejected",
+              "revoked",
+              "policy_missing",
+              "policy_denied",
+              "qualification_required",
+              "selection_changed",
+              "release_retired",
+              "subject_changed",
+              "policy_changed",
+              "principal_inactive",
+              "assignment_changed",
+              "expired",
+              "approval_window_blocked"
+            ]
+          },
+          "executionAuthorized": {
+            "const": false
+          }
+        },
+        "required": [
+          "requestId",
+          "version",
+          "releaseRevisionId",
+          "projectId",
+          "environmentId",
+          "targetId",
+          "specHash",
+          "requesterPrincipalId",
+          "approverPrincipalId",
+          "recordedState",
+          "effectiveState",
+          "createdAtUtc",
+          "pendingExpiresAtUtc",
+          "grantExpiresAtUtc",
+          "eligibilityReasonCode",
+          "executionAuthorized"
+        ]
+      },
+      "ApprovalEnvelope": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "schemaVersion": {
+            "const": 1
+          },
+          "correlationId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^(?!00000000-0000-0000-0000-000000000000$)[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+          },
+          "approval": {
+            "$ref": "#/components/schemas/Approval"
+          }
+        },
+        "required": [
+          "schemaVersion",
+          "correlationId",
+          "approval"
+        ]
+      },
+      "ApprovalListEnvelope": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "schemaVersion": {
+            "const": 1
+          },
+          "correlationId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^(?!00000000-0000-0000-0000-000000000000$)[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+          },
+          "items": {
+            "type": "array",
+            "maxItems": 50,
+            "items": {
+              "$ref": "#/components/schemas/ApprovalListItem"
+            }
+          },
+          "nextAfterId": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^(?!00000000-0000-0000-0000-000000000000$)[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "schemaVersion",
+          "correlationId",
+          "items",
+          "nextAfterId"
+        ]
+      },
+      "ErrorEnvelope": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "schemaVersion": {
+            "const": 1
+          },
+          "correlationId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^(?!00000000-0000-0000-0000-000000000000$)[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+          },
+          "code": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "schemaVersion",
+          "correlationId",
+          "code"
+        ]
+      }
+    }
+  }
+}

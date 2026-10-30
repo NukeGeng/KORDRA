@@ -15,7 +15,7 @@ namespace Kordra.Modules.TenantManagement;
 public sealed class TenantMembershipService(
     IDbContextFactory<TenantDbContext> contexts, IRoleDefinitionReader definitions,
     ITenantSubjectReader subjects, ITenantScopeOwner resources, ITenantAuditTransactionFactory audits,
-    FairAsyncReaderWriterAdmissionGate gate, IAuthorityClock clock) : IScopedGrantReader, IPolicyTenantAuthority
+    FairAsyncReaderWriterAdmissionGate gate, IAuthorityClock clock) : IScopedGrantReader, IDurableGrantEvidenceReader, IPolicyTenantAuthority
 {
     private sealed record Source(Guid Id, long Revision);
     private sealed record ProvenanceValidity(DateTimeOffset? ExpiresAtUtc);
@@ -139,6 +139,70 @@ public sealed class TenantMembershipService(
         return member is null || organization is null ? null : new(principal, tenant, member.Id, organization.Revision,
             member.Revision, effective.AssignmentId, effective.Revision, effective.DefinitionId, effective.DefinitionRevision,
             permission, scopeKind, scopeId, effective.ExpiresAtUtc);
+    }
+
+    /// <summary>Owner comparison for durable evidence; no session or action permission is issued.</summary>
+    public async Task<DurableGrantEvidenceStatus> CompareUnderAdmissionAsync(ScopedGrant expected, CancellationToken ct = default)
+    {
+        if (expected is null || expected.PrincipalId == Guid.Empty || expected.TenantId == Guid.Empty ||
+            expected.MembershipId == Guid.Empty || expected.AssignmentId == Guid.Empty || expected.DefinitionId == Guid.Empty ||
+            expected.ScopeId == Guid.Empty || expected.TenantRevision <= 0 || expected.MembershipRevision <= 0 ||
+            expected.AssignmentRevision <= 0 || expected.DefinitionRevision <= 0 ||
+            !FoundationPermissions.IsValid(new(expected.Permission, expected.ScopeKind))) return DurableGrantEvidenceStatus.Unavailable;
+        await using var db = await contexts.CreateDbContextAsync(ct);
+        var organization = await db.Organizations.AsNoTracking().SingleOrDefaultAsync(x => x.Id == expected.TenantId, ct);
+        var member = await db.Memberships.AsNoTracking().SingleOrDefaultAsync(x => x.TenantId == expected.TenantId && x.Id == expected.MembershipId, ct);
+        var assignment = await db.Assignments.AsNoTracking().SingleOrDefaultAsync(x => x.TenantId == expected.TenantId && x.Id == expected.AssignmentId, ct);
+        if (organization is null || organization.Status != "active" || organization.Revision != expected.TenantRevision ||
+            member is null || member.PrincipalId != expected.PrincipalId || member.Status != "active" || member.Revision != expected.MembershipRevision ||
+            assignment is null || assignment.MembershipId != expected.MembershipId || assignment.Status != "active" ||
+            assignment.Revision != expected.AssignmentRevision || assignment.DefinitionId != expected.DefinitionId ||
+            assignment.DefinitionRevision != expected.DefinitionRevision || assignment.ScopeKind != expected.ScopeKind || assignment.ScopeId != expected.ScopeId)
+            return DurableGrantEvidenceStatus.Invalidated;
+        var now = clock.GetTrustedUtcNow();
+        var effective = await ResolveAsync(db, expected.TenantId, expected.PrincipalId, expected.Permission,
+            new(expected.ScopeKind, expected.ScopeId), now, ct);
+        // ResolveAsync also covers ambiguous assignments and malformed/unavailable provenance.
+        if (effective is null) return await ClassifyProvenanceFailureAsync(db, assignment, now, [], ct);
+        var current = new ScopedGrant(expected.PrincipalId, expected.TenantId, member.Id, organization.Revision,
+            member.Revision, effective.AssignmentId, effective.Revision, effective.DefinitionId,
+            effective.DefinitionRevision, expected.Permission, expected.ScopeKind, expected.ScopeId, effective.ExpiresAtUtc);
+        return current == expected ? DurableGrantEvidenceStatus.Current : DurableGrantEvidenceStatus.Invalidated;
+    }
+
+    // Only positively observed invalidation is classified as such. Malformed graphs, missing
+    // definition detail and failures of unrelated dependencies remain unavailable.
+    private async Task<DurableGrantEvidenceStatus> ClassifyProvenanceFailureAsync(TenantDbContext db,
+        TenantAssignment assignment, DateTimeOffset now, HashSet<Guid> visited, CancellationToken ct)
+    {
+        if (visited.Count >= 32 || !visited.Add(assignment.Id)) return DurableGrantEvidenceStatus.Unavailable;
+        if (assignment.Status == "revoked" || assignment.ExpiresAtUtc <= now) return DurableGrantEvidenceStatus.Invalidated;
+        if (assignment.Status != "active") return DurableGrantEvidenceStatus.Unavailable;
+        var member = await db.Memberships.AsNoTracking().SingleOrDefaultAsync(x => x.TenantId == assignment.TenantId && x.Id == assignment.MembershipId, ct);
+        if (member is null || member.Status == "revoked") return DurableGrantEvidenceStatus.Invalidated;
+        if (member.Status != "active") return DurableGrantEvidenceStatus.Unavailable;
+        if (!await definitions.IsActivePrincipalAsync(member.PrincipalId, ct)) return DurableGrantEvidenceStatus.Invalidated;
+        if (definitions is not IDurableRoleEvidenceReader durableRoles) return DurableGrantEvidenceStatus.Unavailable;
+        var role = await durableRoles.ReadExactUnderAdmissionAsync(assignment.DefinitionId, assignment.DefinitionRevision, ct);
+        if (role.Status == DurableRoleEvidenceStatus.Invalidated) return DurableGrantEvidenceStatus.Invalidated;
+        if (role.Status != DurableRoleEvidenceStatus.Current || role.Definition is null) return DurableGrantEvidenceStatus.Unavailable;
+        Source[]? sources;
+        try { sources = JsonSerializer.Deserialize<Source[]>(assignment.ProvenanceJson); }
+        catch (JsonException) { return DurableGrantEvidenceStatus.Unavailable; }
+        if (sources is null || sources.Length > 32 || sources.Any(x => x is null || x.Id == Guid.Empty || x.Revision <= 0))
+            return DurableGrantEvidenceStatus.Unavailable;
+        if (assignment.IsFounding || sources.Length == 0) return DurableGrantEvidenceStatus.Unavailable;
+        var result = DurableGrantEvidenceStatus.Unavailable;
+        foreach (var source in sources)
+        {
+            var parent = await db.Assignments.AsNoTracking().SingleOrDefaultAsync(x => x.TenantId == assignment.TenantId && x.Id == source.Id, ct);
+            if (parent is null || parent.Revision != source.Revision) return DurableGrantEvidenceStatus.Invalidated;
+            var grantor = await db.Memberships.AsNoTracking().SingleOrDefaultAsync(x => x.TenantId == assignment.TenantId && x.Id == parent.MembershipId, ct);
+            if (grantor is null || grantor.PrincipalId != assignment.GrantorPrincipalId) return DurableGrantEvidenceStatus.Invalidated;
+            var status = await ClassifyProvenanceFailureAsync(db, parent, now, new HashSet<Guid>(visited), ct);
+            if (status == DurableGrantEvidenceStatus.Invalidated) result = status;
+        }
+        return result;
     }
 
     public async Task<TenantCommandResult> ExecuteAsync(TenantCommand command, CancellationToken cancellationToken = default)

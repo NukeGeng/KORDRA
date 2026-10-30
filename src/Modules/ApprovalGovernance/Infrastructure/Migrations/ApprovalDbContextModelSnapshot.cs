@@ -23,6 +23,59 @@ namespace Kordra.Modules.ApprovalGovernance.Infrastructure.Migrations
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
 
+            modelBuilder.Entity("Kordra.Modules.ApprovalGovernance.Infrastructure.ApprovalDecisionRecord", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<string>("Action")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("action");
+
+                    b.Property<Guid>("ActorPrincipalId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("actor_principal_id");
+
+                    b.Property<Guid>("InstallationId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("installation_id");
+
+                    b.Property<DateTimeOffset>("OccurredAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("occurred_at_utc");
+
+                    b.Property<string>("ReasonCode")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("reason_code");
+
+                    b.Property<Guid>("RequestId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("request_id");
+
+                    b.Property<long>("RequestVersion")
+                        .HasColumnType("bigint")
+                        .HasColumnName("request_version");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("tenant_id");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("RequestId", "RequestVersion")
+                        .IsUnique();
+
+                    b.HasIndex("RequestId", "InstallationId", "TenantId");
+
+                    b.ToTable("apr_decisions", "app", t =>
+                        {
+                            t.HasCheckConstraint("ck_apr_decision", "id <> '00000000-0000-0000-0000-000000000000'::uuid AND installation_id <> '00000000-0000-0000-0000-000000000000'::uuid AND tenant_id <> '00000000-0000-0000-0000-000000000000'::uuid AND request_id <> '00000000-0000-0000-0000-000000000000'::uuid AND actor_principal_id <> '00000000-0000-0000-0000-000000000000'::uuid AND request_version > 1 AND isfinite(occurred_at_utc) AND ((action = 'grant' AND reason_code = 'approved') OR (action = 'reject' AND reason_code IN ('changes_required','incorrect_artifact','incorrect_target','policy_denied')) OR (action = 'revoke' AND reason_code IN ('obsolete','requester_cancelled','owner_cancelled')))");
+                        });
+                });
+
             modelBuilder.Entity("Kordra.Modules.ApprovalGovernance.Infrastructure.ApprovalPolicyBinding", b =>
                 {
                     b.Property<Guid>("BindingId")
@@ -266,6 +319,172 @@ namespace Kordra.Modules.ApprovalGovernance.Infrastructure.Migrations
                         });
                 });
 
+            modelBuilder.Entity("Kordra.Modules.ApprovalGovernance.Infrastructure.ApprovalRequestCommandReceipt", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<string>("Action")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("action");
+
+                    b.Property<byte[]>("AuditIntentHash")
+                        .IsRequired()
+                        .HasColumnType("bytea")
+                        .HasColumnName("audit_intent_hash");
+
+                    b.Property<Guid>("AuditIntentId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("audit_intent_id");
+
+                    b.Property<Guid>("BootId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("boot_id");
+
+                    b.Property<byte[]>("BusinessHash")
+                        .IsRequired()
+                        .HasColumnType("bytea")
+                        .HasColumnName("business_hash");
+
+                    b.Property<DateTimeOffset>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at_utc");
+
+                    b.Property<Guid>("InstallationId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("installation_id");
+
+                    b.Property<Guid>("InvocationId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("invocation_id");
+
+                    b.Property<Guid>("PrincipalId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("principal_id");
+
+                    b.Property<Guid>("RequestId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("request_id");
+
+                    b.Property<byte[]>("ScopedKeyHash")
+                        .IsRequired()
+                        .HasColumnType("bytea")
+                        .HasColumnName("scoped_key_hash");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("tenant_id");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("RequestId", "InstallationId", "TenantId");
+
+                    b.HasIndex("InstallationId", "TenantId", "PrincipalId", "Action", "ScopedKeyHash")
+                        .IsUnique();
+
+                    b.ToTable("apr_request_commands", "app", t =>
+                        {
+                            t.HasCheckConstraint("ck_apr_request_command", "id <> '00000000-0000-0000-0000-000000000000'::uuid AND installation_id <> '00000000-0000-0000-0000-000000000000'::uuid AND tenant_id <> '00000000-0000-0000-0000-000000000000'::uuid AND principal_id <> '00000000-0000-0000-0000-000000000000'::uuid AND request_id <> '00000000-0000-0000-0000-000000000000'::uuid AND audit_intent_id <> '00000000-0000-0000-0000-000000000000'::uuid AND boot_id <> '00000000-0000-0000-0000-000000000000'::uuid AND invocation_id <> '00000000-0000-0000-0000-000000000000'::uuid AND action IN ('request','grant','reject','revoke') AND octet_length(scoped_key_hash) = 32 AND octet_length(business_hash) = 32 AND octet_length(audit_intent_hash) = 32 AND isfinite(created_at_utc)");
+                        });
+                });
+
+            modelBuilder.Entity("Kordra.Modules.ApprovalGovernance.Infrastructure.ApprovalRequestRecord", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<byte[]>("ApproverEvidence")
+                        .HasColumnType("bytea")
+                        .HasColumnName("approver_evidence");
+
+                    b.Property<Guid?>("ApproverPrincipalId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("approver_principal_id");
+
+                    b.Property<DateTimeOffset>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at_utc");
+
+                    b.Property<Guid>("EnvironmentId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("environment_id");
+
+                    b.Property<DateTimeOffset?>("GrantExpiresAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("grant_expires_at_utc");
+
+                    b.Property<DateTimeOffset?>("GrantedAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("granted_at_utc");
+
+                    b.Property<Guid>("InstallationId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("installation_id");
+
+                    b.Property<DateTimeOffset>("PendingExpiresAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("pending_expires_at_utc");
+
+                    b.Property<Guid>("ProjectId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("project_id");
+
+                    b.Property<Guid>("ReleaseRevisionId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("release_revision_id");
+
+                    b.Property<byte[]>("RequesterEvidence")
+                        .IsRequired()
+                        .HasColumnType("bytea")
+                        .HasColumnName("requester_evidence");
+
+                    b.Property<Guid>("RequesterPrincipalId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("requester_principal_id");
+
+                    b.Property<byte[]>("SpecHash")
+                        .IsRequired()
+                        .HasColumnType("bytea")
+                        .HasColumnName("spec_hash");
+
+                    b.Property<string>("State")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("state");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("tenant_id");
+
+                    b.Property<long>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("bigint")
+                        .HasColumnName("version");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("InstallationId", "ReleaseRevisionId")
+                        .IsUnique();
+
+                    b.ToTable("apr_requests", "app", t =>
+                        {
+                            t.HasCheckConstraint("ck_apr_request", "id <> '00000000-0000-0000-0000-000000000000'::uuid AND installation_id <> '00000000-0000-0000-0000-000000000000'::uuid AND tenant_id <> '00000000-0000-0000-0000-000000000000'::uuid AND project_id <> '00000000-0000-0000-0000-000000000000'::uuid AND environment_id <> '00000000-0000-0000-0000-000000000000'::uuid AND release_revision_id <> '00000000-0000-0000-0000-000000000000'::uuid AND requester_principal_id <> '00000000-0000-0000-0000-000000000000'::uuid AND version > 0 AND state IN ('Pending','Granted','Rejected','Revoked') AND octet_length(spec_hash) = 32 AND octet_length(requester_evidence) BETWEEN 1 AND 65536 AND isfinite(created_at_utc) AND isfinite(pending_expires_at_utc) AND pending_expires_at_utc > created_at_utc AND (grant_expires_at_utc IS NULL OR (isfinite(grant_expires_at_utc) AND grant_expires_at_utc <= pending_expires_at_utc))");
+                        });
+                });
+
+            modelBuilder.Entity("Kordra.Modules.ApprovalGovernance.Infrastructure.ApprovalDecisionRecord", b =>
+                {
+                    b.HasOne("Kordra.Modules.ApprovalGovernance.Infrastructure.ApprovalRequestRecord", null)
+                        .WithMany()
+                        .HasForeignKey("RequestId", "InstallationId", "TenantId")
+                        .HasPrincipalKey("Id", "InstallationId", "TenantId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("Kordra.Modules.ApprovalGovernance.Infrastructure.ApprovalPolicyBinding", b =>
                 {
                     b.HasOne("Kordra.Modules.ApprovalGovernance.Infrastructure.ApprovalPolicyRevision", null)
@@ -305,6 +524,16 @@ namespace Kordra.Modules.ApprovalGovernance.Infrastructure.Migrations
                     b.HasOne("Kordra.Modules.ApprovalGovernance.Infrastructure.ApprovalPolicyHead", null)
                         .WithMany()
                         .HasForeignKey("InstallationId", "TenantId", "ProjectId", "PolicyId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Kordra.Modules.ApprovalGovernance.Infrastructure.ApprovalRequestCommandReceipt", b =>
+                {
+                    b.HasOne("Kordra.Modules.ApprovalGovernance.Infrastructure.ApprovalRequestRecord", null)
+                        .WithMany()
+                        .HasForeignKey("RequestId", "InstallationId", "TenantId")
+                        .HasPrincipalKey("Id", "InstallationId", "TenantId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
                 });

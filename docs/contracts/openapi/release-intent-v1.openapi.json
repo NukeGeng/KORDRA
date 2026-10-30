@@ -1,0 +1,3691 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Kordra Release Intent v1",
+    "version": "1.0.0"
+  },
+  "servers": [
+    {
+      "url": "https://localhost:5128"
+    }
+  ],
+  "security": [
+    {
+      "localSession": []
+    }
+  ],
+  "paths": {
+    "/api/v1/projects/{projectId}/releases": {
+      "post": {
+        "operationId": "CreateRelease",
+        "parameters": [
+          {
+            "name": "projectId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^(?!00000000-0000-0000-0000-000000000000$)[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 16,
+              "maxLength": 128,
+              "pattern": "^[A-Za-z0-9._-]+$"
+            }
+          },
+          {
+            "name": "X-Kordra-CSRF",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Current authorized response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RevisionEnvelope"
+                }
+              }
+            }
+          },
+          "201": {
+            "description": "Current authorized response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RevisionEnvelope"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Safe bounded error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Safe bounded error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Safe bounded error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Safe bounded error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Safe bounded error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "412": {
+            "description": "Safe bounded error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Safe bounded error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Safe bounded error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Safe bounded error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateRequest"
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "operationId": "ListReleases",
+        "parameters": [
+          {
+            "name": "projectId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^(?!00000000-0000-0000-0000-000000000000$)[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 50
+            }
+          },
+          {
+            "name": "afterId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^(?!00000000-0000-0000-0000-000000000000$)[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Current authorized response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LineageListEnvelope"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Safe bounded error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Safe bounded error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Safe bounded error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Safe bounded error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Safe bounded error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "412": {
+            "description": "Safe bounded error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Safe bounded error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Safe bounded error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Safe bounded error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/projects/{projectId}/releases/{releaseId}/revisions": {
+      "post": {
+        "operationId": "NextRevision",
+        "parameters": [
+          {
+            "name": "projectId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^(?!00000000-0000-0000-0000-000000000000$)[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+            }
+          },
+          {
+            "name": "releaseId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^(?!00000000-0000-0000-0000-000000000000$)[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 16,
+              "maxLength": 128,
+              "pattern": "^[A-Za-z0-9._-]+$"
+            }
+          },
+          {
+            "name": "X-Kordra-CSRF",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Current authorized response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RevisionEnvelope"
+                }
+              }
+            }
+          },
+          "201": {
+            "description": "Current authorized response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RevisionEnvelope"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Safe bounded error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Safe bounded error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Safe bounded error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Safe bounded error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Safe bounded error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "412": {
+            "description": "Safe bounded error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Safe bounded error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Safe bounded error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Safe bounded error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NextRequest"
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "operationId": "ListRevisions",
+        "parameters": [
+          {
+            "name": "projectId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^(?!00000000-0000-0000-0000-000000000000$)[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+            }
+          },
+          {
+            "name": "releaseId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^(?!00000000-0000-0000-0000-000000000000$)[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 50
+            }
+          },
+          {
+            "name": "afterId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^(?!00000000-0000-0000-0000-000000000000$)[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Current authorized response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RevisionListEnvelope"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Safe bounded error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Safe bounded error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Safe bounded error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Safe bounded error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Safe bounded error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "412": {
+            "description": "Safe bounded error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Safe bounded error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Safe bounded error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Safe bounded error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/projects/{projectId}/release-revisions/{revisionId}/draft": {
+      "put": {
+        "operationId": "ReplaceDraft",
+        "parameters": [
+          {
+            "name": "projectId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^(?!00000000-0000-0000-0000-000000000000$)[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+            }
+          },
+          {
+            "name": "revisionId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^(?!00000000-0000-0000-0000-000000000000$)[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 16,
+              "maxLength": 128,
+              "pattern": "^[A-Za-z0-9._-]+$"
+            }
+          },
+          {
+            "name": "X-Kordra-CSRF",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "If-Match",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^\"rel-v1:[0-9a-f-]{36}:[1-9][0-9]*\"$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Current authorized response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RevisionEnvelope"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Safe bounded error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Safe bounded error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Safe bounded error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Safe bounded error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Safe bounded error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "412": {
+            "description": "Safe bounded error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Safe bounded error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Safe bounded error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Safe bounded error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReplaceRequest"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/projects/{projectId}/release-revisions/{revisionId}/freeze": {
+      "post": {
+        "operationId": "FreezeRevision",
+        "parameters": [
+          {
+            "name": "projectId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^(?!00000000-0000-0000-0000-000000000000$)[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+            }
+          },
+          {
+            "name": "revisionId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^(?!00000000-0000-0000-0000-000000000000$)[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 16,
+              "maxLength": 128,
+              "pattern": "^[A-Za-z0-9._-]+$"
+            }
+          },
+          {
+            "name": "X-Kordra-CSRF",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "If-Match",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^\"rel-v1:[0-9a-f-]{36}:[1-9][0-9]*\"$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Current authorized response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RevisionEnvelope"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Safe bounded error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Safe bounded error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Safe bounded error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Safe bounded error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Safe bounded error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "412": {
+            "description": "Safe bounded error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Safe bounded error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Safe bounded error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Safe bounded error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FreezeRequest"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/projects/{projectId}/release-revisions/{revisionId}/retire": {
+      "post": {
+        "operationId": "RetireRevision",
+        "parameters": [
+          {
+            "name": "projectId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^(?!00000000-0000-0000-0000-000000000000$)[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+            }
+          },
+          {
+            "name": "revisionId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^(?!00000000-0000-0000-0000-000000000000$)[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 16,
+              "maxLength": 128,
+              "pattern": "^[A-Za-z0-9._-]+$"
+            }
+          },
+          {
+            "name": "X-Kordra-CSRF",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "If-Match",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^\"rel-v1:[0-9a-f-]{36}:[1-9][0-9]*\"$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Current authorized response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RevisionEnvelope"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Safe bounded error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Safe bounded error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Safe bounded error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Safe bounded error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Safe bounded error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "412": {
+            "description": "Safe bounded error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Safe bounded error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Safe bounded error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Safe bounded error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RetireRequest"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/projects/{projectId}/release-revisions/{revisionId}": {
+      "get": {
+        "operationId": "GetRevision",
+        "parameters": [
+          {
+            "name": "projectId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^(?!00000000-0000-0000-0000-000000000000$)[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+            }
+          },
+          {
+            "name": "revisionId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^(?!00000000-0000-0000-0000-000000000000$)[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Current authorized response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RevisionEnvelope"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Safe bounded error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Safe bounded error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Safe bounded error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Safe bounded error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Safe bounded error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "412": {
+            "description": "Safe bounded error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Safe bounded error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Safe bounded error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Safe bounded error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "localSession": {
+        "type": "apiKey",
+        "in": "cookie",
+        "name": "__Host-kordra.session"
+      }
+    },
+    "schemas": {
+      "CreateRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "schemaVersion": {
+            "const": 1
+          },
+          "correlationId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^(?!00000000-0000-0000-0000-000000000000$)[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+          },
+          "label": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "applicationId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^(?!00000000-0000-0000-0000-000000000000$)[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+          },
+          "environmentId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^(?!00000000-0000-0000-0000-000000000000$)[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+          },
+          "targetId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^(?!00000000-0000-0000-0000-000000000000$)[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+          },
+          "artifactId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^(?!00000000-0000-0000-0000-000000000000$)[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+          }
+        },
+        "required": [
+          "schemaVersion",
+          "correlationId",
+          "label",
+          "applicationId",
+          "environmentId",
+          "targetId",
+          "artifactId"
+        ]
+      },
+      "NextRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "schemaVersion": {
+            "const": 1
+          },
+          "correlationId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^(?!00000000-0000-0000-0000-000000000000$)[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+          },
+          "baseRevisionId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^(?!00000000-0000-0000-0000-000000000000$)[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+          },
+          "label": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "applicationId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^(?!00000000-0000-0000-0000-000000000000$)[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+          },
+          "environmentId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^(?!00000000-0000-0000-0000-000000000000$)[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+          },
+          "targetId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^(?!00000000-0000-0000-0000-000000000000$)[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+          },
+          "artifactId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^(?!00000000-0000-0000-0000-000000000000$)[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+          }
+        },
+        "required": [
+          "schemaVersion",
+          "correlationId",
+          "baseRevisionId",
+          "label",
+          "applicationId",
+          "environmentId",
+          "targetId",
+          "artifactId"
+        ]
+      },
+      "ReplaceRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "schemaVersion": {
+            "const": 1
+          },
+          "correlationId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^(?!00000000-0000-0000-0000-000000000000$)[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+          },
+          "label": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "applicationId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^(?!00000000-0000-0000-0000-000000000000$)[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+          },
+          "environmentId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^(?!00000000-0000-0000-0000-000000000000$)[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+          },
+          "targetId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^(?!00000000-0000-0000-0000-000000000000$)[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+          },
+          "artifactId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^(?!00000000-0000-0000-0000-000000000000$)[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+          }
+        },
+        "required": [
+          "schemaVersion",
+          "correlationId",
+          "label",
+          "applicationId",
+          "environmentId",
+          "targetId",
+          "artifactId"
+        ]
+      },
+      "FreezeRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "schemaVersion": {
+            "const": 1
+          },
+          "correlationId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^(?!00000000-0000-0000-0000-000000000000$)[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+          },
+          "expectedSelectionHash": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          }
+        },
+        "required": [
+          "schemaVersion",
+          "correlationId",
+          "expectedSelectionHash"
+        ]
+      },
+      "RetireRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "schemaVersion": {
+            "const": 1
+          },
+          "correlationId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^(?!00000000-0000-0000-0000-000000000000$)[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+          },
+          "reasonCode": {
+            "enum": [
+              "obsolete",
+              "operator_cancelled"
+            ]
+          }
+        },
+        "required": [
+          "schemaVersion",
+          "correlationId",
+          "reasonCode"
+        ]
+      },
+      "ReleaseIntent": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "schemaVersion": {
+            "const": 1
+          },
+          "subjectKind": {
+            "const": "release-intent-v1"
+          },
+          "tenantId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^(?!00000000-0000-0000-0000-000000000000$)[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+          },
+          "project": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^(?!00000000-0000-0000-0000-000000000000$)[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+              },
+              "revision": {
+                "type": "integer",
+                "minimum": 1
+              }
+            },
+            "required": [
+              "id",
+              "revision"
+            ]
+          },
+          "application": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^(?!00000000-0000-0000-0000-000000000000$)[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+              },
+              "revision": {
+                "type": "integer",
+                "minimum": 1
+              }
+            },
+            "required": [
+              "id",
+              "revision"
+            ]
+          },
+          "environment": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^(?!00000000-0000-0000-0000-000000000000$)[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+              },
+              "revision": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "classification": {
+                "enum": [
+                  "Development",
+                  "Test"
+                ]
+              }
+            },
+            "required": [
+              "id",
+              "revision",
+              "classification"
+            ]
+          },
+          "target": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^(?!00000000-0000-0000-0000-000000000000$)[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+              },
+              "kind": {
+                "type": "string"
+              },
+              "revision": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "associationRevision": {
+                "type": "integer",
+                "minimum": 1
+              }
+            },
+            "required": [
+              "id",
+              "kind",
+              "revision",
+              "associationRevision"
+            ]
+          },
+          "artifact": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "artifactId": {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^(?!00000000-0000-0000-0000-000000000000$)[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+              },
+              "projectId": {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^(?!00000000-0000-0000-0000-000000000000$)[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+              },
+              "registryId": {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^(?!00000000-0000-0000-0000-000000000000$)[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+              },
+              "repository": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 255
+              },
+              "rootDigest": {
+                "type": "string",
+                "pattern": "^(sha256:[0-9a-f]{64}|sha512:[0-9a-f]{128})$"
+              },
+              "platform": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "os": {
+                    "const": "linux"
+                  },
+                  "architecture": {
+                    "enum": [
+                      "amd64",
+                      "arm64"
+                    ]
+                  },
+                  "variant": {
+                    "enum": [
+                      null,
+                      "v8"
+                    ]
+                  }
+                },
+                "required": [
+                  "os",
+                  "architecture",
+                  "variant"
+                ]
+              },
+              "rootMediaType": {
+                "type": "string"
+              },
+              "rootSizeBytes": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "selectedManifestDigest": {
+                "type": "string",
+                "pattern": "^(sha256:[0-9a-f]{64}|sha512:[0-9a-f]{128})$"
+              },
+              "selectedManifestSizeBytes": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "selectedManifestMediaType": {
+                "type": "string"
+              },
+              "configDigest": {
+                "type": "string",
+                "pattern": "^(sha256:[0-9a-f]{64}|sha512:[0-9a-f]{128})$"
+              },
+              "configSizeBytes": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "observedPlatform": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "os": {
+                    "const": "linux"
+                  },
+                  "architecture": {
+                    "enum": [
+                      "amd64",
+                      "arm64"
+                    ]
+                  },
+                  "variant": {
+                    "enum": [
+                      null,
+                      "v8"
+                    ]
+                  }
+                },
+                "required": [
+                  "os",
+                  "architecture",
+                  "variant"
+                ]
+              },
+              "variantEvidence": {
+                "enum": [
+                  "none",
+                  "config",
+                  "descriptor"
+                ]
+              },
+              "verifierProfile": {
+                "const": "artifact-registry-v1"
+              },
+              "verifiedAtUtc": {
+                "type": "string",
+                "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}\\.\\d{6}Z$"
+              },
+              "createdAtUtc": {
+                "type": "string",
+                "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}\\.\\d{6}Z$"
+              },
+              "contentVerification": {
+                "const": "manifest_config_hash_verified"
+              },
+              "layerAvailability": {
+                "const": "not_checked"
+              },
+              "signatureVerification": {
+                "const": "not_checked"
+              }
+            },
+            "required": [
+              "artifactId",
+              "projectId",
+              "registryId",
+              "repository",
+              "rootDigest",
+              "platform",
+              "rootMediaType",
+              "rootSizeBytes",
+              "selectedManifestDigest",
+              "selectedManifestSizeBytes",
+              "selectedManifestMediaType",
+              "configDigest",
+              "configSizeBytes",
+              "observedPlatform",
+              "variantEvidence",
+              "verifierProfile",
+              "verifiedAtUtc",
+              "createdAtUtc",
+              "contentVerification",
+              "layerAvailability",
+              "signatureVerification"
+            ]
+          },
+          "approvalPolicy": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "policyId": {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^(?!00000000-0000-0000-0000-000000000000$)[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+              },
+              "policyRevision": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "payloadHash": {
+                "type": "string",
+                "pattern": "^[0-9a-f]{64}$"
+              },
+              "bindingId": {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^(?!00000000-0000-0000-0000-000000000000$)[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+              },
+              "bindingRevision": {
+                "type": "integer",
+                "minimum": 1
+              }
+            },
+            "required": [
+              "policyId",
+              "policyRevision",
+              "payloadHash",
+              "bindingId",
+              "bindingRevision"
+            ]
+          },
+          "qualification": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "profile": {
+                "const": "pilot"
+              },
+              "provenanceClass": {
+                "const": "unattested"
+              },
+              "executionAuthorized": {
+                "const": false
+              }
+            },
+            "required": [
+              "profile",
+              "provenanceClass",
+              "executionAuthorized"
+            ]
+          }
+        },
+        "required": [
+          "schemaVersion",
+          "subjectKind",
+          "tenantId",
+          "project",
+          "application",
+          "environment",
+          "target",
+          "artifact",
+          "approvalPolicy",
+          "qualification"
+        ]
+      },
+      "Revision": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "releaseId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^(?!00000000-0000-0000-0000-000000000000$)[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+          },
+          "releaseRevisionId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^(?!00000000-0000-0000-0000-000000000000$)[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+          },
+          "revisionNumber": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "version": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "recordedState": {
+            "enum": [
+              "Draft",
+              "Frozen",
+              "Retired"
+            ]
+          },
+          "creatorPrincipalId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^(?!00000000-0000-0000-0000-000000000000$)[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+          },
+          "label": {
+            "type": "string"
+          },
+          "createdAtUtc": {
+            "type": "string",
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}\\.\\d{6}Z$"
+          },
+          "updatedAtUtc": {
+            "type": "string",
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}\\.\\d{6}Z$"
+          },
+          "frozenAtUtc": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}\\.\\d{6}Z$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "retiredAtUtc": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}\\.\\d{6}Z$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "retiredReasonCode": {
+            "enum": [
+              null,
+              "obsolete",
+              "operator_cancelled"
+            ]
+          },
+          "selectionStatus": {
+            "enum": [
+              "eligible",
+              "ineligible",
+              "not_applicable"
+            ]
+          },
+          "eligibilityReasonCode": {
+            "enum": [
+              "eligible",
+              "policy_missing",
+              "policy_denied",
+              "qualification_required",
+              "selection_changed",
+              "release_retired"
+            ]
+          },
+          "selection": {
+            "anyOf": [
+              {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "schemaVersion": {
+                    "const": 1
+                  },
+                  "subjectKind": {
+                    "const": "release-intent-v1"
+                  },
+                  "tenantId": {
+                    "type": "string",
+                    "format": "uuid",
+                    "pattern": "^(?!00000000-0000-0000-0000-000000000000$)[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+                  },
+                  "project": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "id": {
+                        "type": "string",
+                        "format": "uuid",
+                        "pattern": "^(?!00000000-0000-0000-0000-000000000000$)[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+                      },
+                      "revision": {
+                        "type": "integer",
+                        "minimum": 1
+                      }
+                    },
+                    "required": [
+                      "id",
+                      "revision"
+                    ]
+                  },
+                  "application": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "id": {
+                        "type": "string",
+                        "format": "uuid",
+                        "pattern": "^(?!00000000-0000-0000-0000-000000000000$)[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+                      },
+                      "revision": {
+                        "type": "integer",
+                        "minimum": 1
+                      }
+                    },
+                    "required": [
+                      "id",
+                      "revision"
+                    ]
+                  },
+                  "environment": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "id": {
+                        "type": "string",
+                        "format": "uuid",
+                        "pattern": "^(?!00000000-0000-0000-0000-000000000000$)[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+                      },
+                      "revision": {
+                        "type": "integer",
+                        "minimum": 1
+                      },
+                      "classification": {
+                        "enum": [
+                          "Development",
+                          "Test"
+                        ]
+                      }
+                    },
+                    "required": [
+                      "id",
+                      "revision",
+                      "classification"
+                    ]
+                  },
+                  "target": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "id": {
+                        "type": "string",
+                        "format": "uuid",
+                        "pattern": "^(?!00000000-0000-0000-0000-000000000000$)[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+                      },
+                      "kind": {
+                        "type": "string"
+                      },
+                      "revision": {
+                        "type": "integer",
+                        "minimum": 1
+                      },
+                      "associationRevision": {
+                        "type": "integer",
+                        "minimum": 1
+                      }
+                    },
+                    "required": [
+                      "id",
+                      "kind",
+                      "revision",
+                      "associationRevision"
+                    ]
+                  },
+                  "artifact": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "artifactId": {
+                        "type": "string",
+                        "format": "uuid",
+                        "pattern": "^(?!00000000-0000-0000-0000-000000000000$)[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+                      },
+                      "projectId": {
+                        "type": "string",
+                        "format": "uuid",
+                        "pattern": "^(?!00000000-0000-0000-0000-000000000000$)[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+                      },
+                      "registryId": {
+                        "type": "string",
+                        "format": "uuid",
+                        "pattern": "^(?!00000000-0000-0000-0000-000000000000$)[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+                      },
+                      "repository": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 255
+                      },
+                      "rootDigest": {
+                        "type": "string",
+                        "pattern": "^(sha256:[0-9a-f]{64}|sha512:[0-9a-f]{128})$"
+                      },
+                      "platform": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "properties": {
+                          "os": {
+                            "const": "linux"
+                          },
+                          "architecture": {
+                            "enum": [
+                              "amd64",
+                              "arm64"
+                            ]
+                          },
+                          "variant": {
+                            "enum": [
+                              null,
+                              "v8"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "os",
+                          "architecture",
+                          "variant"
+                        ]
+                      },
+                      "rootMediaType": {
+                        "type": "string"
+                      },
+                      "rootSizeBytes": {
+                        "type": "integer",
+                        "minimum": 1
+                      },
+                      "selectedManifestDigest": {
+                        "type": "string",
+                        "pattern": "^(sha256:[0-9a-f]{64}|sha512:[0-9a-f]{128})$"
+                      },
+                      "selectedManifestSizeBytes": {
+                        "type": "integer",
+                        "minimum": 1
+                      },
+                      "selectedManifestMediaType": {
+                        "type": "string"
+                      },
+                      "configDigest": {
+                        "type": "string",
+                        "pattern": "^(sha256:[0-9a-f]{64}|sha512:[0-9a-f]{128})$"
+                      },
+                      "configSizeBytes": {
+                        "type": "integer",
+                        "minimum": 1
+                      },
+                      "observedPlatform": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "properties": {
+                          "os": {
+                            "const": "linux"
+                          },
+                          "architecture": {
+                            "enum": [
+                              "amd64",
+                              "arm64"
+                            ]
+                          },
+                          "variant": {
+                            "enum": [
+                              null,
+                              "v8"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "os",
+                          "architecture",
+                          "variant"
+                        ]
+                      },
+                      "variantEvidence": {
+                        "enum": [
+                          "none",
+                          "config",
+                          "descriptor"
+                        ]
+                      },
+                      "verifierProfile": {
+                        "const": "artifact-registry-v1"
+                      },
+                      "verifiedAtUtc": {
+                        "type": "string",
+                        "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}\\.\\d{6}Z$"
+                      },
+                      "createdAtUtc": {
+                        "type": "string",
+                        "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}\\.\\d{6}Z$"
+                      },
+                      "contentVerification": {
+                        "const": "manifest_config_hash_verified"
+                      },
+                      "layerAvailability": {
+                        "const": "not_checked"
+                      },
+                      "signatureVerification": {
+                        "const": "not_checked"
+                      }
+                    },
+                    "required": [
+                      "artifactId",
+                      "projectId",
+                      "registryId",
+                      "repository",
+                      "rootDigest",
+                      "platform",
+                      "rootMediaType",
+                      "rootSizeBytes",
+                      "selectedManifestDigest",
+                      "selectedManifestSizeBytes",
+                      "selectedManifestMediaType",
+                      "configDigest",
+                      "configSizeBytes",
+                      "observedPlatform",
+                      "variantEvidence",
+                      "verifierProfile",
+                      "verifiedAtUtc",
+                      "createdAtUtc",
+                      "contentVerification",
+                      "layerAvailability",
+                      "signatureVerification"
+                    ]
+                  },
+                  "approvalPolicy": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "policyId": {
+                        "type": "string",
+                        "format": "uuid",
+                        "pattern": "^(?!00000000-0000-0000-0000-000000000000$)[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+                      },
+                      "policyRevision": {
+                        "type": "integer",
+                        "minimum": 1
+                      },
+                      "payloadHash": {
+                        "type": "string",
+                        "pattern": "^[0-9a-f]{64}$"
+                      },
+                      "bindingId": {
+                        "type": "string",
+                        "format": "uuid",
+                        "pattern": "^(?!00000000-0000-0000-0000-000000000000$)[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+                      },
+                      "bindingRevision": {
+                        "type": "integer",
+                        "minimum": 1
+                      }
+                    },
+                    "required": [
+                      "policyId",
+                      "policyRevision",
+                      "payloadHash",
+                      "bindingId",
+                      "bindingRevision"
+                    ]
+                  },
+                  "qualification": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "profile": {
+                        "const": "pilot"
+                      },
+                      "provenanceClass": {
+                        "const": "unattested"
+                      },
+                      "executionAuthorized": {
+                        "const": false
+                      }
+                    },
+                    "required": [
+                      "profile",
+                      "provenanceClass",
+                      "executionAuthorized"
+                    ]
+                  }
+                },
+                "required": [
+                  "schemaVersion",
+                  "subjectKind",
+                  "tenantId",
+                  "project",
+                  "application",
+                  "environment",
+                  "target",
+                  "artifact",
+                  "approvalPolicy",
+                  "qualification"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "selectionHash": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^[0-9a-f]{64}$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "spec": {
+            "anyOf": [
+              {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "schemaVersion": {
+                    "const": 1
+                  },
+                  "subjectKind": {
+                    "const": "release-intent-v1"
+                  },
+                  "tenantId": {
+                    "type": "string",
+                    "format": "uuid",
+                    "pattern": "^(?!00000000-0000-0000-0000-000000000000$)[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+                  },
+                  "project": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "id": {
+                        "type": "string",
+                        "format": "uuid",
+                        "pattern": "^(?!00000000-0000-0000-0000-000000000000$)[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+                      },
+                      "revision": {
+                        "type": "integer",
+                        "minimum": 1
+                      }
+                    },
+                    "required": [
+                      "id",
+                      "revision"
+                    ]
+                  },
+                  "application": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "id": {
+                        "type": "string",
+                        "format": "uuid",
+                        "pattern": "^(?!00000000-0000-0000-0000-000000000000$)[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+                      },
+                      "revision": {
+                        "type": "integer",
+                        "minimum": 1
+                      }
+                    },
+                    "required": [
+                      "id",
+                      "revision"
+                    ]
+                  },
+                  "environment": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "id": {
+                        "type": "string",
+                        "format": "uuid",
+                        "pattern": "^(?!00000000-0000-0000-0000-000000000000$)[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+                      },
+                      "revision": {
+                        "type": "integer",
+                        "minimum": 1
+                      },
+                      "classification": {
+                        "enum": [
+                          "Development",
+                          "Test"
+                        ]
+                      }
+                    },
+                    "required": [
+                      "id",
+                      "revision",
+                      "classification"
+                    ]
+                  },
+                  "target": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "id": {
+                        "type": "string",
+                        "format": "uuid",
+                        "pattern": "^(?!00000000-0000-0000-0000-000000000000$)[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+                      },
+                      "kind": {
+                        "type": "string"
+                      },
+                      "revision": {
+                        "type": "integer",
+                        "minimum": 1
+                      },
+                      "associationRevision": {
+                        "type": "integer",
+                        "minimum": 1
+                      }
+                    },
+                    "required": [
+                      "id",
+                      "kind",
+                      "revision",
+                      "associationRevision"
+                    ]
+                  },
+                  "artifact": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "artifactId": {
+                        "type": "string",
+                        "format": "uuid",
+                        "pattern": "^(?!00000000-0000-0000-0000-000000000000$)[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+                      },
+                      "projectId": {
+                        "type": "string",
+                        "format": "uuid",
+                        "pattern": "^(?!00000000-0000-0000-0000-000000000000$)[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+                      },
+                      "registryId": {
+                        "type": "string",
+                        "format": "uuid",
+                        "pattern": "^(?!00000000-0000-0000-0000-000000000000$)[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+                      },
+                      "repository": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 255
+                      },
+                      "rootDigest": {
+                        "type": "string",
+                        "pattern": "^(sha256:[0-9a-f]{64}|sha512:[0-9a-f]{128})$"
+                      },
+                      "platform": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "properties": {
+                          "os": {
+                            "const": "linux"
+                          },
+                          "architecture": {
+                            "enum": [
+                              "amd64",
+                              "arm64"
+                            ]
+                          },
+                          "variant": {
+                            "enum": [
+                              null,
+                              "v8"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "os",
+                          "architecture",
+                          "variant"
+                        ]
+                      },
+                      "rootMediaType": {
+                        "type": "string"
+                      },
+                      "rootSizeBytes": {
+                        "type": "integer",
+                        "minimum": 1
+                      },
+                      "selectedManifestDigest": {
+                        "type": "string",
+                        "pattern": "^(sha256:[0-9a-f]{64}|sha512:[0-9a-f]{128})$"
+                      },
+                      "selectedManifestSizeBytes": {
+                        "type": "integer",
+                        "minimum": 1
+                      },
+                      "selectedManifestMediaType": {
+                        "type": "string"
+                      },
+                      "configDigest": {
+                        "type": "string",
+                        "pattern": "^(sha256:[0-9a-f]{64}|sha512:[0-9a-f]{128})$"
+                      },
+                      "configSizeBytes": {
+                        "type": "integer",
+                        "minimum": 1
+                      },
+                      "observedPlatform": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "properties": {
+                          "os": {
+                            "const": "linux"
+                          },
+                          "architecture": {
+                            "enum": [
+                              "amd64",
+                              "arm64"
+                            ]
+                          },
+                          "variant": {
+                            "enum": [
+                              null,
+                              "v8"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "os",
+                          "architecture",
+                          "variant"
+                        ]
+                      },
+                      "variantEvidence": {
+                        "enum": [
+                          "none",
+                          "config",
+                          "descriptor"
+                        ]
+                      },
+                      "verifierProfile": {
+                        "const": "artifact-registry-v1"
+                      },
+                      "verifiedAtUtc": {
+                        "type": "string",
+                        "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}\\.\\d{6}Z$"
+                      },
+                      "createdAtUtc": {
+                        "type": "string",
+                        "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}\\.\\d{6}Z$"
+                      },
+                      "contentVerification": {
+                        "const": "manifest_config_hash_verified"
+                      },
+                      "layerAvailability": {
+                        "const": "not_checked"
+                      },
+                      "signatureVerification": {
+                        "const": "not_checked"
+                      }
+                    },
+                    "required": [
+                      "artifactId",
+                      "projectId",
+                      "registryId",
+                      "repository",
+                      "rootDigest",
+                      "platform",
+                      "rootMediaType",
+                      "rootSizeBytes",
+                      "selectedManifestDigest",
+                      "selectedManifestSizeBytes",
+                      "selectedManifestMediaType",
+                      "configDigest",
+                      "configSizeBytes",
+                      "observedPlatform",
+                      "variantEvidence",
+                      "verifierProfile",
+                      "verifiedAtUtc",
+                      "createdAtUtc",
+                      "contentVerification",
+                      "layerAvailability",
+                      "signatureVerification"
+                    ]
+                  },
+                  "approvalPolicy": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "policyId": {
+                        "type": "string",
+                        "format": "uuid",
+                        "pattern": "^(?!00000000-0000-0000-0000-000000000000$)[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+                      },
+                      "policyRevision": {
+                        "type": "integer",
+                        "minimum": 1
+                      },
+                      "payloadHash": {
+                        "type": "string",
+                        "pattern": "^[0-9a-f]{64}$"
+                      },
+                      "bindingId": {
+                        "type": "string",
+                        "format": "uuid",
+                        "pattern": "^(?!00000000-0000-0000-0000-000000000000$)[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+                      },
+                      "bindingRevision": {
+                        "type": "integer",
+                        "minimum": 1
+                      }
+                    },
+                    "required": [
+                      "policyId",
+                      "policyRevision",
+                      "payloadHash",
+                      "bindingId",
+                      "bindingRevision"
+                    ]
+                  },
+                  "qualification": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "profile": {
+                        "const": "pilot"
+                      },
+                      "provenanceClass": {
+                        "const": "unattested"
+                      },
+                      "executionAuthorized": {
+                        "const": false
+                      }
+                    },
+                    "required": [
+                      "profile",
+                      "provenanceClass",
+                      "executionAuthorized"
+                    ]
+                  }
+                },
+                "required": [
+                  "schemaVersion",
+                  "subjectKind",
+                  "tenantId",
+                  "project",
+                  "application",
+                  "environment",
+                  "target",
+                  "artifact",
+                  "approvalPolicy",
+                  "qualification"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "specHash": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^[0-9a-f]{64}$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "executionAuthorized": {
+            "const": false
+          }
+        },
+        "required": [
+          "releaseId",
+          "releaseRevisionId",
+          "revisionNumber",
+          "version",
+          "recordedState",
+          "creatorPrincipalId",
+          "label",
+          "createdAtUtc",
+          "updatedAtUtc",
+          "frozenAtUtc",
+          "retiredAtUtc",
+          "retiredReasonCode",
+          "selectionStatus",
+          "eligibilityReasonCode",
+          "selection",
+          "selectionHash",
+          "spec",
+          "specHash",
+          "executionAuthorized"
+        ]
+      },
+      "RevisionEnvelope": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "schemaVersion": {
+            "const": 1
+          },
+          "correlationId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^(?!00000000-0000-0000-0000-000000000000$)[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+          },
+          "revision": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "releaseId": {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^(?!00000000-0000-0000-0000-000000000000$)[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+              },
+              "releaseRevisionId": {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^(?!00000000-0000-0000-0000-000000000000$)[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+              },
+              "revisionNumber": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "version": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "recordedState": {
+                "enum": [
+                  "Draft",
+                  "Frozen",
+                  "Retired"
+                ]
+              },
+              "creatorPrincipalId": {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^(?!00000000-0000-0000-0000-000000000000$)[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+              },
+              "label": {
+                "type": "string"
+              },
+              "createdAtUtc": {
+                "type": "string",
+                "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}\\.\\d{6}Z$"
+              },
+              "updatedAtUtc": {
+                "type": "string",
+                "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}\\.\\d{6}Z$"
+              },
+              "frozenAtUtc": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}\\.\\d{6}Z$"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "retiredAtUtc": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}\\.\\d{6}Z$"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "retiredReasonCode": {
+                "enum": [
+                  null,
+                  "obsolete",
+                  "operator_cancelled"
+                ]
+              },
+              "selectionStatus": {
+                "enum": [
+                  "eligible",
+                  "ineligible",
+                  "not_applicable"
+                ]
+              },
+              "eligibilityReasonCode": {
+                "enum": [
+                  "eligible",
+                  "policy_missing",
+                  "policy_denied",
+                  "qualification_required",
+                  "selection_changed",
+                  "release_retired"
+                ]
+              },
+              "selection": {
+                "anyOf": [
+                  {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "schemaVersion": {
+                        "const": 1
+                      },
+                      "subjectKind": {
+                        "const": "release-intent-v1"
+                      },
+                      "tenantId": {
+                        "type": "string",
+                        "format": "uuid",
+                        "pattern": "^(?!00000000-0000-0000-0000-000000000000$)[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+                      },
+                      "project": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "properties": {
+                          "id": {
+                            "type": "string",
+                            "format": "uuid",
+                            "pattern": "^(?!00000000-0000-0000-0000-000000000000$)[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+                          },
+                          "revision": {
+                            "type": "integer",
+                            "minimum": 1
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "revision"
+                        ]
+                      },
+                      "application": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "properties": {
+                          "id": {
+                            "type": "string",
+                            "format": "uuid",
+                            "pattern": "^(?!00000000-0000-0000-0000-000000000000$)[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+                          },
+                          "revision": {
+                            "type": "integer",
+                            "minimum": 1
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "revision"
+                        ]
+                      },
+                      "environment": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "properties": {
+                          "id": {
+                            "type": "string",
+                            "format": "uuid",
+                            "pattern": "^(?!00000000-0000-0000-0000-000000000000$)[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+                          },
+                          "revision": {
+                            "type": "integer",
+                            "minimum": 1
+                          },
+                          "classification": {
+                            "enum": [
+                              "Development",
+                              "Test"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "revision",
+                          "classification"
+                        ]
+                      },
+                      "target": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "properties": {
+                          "id": {
+                            "type": "string",
+                            "format": "uuid",
+                            "pattern": "^(?!00000000-0000-0000-0000-000000000000$)[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+                          },
+                          "kind": {
+                            "type": "string"
+                          },
+                          "revision": {
+                            "type": "integer",
+                            "minimum": 1
+                          },
+                          "associationRevision": {
+                            "type": "integer",
+                            "minimum": 1
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "kind",
+                          "revision",
+                          "associationRevision"
+                        ]
+                      },
+                      "artifact": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "properties": {
+                          "artifactId": {
+                            "type": "string",
+                            "format": "uuid",
+                            "pattern": "^(?!00000000-0000-0000-0000-000000000000$)[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+                          },
+                          "projectId": {
+                            "type": "string",
+                            "format": "uuid",
+                            "pattern": "^(?!00000000-0000-0000-0000-000000000000$)[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+                          },
+                          "registryId": {
+                            "type": "string",
+                            "format": "uuid",
+                            "pattern": "^(?!00000000-0000-0000-0000-000000000000$)[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+                          },
+                          "repository": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 255
+                          },
+                          "rootDigest": {
+                            "type": "string",
+                            "pattern": "^(sha256:[0-9a-f]{64}|sha512:[0-9a-f]{128})$"
+                          },
+                          "platform": {
+                            "type": "object",
+                            "additionalProperties": false,
+                            "properties": {
+                              "os": {
+                                "const": "linux"
+                              },
+                              "architecture": {
+                                "enum": [
+                                  "amd64",
+                                  "arm64"
+                                ]
+                              },
+                              "variant": {
+                                "enum": [
+                                  null,
+                                  "v8"
+                                ]
+                              }
+                            },
+                            "required": [
+                              "os",
+                              "architecture",
+                              "variant"
+                            ]
+                          },
+                          "rootMediaType": {
+                            "type": "string"
+                          },
+                          "rootSizeBytes": {
+                            "type": "integer",
+                            "minimum": 1
+                          },
+                          "selectedManifestDigest": {
+                            "type": "string",
+                            "pattern": "^(sha256:[0-9a-f]{64}|sha512:[0-9a-f]{128})$"
+                          },
+                          "selectedManifestSizeBytes": {
+                            "type": "integer",
+                            "minimum": 1
+                          },
+                          "selectedManifestMediaType": {
+                            "type": "string"
+                          },
+                          "configDigest": {
+                            "type": "string",
+                            "pattern": "^(sha256:[0-9a-f]{64}|sha512:[0-9a-f]{128})$"
+                          },
+                          "configSizeBytes": {
+                            "type": "integer",
+                            "minimum": 1
+                          },
+                          "observedPlatform": {
+                            "type": "object",
+                            "additionalProperties": false,
+                            "properties": {
+                              "os": {
+                                "const": "linux"
+                              },
+                              "architecture": {
+                                "enum": [
+                                  "amd64",
+                                  "arm64"
+                                ]
+                              },
+                              "variant": {
+                                "enum": [
+                                  null,
+                                  "v8"
+                                ]
+                              }
+                            },
+                            "required": [
+                              "os",
+                              "architecture",
+                              "variant"
+                            ]
+                          },
+                          "variantEvidence": {
+                            "enum": [
+                              "none",
+                              "config",
+                              "descriptor"
+                            ]
+                          },
+                          "verifierProfile": {
+                            "const": "artifact-registry-v1"
+                          },
+                          "verifiedAtUtc": {
+                            "type": "string",
+                            "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}\\.\\d{6}Z$"
+                          },
+                          "createdAtUtc": {
+                            "type": "string",
+                            "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}\\.\\d{6}Z$"
+                          },
+                          "contentVerification": {
+                            "const": "manifest_config_hash_verified"
+                          },
+                          "layerAvailability": {
+                            "const": "not_checked"
+                          },
+                          "signatureVerification": {
+                            "const": "not_checked"
+                          }
+                        },
+                        "required": [
+                          "artifactId",
+                          "projectId",
+                          "registryId",
+                          "repository",
+                          "rootDigest",
+                          "platform",
+                          "rootMediaType",
+                          "rootSizeBytes",
+                          "selectedManifestDigest",
+                          "selectedManifestSizeBytes",
+                          "selectedManifestMediaType",
+                          "configDigest",
+                          "configSizeBytes",
+                          "observedPlatform",
+                          "variantEvidence",
+                          "verifierProfile",
+                          "verifiedAtUtc",
+                          "createdAtUtc",
+                          "contentVerification",
+                          "layerAvailability",
+                          "signatureVerification"
+                        ]
+                      },
+                      "approvalPolicy": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "properties": {
+                          "policyId": {
+                            "type": "string",
+                            "format": "uuid",
+                            "pattern": "^(?!00000000-0000-0000-0000-000000000000$)[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+                          },
+                          "policyRevision": {
+                            "type": "integer",
+                            "minimum": 1
+                          },
+                          "payloadHash": {
+                            "type": "string",
+                            "pattern": "^[0-9a-f]{64}$"
+                          },
+                          "bindingId": {
+                            "type": "string",
+                            "format": "uuid",
+                            "pattern": "^(?!00000000-0000-0000-0000-000000000000$)[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+                          },
+                          "bindingRevision": {
+                            "type": "integer",
+                            "minimum": 1
+                          }
+                        },
+                        "required": [
+                          "policyId",
+                          "policyRevision",
+                          "payloadHash",
+                          "bindingId",
+                          "bindingRevision"
+                        ]
+                      },
+                      "qualification": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "properties": {
+                          "profile": {
+                            "const": "pilot"
+                          },
+                          "provenanceClass": {
+                            "const": "unattested"
+                          },
+                          "executionAuthorized": {
+                            "const": false
+                          }
+                        },
+                        "required": [
+                          "profile",
+                          "provenanceClass",
+                          "executionAuthorized"
+                        ]
+                      }
+                    },
+                    "required": [
+                      "schemaVersion",
+                      "subjectKind",
+                      "tenantId",
+                      "project",
+                      "application",
+                      "environment",
+                      "target",
+                      "artifact",
+                      "approvalPolicy",
+                      "qualification"
+                    ]
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "selectionHash": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "pattern": "^[0-9a-f]{64}$"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "spec": {
+                "anyOf": [
+                  {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "schemaVersion": {
+                        "const": 1
+                      },
+                      "subjectKind": {
+                        "const": "release-intent-v1"
+                      },
+                      "tenantId": {
+                        "type": "string",
+                        "format": "uuid",
+                        "pattern": "^(?!00000000-0000-0000-0000-000000000000$)[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+                      },
+                      "project": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "properties": {
+                          "id": {
+                            "type": "string",
+                            "format": "uuid",
+                            "pattern": "^(?!00000000-0000-0000-0000-000000000000$)[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+                          },
+                          "revision": {
+                            "type": "integer",
+                            "minimum": 1
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "revision"
+                        ]
+                      },
+                      "application": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "properties": {
+                          "id": {
+                            "type": "string",
+                            "format": "uuid",
+                            "pattern": "^(?!00000000-0000-0000-0000-000000000000$)[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+                          },
+                          "revision": {
+                            "type": "integer",
+                            "minimum": 1
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "revision"
+                        ]
+                      },
+                      "environment": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "properties": {
+                          "id": {
+                            "type": "string",
+                            "format": "uuid",
+                            "pattern": "^(?!00000000-0000-0000-0000-000000000000$)[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+                          },
+                          "revision": {
+                            "type": "integer",
+                            "minimum": 1
+                          },
+                          "classification": {
+                            "enum": [
+                              "Development",
+                              "Test"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "revision",
+                          "classification"
+                        ]
+                      },
+                      "target": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "properties": {
+                          "id": {
+                            "type": "string",
+                            "format": "uuid",
+                            "pattern": "^(?!00000000-0000-0000-0000-000000000000$)[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+                          },
+                          "kind": {
+                            "type": "string"
+                          },
+                          "revision": {
+                            "type": "integer",
+                            "minimum": 1
+                          },
+                          "associationRevision": {
+                            "type": "integer",
+                            "minimum": 1
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "kind",
+                          "revision",
+                          "associationRevision"
+                        ]
+                      },
+                      "artifact": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "properties": {
+                          "artifactId": {
+                            "type": "string",
+                            "format": "uuid",
+                            "pattern": "^(?!00000000-0000-0000-0000-000000000000$)[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+                          },
+                          "projectId": {
+                            "type": "string",
+                            "format": "uuid",
+                            "pattern": "^(?!00000000-0000-0000-0000-000000000000$)[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+                          },
+                          "registryId": {
+                            "type": "string",
+                            "format": "uuid",
+                            "pattern": "^(?!00000000-0000-0000-0000-000000000000$)[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+                          },
+                          "repository": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 255
+                          },
+                          "rootDigest": {
+                            "type": "string",
+                            "pattern": "^(sha256:[0-9a-f]{64}|sha512:[0-9a-f]{128})$"
+                          },
+                          "platform": {
+                            "type": "object",
+                            "additionalProperties": false,
+                            "properties": {
+                              "os": {
+                                "const": "linux"
+                              },
+                              "architecture": {
+                                "enum": [
+                                  "amd64",
+                                  "arm64"
+                                ]
+                              },
+                              "variant": {
+                                "enum": [
+                                  null,
+                                  "v8"
+                                ]
+                              }
+                            },
+                            "required": [
+                              "os",
+                              "architecture",
+                              "variant"
+                            ]
+                          },
+                          "rootMediaType": {
+                            "type": "string"
+                          },
+                          "rootSizeBytes": {
+                            "type": "integer",
+                            "minimum": 1
+                          },
+                          "selectedManifestDigest": {
+                            "type": "string",
+                            "pattern": "^(sha256:[0-9a-f]{64}|sha512:[0-9a-f]{128})$"
+                          },
+                          "selectedManifestSizeBytes": {
+                            "type": "integer",
+                            "minimum": 1
+                          },
+                          "selectedManifestMediaType": {
+                            "type": "string"
+                          },
+                          "configDigest": {
+                            "type": "string",
+                            "pattern": "^(sha256:[0-9a-f]{64}|sha512:[0-9a-f]{128})$"
+                          },
+                          "configSizeBytes": {
+                            "type": "integer",
+                            "minimum": 1
+                          },
+                          "observedPlatform": {
+                            "type": "object",
+                            "additionalProperties": false,
+                            "properties": {
+                              "os": {
+                                "const": "linux"
+                              },
+                              "architecture": {
+                                "enum": [
+                                  "amd64",
+                                  "arm64"
+                                ]
+                              },
+                              "variant": {
+                                "enum": [
+                                  null,
+                                  "v8"
+                                ]
+                              }
+                            },
+                            "required": [
+                              "os",
+                              "architecture",
+                              "variant"
+                            ]
+                          },
+                          "variantEvidence": {
+                            "enum": [
+                              "none",
+                              "config",
+                              "descriptor"
+                            ]
+                          },
+                          "verifierProfile": {
+                            "const": "artifact-registry-v1"
+                          },
+                          "verifiedAtUtc": {
+                            "type": "string",
+                            "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}\\.\\d{6}Z$"
+                          },
+                          "createdAtUtc": {
+                            "type": "string",
+                            "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}\\.\\d{6}Z$"
+                          },
+                          "contentVerification": {
+                            "const": "manifest_config_hash_verified"
+                          },
+                          "layerAvailability": {
+                            "const": "not_checked"
+                          },
+                          "signatureVerification": {
+                            "const": "not_checked"
+                          }
+                        },
+                        "required": [
+                          "artifactId",
+                          "projectId",
+                          "registryId",
+                          "repository",
+                          "rootDigest",
+                          "platform",
+                          "rootMediaType",
+                          "rootSizeBytes",
+                          "selectedManifestDigest",
+                          "selectedManifestSizeBytes",
+                          "selectedManifestMediaType",
+                          "configDigest",
+                          "configSizeBytes",
+                          "observedPlatform",
+                          "variantEvidence",
+                          "verifierProfile",
+                          "verifiedAtUtc",
+                          "createdAtUtc",
+                          "contentVerification",
+                          "layerAvailability",
+                          "signatureVerification"
+                        ]
+                      },
+                      "approvalPolicy": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "properties": {
+                          "policyId": {
+                            "type": "string",
+                            "format": "uuid",
+                            "pattern": "^(?!00000000-0000-0000-0000-000000000000$)[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+                          },
+                          "policyRevision": {
+                            "type": "integer",
+                            "minimum": 1
+                          },
+                          "payloadHash": {
+                            "type": "string",
+                            "pattern": "^[0-9a-f]{64}$"
+                          },
+                          "bindingId": {
+                            "type": "string",
+                            "format": "uuid",
+                            "pattern": "^(?!00000000-0000-0000-0000-000000000000$)[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+                          },
+                          "bindingRevision": {
+                            "type": "integer",
+                            "minimum": 1
+                          }
+                        },
+                        "required": [
+                          "policyId",
+                          "policyRevision",
+                          "payloadHash",
+                          "bindingId",
+                          "bindingRevision"
+                        ]
+                      },
+                      "qualification": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "properties": {
+                          "profile": {
+                            "const": "pilot"
+                          },
+                          "provenanceClass": {
+                            "const": "unattested"
+                          },
+                          "executionAuthorized": {
+                            "const": false
+                          }
+                        },
+                        "required": [
+                          "profile",
+                          "provenanceClass",
+                          "executionAuthorized"
+                        ]
+                      }
+                    },
+                    "required": [
+                      "schemaVersion",
+                      "subjectKind",
+                      "tenantId",
+                      "project",
+                      "application",
+                      "environment",
+                      "target",
+                      "artifact",
+                      "approvalPolicy",
+                      "qualification"
+                    ]
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "specHash": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "pattern": "^[0-9a-f]{64}$"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "executionAuthorized": {
+                "const": false
+              }
+            },
+            "required": [
+              "releaseId",
+              "releaseRevisionId",
+              "revisionNumber",
+              "version",
+              "recordedState",
+              "creatorPrincipalId",
+              "label",
+              "createdAtUtc",
+              "updatedAtUtc",
+              "frozenAtUtc",
+              "retiredAtUtc",
+              "retiredReasonCode",
+              "selectionStatus",
+              "eligibilityReasonCode",
+              "selection",
+              "selectionHash",
+              "spec",
+              "specHash",
+              "executionAuthorized"
+            ]
+          }
+        },
+        "required": [
+          "schemaVersion",
+          "correlationId",
+          "revision"
+        ]
+      },
+      "LineageListEnvelope": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "schemaVersion": {
+            "const": 1
+          },
+          "correlationId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^(?!00000000-0000-0000-0000-000000000000$)[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+          },
+          "items": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "releaseId": {
+                  "type": "string",
+                  "format": "uuid",
+                  "pattern": "^(?!00000000-0000-0000-0000-000000000000$)[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+                },
+                "projectId": {
+                  "type": "string",
+                  "format": "uuid",
+                  "pattern": "^(?!00000000-0000-0000-0000-000000000000$)[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+                },
+                "createdAtUtc": {
+                  "type": "string",
+                  "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}\\.\\d{6}Z$"
+                }
+              },
+              "required": [
+                "releaseId",
+                "projectId",
+                "createdAtUtc"
+              ]
+            },
+            "maxItems": 50
+          },
+          "nextAfterId": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^(?!00000000-0000-0000-0000-000000000000$)[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "schemaVersion",
+          "correlationId",
+          "items",
+          "nextAfterId"
+        ]
+      },
+      "RevisionListEnvelope": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "schemaVersion": {
+            "const": 1
+          },
+          "correlationId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^(?!00000000-0000-0000-0000-000000000000$)[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+          },
+          "items": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "releaseId": {
+                  "type": "string",
+                  "format": "uuid",
+                  "pattern": "^(?!00000000-0000-0000-0000-000000000000$)[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+                },
+                "releaseRevisionId": {
+                  "type": "string",
+                  "format": "uuid",
+                  "pattern": "^(?!00000000-0000-0000-0000-000000000000$)[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+                },
+                "revisionNumber": {
+                  "type": "integer",
+                  "minimum": 1
+                },
+                "version": {
+                  "type": "integer",
+                  "minimum": 1
+                },
+                "recordedState": {
+                  "enum": [
+                    "Draft",
+                    "Frozen",
+                    "Retired"
+                  ]
+                },
+                "label": {
+                  "type": "string"
+                },
+                "applicationId": {
+                  "type": "string",
+                  "format": "uuid",
+                  "pattern": "^(?!00000000-0000-0000-0000-000000000000$)[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+                },
+                "environmentId": {
+                  "type": "string",
+                  "format": "uuid",
+                  "pattern": "^(?!00000000-0000-0000-0000-000000000000$)[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+                },
+                "targetId": {
+                  "type": "string",
+                  "format": "uuid",
+                  "pattern": "^(?!00000000-0000-0000-0000-000000000000$)[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+                },
+                "artifactId": {
+                  "type": "string",
+                  "format": "uuid",
+                  "pattern": "^(?!00000000-0000-0000-0000-000000000000$)[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+                },
+                "createdAtUtc": {
+                  "type": "string",
+                  "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}\\.\\d{6}Z$"
+                },
+                "frozenAtUtc": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}\\.\\d{6}Z$"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "specHash": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "pattern": "^[0-9a-f]{64}$"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "executionAuthorized": {
+                  "const": false
+                }
+              },
+              "required": [
+                "releaseId",
+                "releaseRevisionId",
+                "revisionNumber",
+                "version",
+                "recordedState",
+                "label",
+                "applicationId",
+                "environmentId",
+                "targetId",
+                "artifactId",
+                "createdAtUtc",
+                "frozenAtUtc",
+                "specHash",
+                "executionAuthorized"
+              ]
+            },
+            "maxItems": 50
+          },
+          "nextAfterId": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^(?!00000000-0000-0000-0000-000000000000$)[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "schemaVersion",
+          "correlationId",
+          "items",
+          "nextAfterId"
+        ]
+      },
+      "ErrorEnvelope": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "schemaVersion": {
+            "const": 1
+          },
+          "correlationId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^(?!00000000-0000-0000-0000-000000000000$)[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+          },
+          "code": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "schemaVersion",
+          "correlationId",
+          "code"
+        ]
+      }
+    }
+  },
+  "x-working-tree-source-sha256": {
+    "src/Host/Kordra.Api/Endpoints/Releases/ReleaseEndpoints.cs": "035d628ba160a433eadd54d984478939439bbbbfd5a1c2b31bf9307a45b4ff51",
+    "src/Host/Kordra.Api/Endpoints/Releases/ReleaseRequestParser.cs": "32d5551452b1d2526b42f08d39da9fbc5a7908da95c130e1898897e5bee7d800",
+    "src/Host/Kordra.Api/Endpoints/Releases/ReleaseCallerBoundResponseCommitter.cs": "85c7a73de6f11015d5a945ada8986058d3bfa060e9cc6d7115a3f512a47415e9",
+    "src/Host/Kordra.Api/Composition/Releases/ReleasePayloadBuilder.cs": "5a8eee582fc52d8dc9d990d4ece09337b7554f8b581c60bcf7be336bda4c471d",
+    "src/Host/Kordra.Api/Composition/Releases/ReleaseMutationDisclosure.cs": "6e1c853d84f4f323a6cfd1b29631508c7d97127351b038891201be274c7927d5",
+    "src/Host/Kordra.Api/Composition/Releases/ReleaseReadCoordinator.cs": "591379d3f53e1408a59163ed5c9bb1534f8cc1bd549d71d67678401469d36dea",
+    "src/Modules/ReleaseManagement/Domain/ReleaseIntent.cs": "68b2ef23ac8d19142bff33db5aafb6ea29c8d64a68f37bacadb772a5d1289fcf",
+    "src/Host/Kordra.Api/Endpoints/LocalAuthenticationEndpoints.cs": "981e20def34e590369c61737d0ece1947810f51d1c5ad9106f725aaa87dddc55"
+  }
+}

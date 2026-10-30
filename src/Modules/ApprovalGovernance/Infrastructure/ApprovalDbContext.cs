@@ -69,6 +69,9 @@ public sealed class ApprovalDbContext(DbContextOptions<ApprovalDbContext> option
     public DbSet<ApprovalPolicyBinding> Bindings => Set<ApprovalPolicyBinding>();
     public DbSet<ApprovalPolicyBindingHistory> BindingHistory => Set<ApprovalPolicyBindingHistory>();
     public DbSet<ApprovalPolicyCommandReceipt> Commands => Set<ApprovalPolicyCommandReceipt>();
+    public DbSet<ApprovalRequestRecord> Requests => Set<ApprovalRequestRecord>();
+    public DbSet<ApprovalDecisionRecord> Decisions => Set<ApprovalDecisionRecord>();
+    public DbSet<ApprovalRequestCommandReceipt> RequestCommands => Set<ApprovalRequestCommandReceipt>();
 
     protected override void OnModelCreating(ModelBuilder model)
     {
@@ -98,6 +101,27 @@ public sealed class ApprovalDbContext(DbContextOptions<ApprovalDbContext> option
         receipt.HasKey(x => new { x.InstallationId, x.ManifestId });
         receipt.HasIndex(x => x.CommandId).IsUnique();
         receipt.HasOne<ApprovalPolicyRevision>().WithMany().HasForeignKey(x => new { x.InstallationId, x.TenantId, x.ProjectId, x.PolicyId, Revision = x.PolicyRevision }).OnDelete(DeleteBehavior.Restrict);
+        var request = model.Entity<ApprovalRequestRecord>();
+        request.ToTable("apr_requests", t => t.HasCheckConstraint("ck_apr_request", Ids("id", "installation_id", "tenant_id", "project_id", "environment_id", "release_revision_id", "requester_principal_id") +
+            " AND version > 0 AND state IN ('Pending','Granted','Rejected','Revoked') AND octet_length(spec_hash) = 32 AND octet_length(requester_evidence) BETWEEN 1 AND 65536 AND isfinite(created_at_utc) AND isfinite(pending_expires_at_utc) AND pending_expires_at_utc > created_at_utc AND (grant_expires_at_utc IS NULL OR (isfinite(grant_expires_at_utc) AND grant_expires_at_utc <= pending_expires_at_utc))"));
+        request.HasKey(x => x.Id); request.Property(x => x.Id).ValueGeneratedNever();
+        request.HasAlternateKey(x => new { x.Id, x.InstallationId, x.TenantId });
+        request.HasIndex(x => new { x.InstallationId, x.ReleaseRevisionId }).IsUnique();
+        request.Property(x => x.Version).IsConcurrencyToken();
+        var decision = model.Entity<ApprovalDecisionRecord>();
+        decision.ToTable("apr_decisions", t => t.HasCheckConstraint("ck_apr_decision", Ids("id", "installation_id", "tenant_id", "request_id", "actor_principal_id") +
+            " AND request_version > 1 AND isfinite(occurred_at_utc) AND ((action = 'grant' AND reason_code = 'approved') OR (action = 'reject' AND reason_code IN ('changes_required','incorrect_artifact','incorrect_target','policy_denied')) OR (action = 'revoke' AND reason_code IN ('obsolete','requester_cancelled','owner_cancelled')))"));
+        decision.HasKey(x => x.Id); decision.Property(x => x.Id).ValueGeneratedNever();
+        decision.HasIndex(x => new { x.RequestId, x.RequestVersion }).IsUnique();
+        decision.HasOne<ApprovalRequestRecord>().WithMany().HasForeignKey(x => new { x.RequestId, x.InstallationId, x.TenantId })
+            .HasPrincipalKey(x => new { x.Id, x.InstallationId, x.TenantId }).OnDelete(DeleteBehavior.Restrict);
+        var command = model.Entity<ApprovalRequestCommandReceipt>();
+        command.ToTable("apr_request_commands", t => t.HasCheckConstraint("ck_apr_request_command", Ids("id", "installation_id", "tenant_id", "principal_id", "request_id", "audit_intent_id", "boot_id", "invocation_id") +
+            " AND action IN ('request','grant','reject','revoke') AND octet_length(scoped_key_hash) = 32 AND octet_length(business_hash) = 32 AND octet_length(audit_intent_hash) = 32 AND isfinite(created_at_utc)"));
+        command.HasKey(x => x.Id); command.Property(x => x.Id).ValueGeneratedNever();
+        command.HasIndex(x => new { x.InstallationId, x.TenantId, x.PrincipalId, x.Action, x.ScopedKeyHash }).IsUnique();
+        command.HasOne<ApprovalRequestRecord>().WithMany().HasForeignKey(x => new { x.RequestId, x.InstallationId, x.TenantId })
+            .HasPrincipalKey(x => new { x.Id, x.InstallationId, x.TenantId }).OnDelete(DeleteBehavior.Restrict);
         foreach (var entity in model.Model.GetEntityTypes())
             foreach (var property in entity.GetProperties())
                 property.SetColumnName(string.Concat(property.Name.Select((c, i) => char.IsUpper(c)

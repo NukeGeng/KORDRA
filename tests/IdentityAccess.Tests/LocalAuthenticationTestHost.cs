@@ -267,6 +267,8 @@ public sealed class LocalAuthenticationTestHost : IAsyncDisposable
         return context;
     }
 
+    public Task StopForOfflineFixtureAsync() => StopInstanceAsync();
+
     public async Task RestartAsync()
     {
         await StopInstanceAsync();
@@ -412,6 +414,8 @@ public sealed class LocalAuthenticationTestHost : IAsyncDisposable
         LocalAuthenticationEndpoints.Map(_app);
         if (_resourceAuthority) { ProtectedMetadataEndpoints.Map(_app); EnvironmentV2Endpoints.Map(_app); }
         if (_app.Services.GetService<ArtifactReadCoordinator>() is not null) ArtifactEndpoints.Map(_app);
+        if (_app.Services.GetService<ReleaseReadCoordinator>() is not null) ReleaseEndpoints.Map(_app);
+        if (_app.Services.GetService<ApprovalReadCoordinator>() is not null) ApprovalEndpoints.Map(_app);
         _app.MapGet("/health/live", () => Results.Text("alive\n", "text/plain; charset=utf-8"));
         if (_initializeBoot || _auditFactory is IdentityAccessAuditTransactionAdapter)
         {
