@@ -159,3 +159,8 @@ FEAT-AMR-001 / engineering tooling; actor: local repository contributor; no prod
 ### Serial Product validation capacity — 2026-10-24
 
 The expanded T08 serial PostgreSQL/HTTPS/native fixture suite uses a bounded 300-second Product-test stage instead of the old 90-second whole-suite budget, which had already produced false timeouts as the suite grew. All other command deadlines remain 90 seconds; failed/missing checks and stale binaries still block. One regression models a legitimate >90-second suite while verifying the Product cap and other-stage bounds. This is deterministic CLI validation capacity only; no model/routing/checkpoint/review-policy or runtime admission/provider deadline changes.
+
+
+## Bounded product-test timeout — 2026-10-30
+
+T12.0's real serial crash/retry fixtures exposed the canonical product-test stage's fixed 300-second ceiling. `gates --product-test-timeout <seconds>` now permits an explicit integer 1..1800; the default stays 300, all other command limits stay 90, and timeout remains a failed gate. The receipt records the chosen bound as additive metadata; existing schemaVersion 1 receipts/checkpoints remain readable. No model routing, review trigger, human approval or gate-reuse rule changed. Regression cases verify a suite exceeding the default can finish under an explicit bounded budget, invalid/unbounded values execute nothing, and expiry still fails. Fourteen gate tests passed locally.
