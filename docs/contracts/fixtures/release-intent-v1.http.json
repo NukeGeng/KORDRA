@@ -1,0 +1,99 @@
+{
+  "contractId": "CTR-RELEASE-APPROVAL-V1",
+  "schemaVersion": 1,
+  "schemaFields": {
+    "CreateRequest": [
+      "schemaVersion",
+      "correlationId",
+      "label",
+      "applicationId",
+      "environmentId",
+      "targetId",
+      "artifactId"
+    ],
+    "NextRequest": [
+      "schemaVersion",
+      "correlationId",
+      "baseRevisionId",
+      "label",
+      "applicationId",
+      "environmentId",
+      "targetId",
+      "artifactId"
+    ],
+    "ReplaceRequest": [
+      "schemaVersion",
+      "correlationId",
+      "label",
+      "applicationId",
+      "environmentId",
+      "targetId",
+      "artifactId"
+    ],
+    "FreezeRequest": [
+      "schemaVersion",
+      "correlationId",
+      "expectedSelectionHash"
+    ],
+    "RetireRequest": [
+      "schemaVersion",
+      "correlationId",
+      "reasonCode"
+    ],
+    "ReleaseIntent": [
+      "schemaVersion",
+      "subjectKind",
+      "tenantId",
+      "project",
+      "application",
+      "environment",
+      "target",
+      "artifact",
+      "approvalPolicy",
+      "qualification"
+    ],
+    "Revision": [
+      "releaseId",
+      "releaseRevisionId",
+      "revisionNumber",
+      "version",
+      "recordedState",
+      "creatorPrincipalId",
+      "label",
+      "createdAtUtc",
+      "updatedAtUtc",
+      "frozenAtUtc",
+      "retiredAtUtc",
+      "retiredReasonCode",
+      "selectionStatus",
+      "eligibilityReasonCode",
+      "selection",
+      "selectionHash",
+      "spec",
+      "specHash",
+      "executionAuthorized"
+    ],
+    "RevisionEnvelope": [
+      "schemaVersion",
+      "correlationId",
+      "revision"
+    ],
+    "LineageListEnvelope": [
+      "schemaVersion",
+      "correlationId",
+      "items",
+      "nextAfterId"
+    ],
+    "RevisionListEnvelope": [
+      "schemaVersion",
+      "correlationId",
+      "items",
+      "nextAfterId"
+    ],
+    "ErrorEnvelope": [
+      "schemaVersion",
+      "correlationId",
+      "code"
+    ]
+  }
+}

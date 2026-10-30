@@ -1,6 +1,7 @@
 using Kordra.ArtifactManagement.Domain;
 using Kordra.Modules.ArtifactManagement;
 using Kordra.Modules.ArtifactManagement.Infrastructure;
+using Kordra.Modules.ArtifactManagement.Contracts;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage;
 using Xunit;
@@ -59,6 +60,20 @@ public sealed class ArtifactQueryTests : IAsyncLifetime
         var detail = await Queries.ReadDetailAsync(_tenant, _project, first.Items[0].ArtifactId);
         Assert.NotNull(detail); Assert.Equal("manifest_config_hash_verified", detail.ContentVerification);
         Assert.Equal("not_checked", detail.LayerAvailability); Assert.Equal("not_checked", detail.SignatureVerification);
+    }
+
+    [Fact]
+    public async Task Release_reader_only_returns_exact_project_artifact_without_claim_or_registry_access()
+    {
+        var id = await Register(Pending(declaration: true));
+        IReleaseArtifactReader reader = Queries;
+        var actual = await reader.ReadReleaseArtifactUnderAdmissionAsync(_tenant, _project, id);
+        Assert.NotNull(actual); Assert.Equal(id, actual.ArtifactId);
+        Assert.Equal("manifest_config_hash_verified", actual.ContentVerification);
+        Assert.Equal("not_checked", actual.SignatureVerification);
+        Assert.Null(await reader.ReadReleaseArtifactUnderAdmissionAsync(Guid.NewGuid(), _project, id));
+        Assert.Null(await reader.ReadReleaseArtifactUnderAdmissionAsync(_tenant, Guid.NewGuid(), id));
+        Assert.Null(await reader.ReadReleaseArtifactUnderAdmissionAsync(_tenant, _project, Guid.Empty));
     }
 
     [Theory]

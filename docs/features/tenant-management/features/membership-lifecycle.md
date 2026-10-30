@@ -132,3 +132,7 @@ The accepted ADR-0005 T11.0 adds a BCL-only ApprovalGovernance Domain project an
 ## T11.0 offline owner-read seam
 
 T11.0 adds a TEN-owned active-organization lookup on an already enlisted, guarded offline connection. It does not grant membership/permissions or add a database writer; caller must hold stopped installation custody. Policy publication remains incomplete.
+
+## T11.1 shared graph acknowledgment — 2026-10-27
+
+The accepted ADR-0005 Release slice adds a BCL-only REL Domain and test project to the solution and architecture graph. This does not alter this owner’s runtime behavior or authorize a release. Full REL feature implementation remains in progress.

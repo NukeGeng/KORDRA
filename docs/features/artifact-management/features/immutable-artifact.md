@@ -177,3 +177,11 @@ The local full gate on 2026-10-27 passed 218 tooling tests and 1,158 Product tes
 ART consumer acknowledgment for [Release and approval v1](../../../contracts/release-approval-v1.md) / [ADR-0005](../../../decisions/0005-immutable-release.md), awaiting exact human acceptance. Add a neutral owner Contract/reader for exact trusted tenant/project/artifactId, returning only the closed immutable T10 ArtifactV1 facts. Do not borrow another registration provenance receipt, access SEC/registry or reverify historical records. Qualification remains manifest/config hash evidence with unattested provenance; layer/signature availability remains unverified.
 
 This is planned additive scope, not implemented source/test evidence or a change to the accepted T01–T10 baseline. Preserve current source/test mappings; Developer adds precise new paths and negative/compatibility tests only when the owning slice exists. R11-02/03/10/12/15 are required as applicable. No real database/provider/secret operation is authorized.
+
+## T11.1 shared graph acknowledgment — 2026-10-27
+
+Accepted ADR-0005 adds a BCL-only REL Domain and test project to the solution and actual architecture graph. This graph change does not alter this owner’s runtime behavior or grant release authority. T11.1 owner ports, persistence and HTTP remain in progress.
+
+## T11.1 neutral release artifact port — local increment
+
+A BCL-only ART-owned IReleaseArtifactReader delegates to the existing exact tenant/project immutable artifact projection. It returns no declaration/provenance claim and performs no registry or credential access; the caller must hold admission and independently authorize release selection. Actual source and synthetic PostgreSQL tests remain owned by this feature; T11.1 remains incomplete.

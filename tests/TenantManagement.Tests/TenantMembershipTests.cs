@@ -4,6 +4,7 @@ using Kordra.BuildingBlocks.Security;
 using Kordra.Modules.AuditCompliance.Contracts;
 using Kordra.Modules.AuditCompliance.Infrastructure;
 using Kordra.Modules.IdentityAccess.Authorization;
+using Kordra.Modules.IdentityAccess.Authentication;
 using Kordra.Modules.IdentityAccess.Contracts;
 using Kordra.Modules.IdentityAccess.Infrastructure;
 using Kordra.Modules.TenantManagement.Contracts;
@@ -187,6 +188,134 @@ public sealed class TenantMembershipTests : IAsyncLifetime
         await using var admission = await _gate.AcquireReadAsync();
         var grant = await _service.ReadCurrentGrantUnderAdmissionAsync(_recipient, _tenant, "target.read", scope.Kind, scope.Id);
         Assert.NotNull(grant); Assert.Null(grant.ExpiresAtUtc);
+    }
+
+    [Fact]
+    public async Task Durable_grant_distinguishes_changed_owner_from_ambiguous_provenance()
+    {
+        var (role, scope, root) = await ProjectCapability();
+        Assert.Equal("success", (await _service.ExecuteAsync(Assign(role, scope))).Status);
+        ScopedGrant grant;
+        await using (var admission = await _gate.AcquireReadAsync())
+        {
+            grant = (await _service.ReadCurrentGrantUnderAdmissionAsync(_recipient, _tenant, "target.read", scope.Kind, scope.Id))!;
+            Assert.NotNull(grant);
+            Assert.Equal(DurableGrantEvidenceStatus.Current, await _service.CompareUnderAdmissionAsync(grant));
+            Assert.Equal(DurableGrantEvidenceStatus.Invalidated, await _service.CompareUnderAdmissionAsync(grant with { AssignmentId = Guid.NewGuid() }));
+        }
+        await using (var admission = await _gate.AcquireWriteAsync())
+        await using (var db = await _ten.CreateDbContextAsync())
+        {
+            var ancestor = await db.Assignments.SingleAsync(x => x.TenantId == _tenant && x.Id == root.ResourceId);
+            ancestor.ProvenanceJson = "{}"; // Valid JSON with an invalid provenance shape.
+            await db.SaveChangesAsync();
+        }
+        await using (var admission = await _gate.AcquireReadAsync())
+            Assert.Equal(DurableGrantEvidenceStatus.Unavailable, await _service.CompareUnderAdmissionAsync(grant));
+        await using (var admission = await _gate.AcquireWriteAsync())
+        await using (var db = await _ten.CreateDbContextAsync())
+        {
+            var assignment = await db.Assignments.SingleAsync(x => x.TenantId == _tenant && x.Id == grant.AssignmentId);
+            assignment.Status = "revoked"; assignment.Revision++; await db.SaveChangesAsync();
+        }
+        await using (var admission = await _gate.AcquireReadAsync())
+            Assert.Equal(DurableGrantEvidenceStatus.Invalidated, await _service.CompareUnderAdmissionAsync(grant));
+    }
+
+    [Theory]
+    [InlineData("revoked")]
+    [InlineData("restored")]
+    [InlineData("expired")]
+    [InlineData("malformed")]
+    public async Task Durable_grant_classifies_provenance_ancestor_facts(string change)
+    {
+        var (_, scope, _) = await EarlierProvenance("ancestor");
+        ScopedGrant grant;
+        await using (var admission = await _gate.AcquireReadAsync())
+        {
+            grant = (await _service.ReadCurrentGrantUnderAdmissionAsync(_recipient, _tenant, "target.read", scope.Kind, scope.Id))!;
+            Assert.NotNull(grant);
+            Assert.Equal(DurableGrantEvidenceStatus.Current, await _service.CompareUnderAdmissionAsync(grant));
+        }
+        await using (var admission = await _gate.AcquireWriteAsync())
+        await using (var db = await _ten.CreateDbContextAsync())
+        {
+            var ancestor = await db.Assignments.SingleAsync(x => x.TenantId == _tenant && x.MembershipId == _founderMember && x.ScopeKind == "project");
+            if (change == "revoked") ancestor.Status = "revoked";
+            if (change == "restored") ancestor.Revision += 2; // Final status active, old referenced revision cannot return.
+            if (change == "expired") ancestor.ExpiresAtUtc = DateTimeOffset.FromUnixTimeMilliseconds(_clock.Now.ToUnixTimeMilliseconds());
+            if (change == "malformed") ancestor.ProvenanceJson = "{}";
+            await db.SaveChangesAsync();
+        }
+        await using var held = await _gate.AcquireReadAsync();
+        Assert.Equal(change == "malformed" ? DurableGrantEvidenceStatus.Unavailable : DurableGrantEvidenceStatus.Invalidated,
+            await _service.CompareUnderAdmissionAsync(grant));
+    }
+
+    [Theory]
+    [InlineData("request-revoked")]
+    [InlineData("read-revoked")]
+    [InlineData("principal-disabled")]
+    public async Task Durable_approval_authority_uses_real_iam_and_tenant_owner_facts(string change)
+    {
+        var environment = new TenantScope("environment", Guid.NewGuid());
+        var project = new TenantScope("project", Guid.NewGuid());
+        _scopes.Add(_tenant, environment); _scopes.Add(_tenant, project);
+        var requestRole = await Role([new("release.request-approval", "environment")]);
+        var readRole = await Role([new("release.read", "project")]);
+        Assert.Equal("success", (await _service.GrantOfflineAsync(_offline, Guid.NewGuid(), _tenant, _recipientMember, 1,
+            requestRole.DefinitionId, 1, environment, null)).Status);
+        Assert.Equal("success", (await _service.GrantOfflineAsync(_offline, Guid.NewGuid(), _tenant, _recipientMember, 2,
+            readRole.DefinitionId, 1, project, null)).Status);
+        var reader = new DurableApprovalAuthorityReader(new DurablePrincipalReader(_iam), _service, _roles, _clock);
+        ScopedGrant request, read; DurablePrincipal principal;
+        await using (var held = await _gate.AcquireReadAsync())
+        {
+            principal = (await new DurablePrincipalReader(_iam).ReadUnderAdmissionAsync(_recipient))!;
+            request = (await _service.ReadCurrentGrantUnderAdmissionAsync(_recipient, _tenant, "release.request-approval", environment.Kind, environment.Id))!;
+            read = (await _service.ReadCurrentGrantUnderAdmissionAsync(_recipient, _tenant, "release.read", project.Kind, project.Id))!;
+            Assert.NotNull(principal); Assert.NotNull(request); Assert.NotNull(read);
+            Assert.Equal(DurableApprovalAuthorityStatus.Current, (await reader.CheckUnderAdmissionAsync(principal, request, read)).Status);
+        }
+        await using (var held = await _gate.AcquireWriteAsync())
+        {
+            if (change == "principal-disabled")
+            {
+                await using var db = await _iam.CreateDbContextAsync();
+                var current = await db.Principals.SingleAsync(x => x.Id == _recipient);
+                current.AccountStatus = "disabled"; current.Revision++; await db.SaveChangesAsync();
+            }
+            else
+            {
+                await using var db = await _ten.CreateDbContextAsync();
+                var id = change == "request-revoked" ? request.AssignmentId : read.AssignmentId;
+                var assignment = await db.Assignments.SingleAsync(x => x.TenantId == _tenant && x.Id == id);
+                assignment.Status = "revoked"; assignment.Revision++; await db.SaveChangesAsync();
+            }
+        }
+        await using (var held = await _gate.AcquireReadAsync())
+            Assert.Equal(DurableApprovalAuthorityStatus.Invalidated, (await reader.CheckUnderAdmissionAsync(principal, request, read)).Status);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Durable_role_change_or_retirement_invalidates_original_tenant_grant(bool retire)
+    {
+        var (role, scope, _) = await ProjectCapability();
+        Assert.Equal("success", (await _service.ExecuteAsync(Assign(role, scope))).Status);
+        ScopedGrant grant;
+        await using (var held = await _gate.AcquireReadAsync())
+        {
+            grant = (await _service.ReadCurrentGrantUnderAdmissionAsync(_recipient, _tenant, "target.read", scope.Kind, scope.Id))!;
+            Assert.NotNull(grant);
+            Assert.Equal(DurableGrantEvidenceStatus.Current, await _service.CompareUnderAdmissionAsync(grant));
+        }
+        Assert.Equal("success", (await _roles.PublishOfflineAsync(_offline, Guid.NewGuid(), role.DefinitionId, 1,
+            "synthetic updated role", [new("target.read", "project")], retire: retire)).Status);
+        await using var admission = await _gate.AcquireReadAsync();
+        Assert.Equal(DurableRoleEvidenceStatus.Invalidated, (await _roles.ReadExactUnderAdmissionAsync(role.DefinitionId, 1)).Status);
+        Assert.Equal(DurableGrantEvidenceStatus.Invalidated, await _service.CompareUnderAdmissionAsync(grant));
     }
 
     private async Task<(DefinitionWriteResult Role, TenantScope Scope, DateTimeOffset Deadline)> EarlierProvenance(string variant)

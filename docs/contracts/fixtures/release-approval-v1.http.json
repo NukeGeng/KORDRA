@@ -1,0 +1,104 @@
+{
+  "schemaVersion": 1,
+  "status": "in-progress",
+  "contract": "docs/contracts/release-approval-v1.md",
+  "schemaFields": {
+    "RequestApproval": [
+      "schemaVersion",
+      "correlationId",
+      "releaseRevisionId"
+    ],
+    "GrantApproval": [
+      "schemaVersion",
+      "correlationId",
+      "reasonCode"
+    ],
+    "RejectApproval": [
+      "schemaVersion",
+      "correlationId",
+      "reasonCode"
+    ],
+    "RevokeApproval": [
+      "schemaVersion",
+      "correlationId",
+      "reasonCode"
+    ],
+    "ReleaseIntent": [
+      "schemaVersion",
+      "subjectKind",
+      "tenantId",
+      "project",
+      "application",
+      "environment",
+      "target",
+      "artifact",
+      "approvalPolicy",
+      "qualification"
+    ],
+    "Decision": [
+      "decisionId",
+      "action",
+      "actorPrincipalId",
+      "occurredAtUtc",
+      "reasonCode"
+    ],
+    "Approval": [
+      "requestId",
+      "version",
+      "purpose",
+      "releaseId",
+      "releaseRevisionId",
+      "projectId",
+      "environmentId",
+      "targetId",
+      "specHash",
+      "requesterPrincipalId",
+      "approverPrincipalId",
+      "recordedState",
+      "effectiveState",
+      "createdAtUtc",
+      "pendingExpiresAtUtc",
+      "grantedAtUtc",
+      "grantExpiresAtUtc",
+      "policy",
+      "subject",
+      "decisions",
+      "eligibilityReasonCode",
+      "executionAuthorized"
+    ],
+    "ApprovalListItem": [
+      "requestId",
+      "version",
+      "releaseRevisionId",
+      "projectId",
+      "environmentId",
+      "targetId",
+      "specHash",
+      "requesterPrincipalId",
+      "approverPrincipalId",
+      "recordedState",
+      "effectiveState",
+      "createdAtUtc",
+      "pendingExpiresAtUtc",
+      "grantExpiresAtUtc",
+      "eligibilityReasonCode",
+      "executionAuthorized"
+    ],
+    "ApprovalEnvelope": [
+      "schemaVersion",
+      "correlationId",
+      "approval"
+    ],
+    "ApprovalListEnvelope": [
+      "schemaVersion",
+      "correlationId",
+      "items",
+      "nextAfterId"
+    ],
+    "ErrorEnvelope": [
+      "schemaVersion",
+      "correlationId",
+      "code"
+    ]
+  }
+}

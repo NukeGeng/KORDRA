@@ -125,6 +125,9 @@ public static class LocalApiHost
         if (options.ArtifactConnectionString is not null)
             builder.Services.AddLocalArtifacts(options.ArtifactConnectionString, options.ArtifactRegistries);
 
+        if (options.Releases?.ReleaseLocator is { } releaseLocator && options.Releases.ApprovalLocator is { } approvalLocator)
+            builder.Services.AddLocalReleases(releaseLocator, approvalLocator, options.ArtifactConnectionString ?? options.RuntimeConnectionString, options.RuntimeConnectionString);
+
         var app = builder.Build();
         app.Use(LocalAuthenticationEndpoints.RequestGuard("localhost:5128"));
         app.Use(async (context, next) =>
@@ -150,6 +153,7 @@ public static class LocalApiHost
         if (options.NomadTrust is not null) NomadWorkloadEndpoints.Map(app);
         if (options.KubernetesTrust is not null) KubernetesWorkloadEndpoints.Map(app);
         if (options.ArtifactConnectionString is not null) ArtifactEndpoints.Map(app);
+        if (options.Releases?.ReleaseLocator is not null) { ReleaseEndpoints.Map(app); ApprovalEndpoints.Map(app); }
         app.MapFallback((RequestDelegate)(context =>
         {
             context.Response.StatusCode = StatusCodes.Status404NotFound;

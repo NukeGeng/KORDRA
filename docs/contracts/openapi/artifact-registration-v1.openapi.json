@@ -1212,7 +1212,7 @@
     "src/Host/Kordra.Api/Endpoints/Artifacts/ArtifactCallerBoundResponseCommitter.cs": "fde350ad38d767e148be05fb80aa248d61da6965a4ee3576da1e2c1c8f7f9a33",
     "src/Host/Kordra.Api/Composition/Artifacts/ArtifactRegistrationCoordinator.cs": "96aca1e0717d727bf258f77afac4fd31220765f152dccd92a268f22b76e28cba",
     "src/Host/Kordra.Api/Composition/Artifacts/ArtifactReadCoordinator.cs": "e8f6521e05bb30c78ce8cfe8bf85644872e33dbc05579c5355a7c36a69996f0e",
-    "src/Modules/ArtifactManagement/Contracts/ArtifactDtos.cs": "2b9e950277a85e4d087a8369a5ebbca9142f1ad9fdc90ee0b3e80abfc3c259be",
+    "src/Modules/ArtifactManagement/Contracts/ArtifactDtos.cs": "d06bfbe47ea093b0dac1b5cc1488c8a827629b9d1da2f0a2bffa67c249c006ea",
     "src/Host/Kordra.Api/Endpoints/LocalAuthenticationEndpoints.cs": "981e20def34e590369c61737d0ece1947810f51d1c5ad9106f725aaa87dddc55"
   }
 }

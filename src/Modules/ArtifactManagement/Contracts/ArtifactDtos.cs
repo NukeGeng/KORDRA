@@ -17,3 +17,10 @@ public sealed record ArtifactRegistrationV1(Guid RegistrationId, string Status, 
 public sealed record ArtifactSummaryV1(Guid ArtifactId, Guid RegistryId, string Repository,
     string RootDigest, ArtifactPlatformV1 Platform, DateTimeOffset CreatedAtUtc, string ContentVerification);
 public sealed record ArtifactRegistrySelectorV1(Guid RegistryId, string DisplayName, string Repository, bool AuthRequired);
+
+/// <summary>Owner-only immutable facts for release selection; the caller holds admission and authorizes the action.</summary>
+public interface IReleaseArtifactReader
+{
+    Task<ArtifactV1?> ReadReleaseArtifactUnderAdmissionAsync(Guid tenantId, Guid projectId, Guid artifactId,
+        CancellationToken cancellationToken = default);
+}

@@ -16,8 +16,23 @@ public sealed record DefinitionWriteResult(string Status, Guid DefinitionId = de
 public sealed class RoleDefinitionStore(
     IDbContextFactory<KordraIdentityDbContext> contexts,
     FairAsyncReaderWriterAdmissionGate gate,
-    IIdentityAuditTransactionFactory audits, LocalAuthenticationConfiguration? configuration = null, IAuthorityClock? clock = null) : IRoleDefinitionReader
+    IIdentityAuditTransactionFactory audits, LocalAuthenticationConfiguration? configuration = null, IAuthorityClock? clock = null) : IRoleDefinitionReader, IDurableRoleEvidenceReader
 {
+    public async Task<DurableRoleEvidence> ReadExactUnderAdmissionAsync(Guid definitionId, long revision, CancellationToken cancellationToken = default)
+    {
+        if (definitionId == Guid.Empty || revision <= 0) return new(DurableRoleEvidenceStatus.Unavailable);
+        await using var db = await contexts.CreateDbContextAsync(cancellationToken);
+        var row = await db.RoleDefinitions.AsNoTracking().Where(x => x.DefinitionId == definitionId)
+            .OrderByDescending(x => x.Revision).FirstOrDefaultAsync(cancellationToken);
+        if (row is null || row.IsRetired || row.Revision != revision) return new(DurableRoleEvidenceStatus.Invalidated);
+        try
+        {
+            var rules = JsonSerializer.Deserialize<PermissionRule[]>(row.RulesJson, new JsonSerializerOptions { UnmappedMemberHandling = System.Text.Json.Serialization.JsonUnmappedMemberHandling.Disallow });
+            if (rules is not { Length: > 0 and <= 32 } || !rules.All(FoundationPermissions.IsValid)) return new(DurableRoleEvidenceStatus.Unavailable);
+            return new(DurableRoleEvidenceStatus.Current, new(row.DefinitionId, row.Revision, row.Name, Array.AsReadOnly(rules)));
+        }
+        catch (JsonException) { return new(DurableRoleEvidenceStatus.Unavailable); }
+    }
     public async Task<RoleDefinitionSnapshot?> GetCurrentAsync(Guid definitionId, long exactRevision, CancellationToken cancellationToken = default)
     {
         if (definitionId == Guid.Empty || exactRevision <= 0) return null;

@@ -15,6 +15,23 @@ Sol clarification is tracked by FEAT-AMR-001 (ENG-TOOLING); existing router/conf
 
 | Date | Change ID | Module / Feature | Source PR/Commit | ADR / contract | Migration impact | Owner |
 |---|---|---|---|---|---|---|
+| 2026-10-29 | FEAT-APR-001-T11-DOMAIN | MOD-APR / FEAT-APR-001 | Local uncommitted increment | ADR-0005, Release and approval v1 | Pure recorded-state transitions and reason codes only; no authorization, persistence or migration | NukeGeng |
+| 2026-10-29 | FEAT-APR-001-T11-DEADLINES | MOD-APR / FEAT-APR-001 | Local uncommitted increment | ADR-0005, Release and approval v1 | Pilot deadline, blocked-window and separation calculations; no grant or persistence | NukeGeng |
+| 2026-10-29 | FEAT-APR-001-T11-EFFECTIVE | MOD-APR / FEAT-APR-001 | Local uncommitted increment | ADR-0005, Release and approval v1 | Pure effective-state projection; no owner resolution, reader authorization or persistence | NukeGeng |
+| 2026-10-29 | FEAT-APR-001-T11-DURABLE-IAM | MOD-IAM / FEAT-APR-001 | Local uncommitted increment | ADR-0005, Release and approval v1 | Neutral durable principal facts without sessions; no grant resolution or authorization | NukeGeng |
+| 2026-10-29 | FEAT-APR-001-T11-DURABLE-COMPARE | MOD-IAM / FEAT-APR-001 | Local uncommitted increment | ADR-0005, Release and approval v1 | Compare exact persisted authority facts; ambiguous TEN nulls remain unavailable, no runtime permit | NukeGeng |
+| 2026-10-29 | FEAT-APR-001-T11-DURABLE-TEN | MOD-TEN / FEAT-APR-001 | Local uncommitted increment | ADR-0005, Release and approval v1 | Owner distinguishes direct invalidation from unresolved provenance; no action permit | NukeGeng |
+| 2026-10-29 | FEAT-APR-001-T11-PROVENANCE | MOD-TEN / FEAT-APR-001 | Local uncommitted increment | ADR-0005, Release and approval v1 | Classifies observed ancestor invalidation; malformed provenance remains unavailable | NukeGeng |
+| 2026-10-29 | FEAT-APR-001-T11-OWNER-INTEGRATION | MOD-IAM / MOD-TEN / FEAT-APR-001 | Local uncommitted increment | ADR-0005, Release and approval v1 | Isolated real-owner durable authority checks for both grants and principal disablement; no runtime permit | NukeGeng |
+| 2026-10-29 | FEAT-APR-001-T11-ROLE-EVIDENCE | MOD-IAM / MOD-TEN / FEAT-APR-001 | Local uncommitted increment | ADR-0005, Release and approval v1 | Distinguish changed or retired role from malformed evidence; no runtime permit | NukeGeng |
+| 2026-10-29 | FEAT-APR-001-T11-EVIDENCE-SCOPE | MOD-IAM / FEAT-APR-001 | Local uncommitted increment | ADR-0005, Release and approval v1 | Validates evidence scope and identity consistency; no trusted capture, persistence or authorization | NukeGeng |
+| 2026-10-29 | FEAT-APR-001-T11-REQUESTER-CAPTURE | MOD-IAM / MOD-PRJ / FEAT-APR-001 | Local uncommitted increment | ADR-0005, Release and approval v1 | Owner-interface requester capture and PRJ adapter; no runtime wiring or mutation | NukeGeng |
+| 2026-10-29 | FEAT-APR-001-T11-APPROVER-CAPTURE | MOD-IAM / MOD-PRJ / FEAT-APR-001 | Local uncommitted increment | ADR-0005, Release and approval v1 | Approver capture checks two exact environment permissions; PRJ adapter tested against isolated PostgreSQL | NukeGeng |
+| 2026-10-29 | FEAT-APR-001-T11-CAPTURE-INTEGRATION | MOD-IAM / MOD-TEN / MOD-PRJ / FEAT-APR-001 | Local uncommitted increment | ADR-0005, Release and approval v1 | Test-only HTTPS capture through actual session and owners; no approval endpoint or transaction | NukeGeng |
+| 2026-10-29 | FEAT-APR-001-T11-REQUEST-SCHEMA | MOD-APR / FEAT-APR-001 | Local uncommitted increment | ADR-0005, Release and approval v1 | Isolated request/decision/receipt schema and history guards; transaction and feature acceptance pending | NukeGeng |
+| 2026-10-29 | FEAT-APR-001-T11-REQUEST-STORE | MOD-APR / FEAT-APR-001 | Local uncommitted increment | ADR-0005, Release and approval v1 | Stages scoped request and decision under caller transaction; real two-transaction conflict test, runtime integration pending | NukeGeng |
+| 2026-10-29 | FEAT-APR-001-T11-DECISION-CONSISTENCY | MOD-APR / FEAT-APR-001 | Local uncommitted increment | ADR-0005, Release and approval v1 | Deferred request/decision consistency constraints plus corrective migration; tested only in isolated PostgreSQL | NukeGeng |
+| 2026-10-29 | FEAT-APR-001-T11-EVIDENCE-CODEC | MOD-IAM / FEAT-APR-001 | Local uncommitted increment | ADR-0005, Release and approval v1 | Versioned session-free evidence serialization and scope validation; persistence integration pending | NukeGeng |
 | 2026-10-23 | T08-DESIGN-ACCEPTED | MOD-SEC / FEAT-SEC-001 | Explicit maintainer design and isolated-fixture decisions; private exact proposal snapshots | ADR-0015 + Credential boundary v1 accepted for T08 only | No source/migration/Keychain execution; fixture permission excludes existing items and all provider network access. T08.1–T08.5 implementation pending | NukeGeng |
 | 2026-10-23 | T08-CREDENTIAL-DESIGN | MOD-SEC / FEAT-SEC-001; IAM/INV/PRJ/AUD consumers | Local bounded design; no source/PR action | Proposed ADR-0015 + Credential boundary v1; exact approval pending | Defines local Mac Keychain child, offline SEC metadata and separate C/current SEC evidence. No dependency/runtime/Keychain operation or debt change; T07/checkpoints preserved | NukeGeng |
 | 2026-10-23 | FOUNDATION-T07-BOUNDED-READ | MOD-INV / FEAT-INV-001; IAM/TEN/PRJ/AUD consumers | Local T07 branch; final private deterministic receipt | Accepted ADR-0012/admission v1; internal observation-only port; metadata wire v1 unchanged | Controlled-adapter actual-owner HTTPS proof; production defaults to local registry reader. No migration/dependency/provider operation; no debt added/closed or checkpoint replay | NukeGeng |
@@ -286,3 +303,133 @@ A configured full-gate attempt after the local T11.0 increments failed one synth
 T11.0 continuation, gpt-6.1-terra/xhigh: APR policy persistence and guarded offline inspect/apply are implemented locally under accepted ADR-0005. Focused results: 28 Domain, 11 isolated APR PostgreSQL, 12 offline coordinator, 2 PRJ reader and 1 migration-guard cases; 6 XML/PE architecture cases, locked restore and EF pending-model check passed on the tested inputs. Audit-only durable evidence without a corresponding owner receipt and extra binding history now fence instead of producing success. The UUID custody test uses the existing process lock without TLS/Keychain. Only kordra_test synthetic data was written; no real installation migration or policy publication. The separate AMR plan KORDRA-T11-APR-POLICY-20261027 exists; goal step rejected the user-authorized Terra profile because its current route expects Luna, so no successful CLI dispatch/finish is claimed. Full current-content gates and PR review remain pending.
 
 T11.0 exact-source feature gate subsequently passed: docs/scope/mapping, 218 tooling, locked restore, Release build and 1,220 Product cases with one separately scoped live Nomad skip. The synthetic native Keychain test that failed in an earlier gate passed both targeted recheck and this full run; the intermittent cause remains unproven. Accepted APR policy code is locally implemented, not yet independently reviewed or merged. No real installation migration or policy publication. The Terra user exception is evidenced by native turn context; the AMR CLI plan remains pending because its fixed route rejects Terra and no false completion receipt is created.
+
+## T11.1 release draft and owner ports — local increment, 2026-10-27
+
+FEAT-REL-001 under accepted ADR-0005: Terra xhigh implemented BCL-only draft identity, NFC/scalar label validation, creator/version replacement, and the exact independent release-selection-v1 preview-hash vector, plus neutral ART/PRJ/INV owner readers for exact scoped facts. No public API, persistence, frozen subject, permission grant, or deployment is created. Targeted evidence: 8 REL Domain tests, 1 ART and 3 PRJ/INV owner tests on isolated kordra_test; 6 actual XML/PE architecture tests; locked restore, docs and source mapping passed. New approved source remains local and uncommitted until T11.1 is complete. PR #20 T11.0 was checked at head 5c1691647c5cbc3f6f0216824013a28291ce7d21: three required hosted checks succeeded; Codex automatic PR-open review completed without findings, and the PR remains open for human merge. AMR plan KORDRA-T11-REL-DOMAIN-20261027 is pending: CLI goal step rejects the user-authorized Terra route; actual turn context and partial evidence are retained privately, no fabricated completion. Full T11.1 gates, PR and future T11.2–T11.3 are outstanding.
+
+## 2026-10-27 — T11.1 local atomic mutation increment
+
+FEAT-REL-001 / MOD-REL and MOD-AUD add closed mutation commands, scoped replay evidence and a non-registered shared REL/AUD/IAM-floor transaction component. Isolated synthetic PostgreSQL checks cover successful and unknown commit, pre-commit failures, authority/owner/policy changes and audit mismatch. This is not an activated endpoint or a completed feature; actual session U/D, stopped recovery and final gates remain. No real installation migration, cluster action, PR review or deployment was performed.
+
+## 2026-10-27 — T11.1 bounded reads and recovery evidence
+
+Added owner-scoped release history reads, strict closed wire parser and private stopped-recovery plan/reader for synthetic validation. Receipt insertions bind boot and invocation; deterministic AUD intent IDs bind scoped idempotency identity. SQL migration was applied only to isolated kordra_test. Prior synthetic receipts without boot/invocation cannot be certified as recovered. Recovery CLI, real stopped custody proof, API U/D and full feature gates remain pending. No live resource or product database operation occurred.
+
+## 2026-10-27 — T11.1 opt-in HTTPS and evidence validation
+
+FEAT-REL-001 / MOD-REL adds bounded U/M/D coordination, owner-scoped history queries, explicit paired runtime activation, offline migration/recovery commands and source-bound wire artifacts. Synthetic real HTTPS tests cover session, CSRF, scoped permission, create/edit/replay and policy-backed freeze/retire. A full gate passed on the preceding source tree (218 tooling; 1,403 Product passes and one separately scoped live Nomad skip). After that gate a PostgreSQL two-connection next-Draft race test was added and passed; final current-tree gate must run again. Lost caller acknowledgment is simulated after a real commit; no actual transport-level lost ACK is claimed. No real installation migration or production action occurred.
+
+## 2026-10-29 — T11.2 approval evidence validation
+
+FEAT-APR-001 adds an independent codec hash vector and a test-only real-session capture and isolated PostgreSQL storage round trip. Seven codec cases and the capture/storage case passed; the transaction was rolled back. Four additional tests passed for caller-owned APR transaction enlistment and target/role rejection. Product approval endpoints, shared mutation/audit coordination and final feature validation remain incomplete.
+
+## 2026-10-29 — T11.2 approval receipt candidate
+
+FEAT-APR-001 adds an owner-scoped command receipt store and an isolated PostgreSQL replay/conflict test. The store reports evidence candidates only; audit matching, fresh authorization, atomic coordination and recovery are not implemented by it.
+
+## 2026-10-29 — T11.2 stored authority revalidation
+
+FEAT-APR-001 adds the IAM stored-evidence adapter: canonical scope/principal binding precedes fresh persisted-principal and exact grant checks. Sixteen focused codec/authority cases and an isolated real-session/PostgreSQL owner test passed. A compile error in the previously interrupted test was corrected. This adapter does not grant actions; API coordination, AUD/floor atomicity and complete T11 validation remain pending.
+
+## 2026-10-29 — T11.2 bounded approval owner queries
+
+FEAT-APR-001 adds exact installation/tenant/project/environment-scoped request detail and queue reads with detached owner evidence, bounded history and scoped stable cursors. The isolated PostgreSQL query test passed. This is an API prerequisite; current eligibility and audited disclosure are still required before exposing results.
+
+## 2026-10-29 — T11.2 closed approval input and command hashes
+
+FEAT-APR-001 and FEAT-REL-001 add bounded approval input decoding and the accepted approval actions to the existing release-command-v1 hash utility. Request-scoped ETags, reason catalogs and canonical routes are checked; five parser cases and nine unchanged REL hash cases pass. Independent vectors cover request/grant body identity. HTTP coordination, atomic audit/floor and recovery remain pending.
+
+## 2026-10-29 — T11.2 explicit revoker authority
+
+FEAT-APR-001 adds transient revoke capture requiring current session, trusted PRJ ownership, active principal and exact revoke/read grants with role denies and original expiry. Revoke facts cannot be encoded as durable requester/approver evidence. Forty-five targeted cases pass, including the actual HTTPS/IAM/TEN/PRJ capture fixture; product approval endpoints remain uncomposed.
+
+## 2026-10-29 — T11.2 transient authority comparison
+
+FEAT-APR-001 captures exact current session and Project/Environment revisions alongside scoped grants, using an internally constructed snapshot. Rechecking compares the complete authority selection, including original validity. Twenty-nine capture tests pass; changed owner revisions, replacement session and operation mismatch are rejected. The record is transient and grants no action; transactional U/M/D wiring remains incomplete.
+
+## 2026-10-29 — T11.2 durable use admission
+
+FEAT-APR-001 adds unregistered approval Use admission using the existing shared AUD/IAM-floor transaction and gate. Durable U plus fresh authority/time is required to construct a one-use action-bound ticket. The real-session HTTPS/PostgreSQL fixture passes for missing grant, durable U, single consumption, precommit setup failure and simulated unknown committed U. Approval commands now have internal construction and read-only fields. M/D, endpoint activation and complete feature validation remain pending.
+
+## 2026-10-29 — T11.2 current approval subject
+
+FEAT-APR-001 adds an unregistered request/grant subject reader over REL owner queries and current catalog/target/artifact/policy selection. Only scoped Frozen content with an unchanged subject hash is eligible. The exact parsed policy travels with that selection for subsequent deadline calculation. The real HTTPS/PostgreSQL case passes for Draft, eligible Frozen, foreign scope, changed environment revision and Retired. Approval mutation coordination remains incomplete.
+
+## 2026-10-29 — T11.2 approval mutation transaction
+
+FEAT-APR-001 adds the unregistered one-ticket mutation coordinator with scoped replay/AUD matching, exact Frozen/current policy and requester checks, original deadline/SoD enforcement and shared APR/AUD/IAM-floor commit. The integration fixture covers request/replay, stale version, explicit self-allowed grant and revoke; it exposed an audit-owner prefix collision with REL readiness. APR now uses approval-m- while retaining exact key/body binding, and REL retirement is verified afterward. M failure/concurrency coverage, readiness, D, public endpoints and recovery remain pending.
+
+## 2026-10-29 — T11.2 fresh effective approval state
+
+FEAT-APR-001 adds current eligibility projection from original deadlines, retained authority snapshots and fresh Frozen owner/policy facts. Expiry/terminal summaries avoid old permitting dependencies; malformed scope/time or unavailable evidence cannot become Granted. Window transitions return a fresh display boundary. The real-owner fixture covers Pending/Granted/Invalidated/Revoked; five focused cases cover original expiry, terminal decisions, scope and clock rollback. Audited disclosure, public endpoints and final conformance remain pending.
+
+## 2026-10-29 — T11.2 audited mutation disclosure
+
+FEAT-APR-001 adds closed detail payload construction and D authority/effective-state revalidation with payload hash/size audit and IAM floor before handoff. Successful M/replay outcomes bind their U ticket through internal construction. The real-owner fixture and test-owned sink pass for 201/200, safe Pending/Revoked payload and post-audit expiry withholding. No public approval route or caller-bound HTTP committer is enabled. Read/list paths, full failure coverage, schemas and recovery remain outstanding.
+
+## 2026-10-29 — T11.2 caller-bound HTTPS response
+
+FEAT-APR-001 adds the exact-session/environment HTTP response committer with route/query/hash/deadline and monotonic clock validation at handoff. Twelve focused cases cover one-shot success and wrong caller/target/transport/content/time rejection. The real-owner fixture sends approval replay bytes over actual HTTPS through its test-only probe with ETag/no-store. Public approval routes, read/list readiness/recovery and complete feature gates remain pending.
+
+## 2026-10-29 — T11.2 audited approval history reads
+
+FEAT-APR-001 adds transient exact approval-read capture, bounded list projection and an unregistered U/D read coordinator using shared capacity and caller-bound response handling. Thirty-one targeted and actual-owner cases pass, including real HTTPS list/detail without list subject/authority leakage. Test readiness checks only fixture migrations plus REL readiness; complete production APR readiness, contract-route activation, failure/scale conformance and recovery remain incomplete.
+
+## 2026-10-29 — T11.2 readiness and bounded mutation execution
+
+FEAT-APR-001 adds read-only APR schema/ACL/history/AUD readiness and replaces the fixture-only adapter. Actual PostgreSQL accepts complete history and rejects an installation missing receipts or audit. The full mutation executor uses existing shared capacity and bounded U/M/D with unknown-outcome fencing; the real HTTPS replay path passes. Two component cases verify exhausted capacity, failed readiness, released completed reservations and cancellation while work remains unresolved. Public contract routes, recovery and broader fault/scale conformance remain pending.
+
+## 2026-10-29 — T11.2 canonical approval route composition
+
+FEAT-APR-001 now composes local-pilot services and canonical request/list/detail/grant/reject/revoke routes under the existing paired release/APR opt-in. Additive PRJ environment identity resolves trusted parent scope under capacity/admission. Source-bound OpenAPI and closed field fixtures accompany the routes. Actual HTTPS verifies create/read/grant/revoke and duplicate/terminal/CSRF/session/foreign-scope negatives; isolated PostgreSQL verifies owner collision denial. Recovery, new-process startup, full conformance and final gates remain pending.
+
+## 2026-10-29 — T11.2 stopped approval recovery implementation
+
+FEAT-APR-001 adds closed recovery plans, custody-bound receipt reads, exact stopped owner/AUD inspection/apply and an approval-recovery entrypoint. Readiness prevents inconsistent installations from certifying no-commit. The shared plan hash domain is retained; REL and APR parsers now reject each other’s actions. Seven parser/vector cases and a stopped API/PostgreSQL fixture pass for confirmed/no_commit and wrong evidence/hash. Custody/process checks use explicit doubles in that fixture; installed-command/native custody and new-process acceptance remain outstanding. No decision or history is mutated by recovery.
+
+## 2026-10-29 — T11.2 lost PostgreSQL mutation acknowledgment
+
+FEAT-APR-001 reuses the existing isolated COMMIT-response stream fault in the canonical approval HTTPS flow. The transport confirms COMMIT and discards the actual PostgreSQL acknowledgment; the API aborts without success, admission fences and independent owner reads retain exactly one grant and two request/decision receipts. Stopped API fixture recovery confirms that grant without another mutation. Both normal and lost-reply variants pass; recovery still uses explicit custody/process doubles and is not installed/native-custody acceptance.
+
+## 2026-10-29 — T11.2 race, precommit failure and native fixture custody
+
+FEAT-APR-001 adds concurrent canonical grant/reject HTTP coverage with exactly one decision and stale-version rejection. Injected precommit audit-stage failure preserves Pending/history and healthy admission, then recovers as no_commit. The normal macOS case uses an isolated native installation lock plus a test-owned live/exited child PID for real quiescence checks. Four variants pass. Installed CLI/new-process acceptance, independent schema validation, scale/further conformance and final gates remain outstanding.
+
+## 2026-10-29 — T11 complete assessment and invocation reconciliation
+
+The first complete gate run was source-stable: tooling/build/docs passed, while Product tests exposed a missing KORDRA_AUDIT_TEST_CONNECTION_STRING in the agent invocation and five stale T09 host source-hash checks after APR composition. The failed receipt is preserved. Correctly configured Audit tests pass 39 cases; the five T09 cases pass after updating only current host hashes. Fresh complete gates remain required. Read-only kordra metadata confirms REL/APR are absent, and no installed identity exists; idempotent migration SQL has been generated privately for review only, never applied.
+
+
+T11 local contract conformance follow-up (2026-10-29): approval mutations now return 404 for a scoped absent/foreign request or absent release subject only after parent authorization. Stale/non-Frozen subjects return 409, policy/current-authority denial returns 403, and 422 remains reserved for qualification rejection; unrecognized eligibility failures remain unavailable. Canonical HTTPS variants cover all three absent decision routes, absent request subject and retired-subject conflict. No schemaVersion, permission, ADR or operational authority changed. The earlier full local gate passed (218 tooling; 1,555 Product passed and one optional live Nomad test skipped); final evidence must follow the changed source revision, not reuse that older success as current.
+
+
+## Authorized local bootstrap evidence — 2026-10-29
+
+After the owner's separate explicit local operational approval, the existing DbMigrator applied all nine accepted owner migration sets to the approved loopback `kordra` target as `kordra_admin`, under a newly created private canonical installation identity and exclusive migration custody. Preflight found no app tables and no other database sessions. A private custom-format backup was listed and fully extracted successfully before the change; this is archive verification, not a restore rehearsal. No destructive Down, trigger bypass, role creation, user enrollment, grant, provider connection or existing Keychain secret access occurred.
+
+Native installed REL/APR recovery executables now have successful `inspect`/hash-bound `apply` evidence for synthetic `no_commit` plans. Both reject a live test-owned old process and an incorrect approved hash. This closes the previously missing installed-command no-commit path; confirmed mutation recovery remains covered by the isolated durable-owner fixture, not a live installation mutation. Runtime catalog probes confirm no database/schema CREATE rights and no immutable REL/APR-history mutation rights; both owner datasets remain empty.
+
+Fresh installed API startup correctly rejects a new self-signed localhost certificate that macOS does not trust. Native trust validation remains unchanged. A separate owner decision on temporary SSL/localhost-only user trust is pending; no trust-store change has occurred. Successful installed startup/restart and the final conformance/publication gate therefore remain pending. The temporary configuration has a synthetic startup-only denylist, permits no account enrollment and enables no external provider. It is acceptance configuration, not a production-ready identity installation. Private bootstrap/backup/CLI receipts are retained outside Git; certificate/private locator contents and installation identity are not published.
+
+
+## Installed certificate verification follow-up — 2026-10-30
+
+The separately approved temporary user-domain SSL/localhost trust operation completed after native macOS authentication. Native SSL verification then passed, but the unchanged installed .NET certificate-chain check rejected startup with `UntrustedRoot`; the certificate had a private key and matched localhost. This is not a completed startup/restart test. .NET 10's [Apple chain implementation](https://raw.githubusercontent.com/dotnet/runtime/v10.0.0/src/native/libs/System.Security.Cryptography.Native.Apple/pal_x509chain.c) creates a Basic X.509 policy; the observed SSL-only trust result must not be substituted for a successful .NET chain result.
+
+The temporary SSL trust was removed successfully and native verification rejected the certificate again; the same no-trust state was rechecked on resume. No trust operation or API remains running. The private certificate/configuration is retained for bounded acceptance, with no account enrollment, grant, external provider or production claim. Historical pending decision, resolved by the subsequent explicit owner approval: the owner had not approved temporary Basic X.509 trust: the previous response requested a pause. Ordinary GOAL continuation does not expand trust authority. Keep startup/restart and final feature publication pending; do not disable validation, silently broaden trust, rerun applied migrations, or treat old deterministic receipts as fresh evidence.
+
+
+## Current local installed acceptance — 2026-10-30
+
+The owner explicitly approved temporary Basic X.509 user trust for the exact new, non-CA localhost acceptance certificate after the SSL-only trust limitation was demonstrated. With the unchanged native chain/hostname/EKU/validity checks, the installed `Kordra.Api --profile local-pilot` executable completed two distinct process starts and clean shutdowns. Each served verified HTTPS `/health/live` (200), denied anonymous REL/APR route requests (401), and excluded recovery while runtime custody was held. Read-only durable evidence shows two distinct startup audit invocations and one persisted installation clock floor; no principals, grants, release revisions or approval requests were created. Authenticated business transitions remain evidenced by the isolated HTTPS/current-owner tests, not these anonymous installation probes.
+
+The exact temporary trust was removed immediately afterward. Native Basic and SSL verification both reject the certificate again, and no API listener remains. The private startup-only configuration/certificate remains offline; it is not a usable unattended or production-ready installation. This resolves the earlier pending Basic-trust decision and native startup/restart evidence gap without modifying TLS validation or runtime architecture. Earlier progress paragraphs are dated evidence snapshots, not current blockers. The separately scoped live Nomad case remains outside this acceptance. Final content gates, hosted CI/Codex Auto PR Review and human merge are separate and must not be inferred from these operational checks.
+
+
+2026-10-30 — PR #21 hosted source mapping correction: FEAT-APR-002 now records the FEAT-APR-001 additions in its shared context/factory/snapshot, domain and offline source directories. The initial hosted mapping check failed on 14 stale-owner entries; no Product source, mapping rule, policy contract, ADR or test is changed. Revalidate the actual committed PR range after committing this owner documentation update; working-tree success alone did not establish that gate.
+
+
+## PR21-REL-POLICY-001 — freeze error classification
+
+Codex Auto PR Review identified that REL freeze flattened missing/expired/denying policy into qualification rejection. Four actual HTTPS regression cases reproduced three wrong 422 responses while the Staging qualification case correctly stayed 422. The scoped fix preserves missing policy as 409 conflict, expired/denying policy as 403 denial and qualification/profile rejection as 422; unrecognized eligibility failure stays unavailable. It does not create a revision mutation or extra command receipt on rejection. Policy bodies/hashes, permissions and ADR-0005 remain unchanged; the published wire schema and its existing source bindings remain unchanged; the HTTPS regressions verify the accepted error behavior. Current regression/gate evidence and hosted follow-up are recorded separately; the finding is not declared independently reviewed or resolved merely because a fix is present.
