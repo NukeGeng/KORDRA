@@ -8,6 +8,12 @@ public sealed class AuditDbContext(DbContextOptions<AuditDbContext> options) : D
     public const string SchemaName = "app";
     public const string MigrationHistoryTableName = "aud_ef_migrations_history";
     public const string EntriesTableName = "aud_intents";
+    internal string ModelSchema { get; } = SchemaName;
+
+    internal AuditDbContext(DbContextOptions<AuditDbContext> options, string isolatedSchema) : this(options)
+    {
+        ModelSchema = isolatedSchema;
+    }
 
     public DbSet<AuditEntry> Entries => Set<AuditEntry>();
 
@@ -15,6 +21,7 @@ public sealed class AuditDbContext(DbContextOptions<AuditDbContext> options) : D
     {
         base.OnModelCreating(modelBuilder);
         ConfigureModel(modelBuilder);
+        modelBuilder.HasDefaultSchema(ModelSchema);
     }
 
     internal static void ConfigureModel(ModelBuilder modelBuilder)

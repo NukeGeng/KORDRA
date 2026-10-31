@@ -6,12 +6,19 @@ last_reviewed: 2026-10-20
 module_id: MOD-MSG
 feature_id: FEAT-MSG-001
 phase: MVP
-source_paths: ["Kordra.slnx"]
-test_paths: ["tests/Messaging.Durability.Tests/"]
-planned_test_paths: ["tests/Messaging.Durability.Tests/"]
+source_paths: [".github/workflows/product-ci.yml", "Kordra.slnx", "src/Modules/Messaging/Infrastructure/", "src/Modules/Messaging/Contracts/"]
+test_paths: ["tests/Messaging.Durability.Tests/", "tests/Messaging.Tests/"]
+planned_test_paths: ["tests/Messaging.Durability.Tests/", "tests/Messaging.Tests/"]
+planned_source_paths: ["src/Modules/Messaging/Contracts/", "src/Modules/Messaging/Infrastructure/", "Kordra.slnx"]
+planned_doc_paths: ["docs/decisions/0020-messaging-runtime-adoption.md", "docs/contracts/durable-messaging-v1.md", "docs/engineering/t12-1-design.vi.md"]
 ---
 
 # FEAT-MSG-001 — Durable command delivery and recovery
+
+
+## Current implementation scope
+
+The bounded T12.1 kernel is implemented and locally verified; the final section records its evidence, integration limits and publication gates. The broader worker-delivery feature below remains proposed and is not activated by this increment.
 
 ## Independent worker delivery slice — proposed 2026-10-20
 
@@ -116,3 +123,48 @@ The shared architecture suite now explicitly validates this accepted test-only s
 Canonical `gates --base 69c5d86f3bc85a23636a475a8785543f1641df84 --product-test-timeout 600 --validation-context <private-nonsecret-epoch>` passed with stable source: docs, scope, 220 tooling tests, Clients pin metadata only, locked restore, Release build, serial Product tests and source mapping. Product result: 1,594 passed, zero failed, one existing T09 live Nomad test skipped; all 34 T12.0 tests passed with zero skips. No existing Keychain item, VM or real provider was accessed to replace the skipped test.
 
 The full PoC implementation is locally validated. Hosted CI, exact PR review evidence and human merge remain separate. T12.1–T12.4/runtime adoption is still unapproved. Earlier partial/failing receipts remain retained, including default-schema escape, initial unknown-type fixture error, missing graph entry, missing synthetic fixture-root environment and the 300-second serial-suite timeout. The corrected final run used the approved isolated synthetic Keychain root, explicit bounded timeout and a rotated fixture epoch after interruption. Existing historical GOAL checkpoints were not rewritten or replayed. A pending bounded CLI plan is not represented as completed native execution for the user-authorized Medium session; actual coordinator/model/source/test receipts are retained separately.
+
+
+## T12.1 bounded Architect proposal — 2026-10-30
+
+[ADR-0020](../../../decisions/0020-messaging-runtime-adoption.md), [Durable Messaging v1](../../../contracts/durable-messaging-v1.md) và [thiết kế tiếng Việt / T12.1a–f](../../../engineering/t12-1-design.vi.md) là **proposed**, chưa cấp quyền runtime adoption. Owner/custodian đề xuất NukeGeng; phạm vi là Contracts/Infrastructure library và conformance, chưa activate API/business consumers/ControlWorker. Planned paths là kế hoạch, không implementation mapping. Adapter giữ commit ở caller, dùng pinned public transaction APIs qua compatibility gate; AUD isolated-test seam được trình rõ, không nới production guards. Không suy approval T12.0 sang migration/role/HBA thật.
+
+
+### T12.1 scoped acceptance recorded — 2026-10-30
+
+NukeGeng accepted [ADR-0020](../../../decisions/0020-messaging-runtime-adoption.md), [Durable Messaging v1](../../../contracts/durable-messaging-v1.md) and T12.1a–f on the exact reviewed proposal, including the guarded AUD UUID-schema test seam. Earlier proposed notes are historical. No Product implementation is established by this annotation; production target guards/authority remain unchanged. Design approval grants no real installation migration, new role/HBA, credential or provider access. T12.1a public-API/actual-AUD compatibility proof precedes dependent slices.
+
+
+## T12.1 kernel — implemented and locally verified, 2026-10-31
+
+Scope: accepted ADR-0020 and Durable Messaging v1, T12.1a–f only. NukeGeng approved the design, the later bounded logging correction and the separately scoped operational fixtures. The current implementation is a library kernel; the business catalog is empty. No API/ControlWorker activation, distributed authority, T12.2+ adoption, deployment or production database provisioning is implied.
+
+| Area | Implementation and observed evidence |
+|---|---|
+| Contracts and wire | BCL identity/full logical key, explicit tenant/system scope, typed closed registry, canonical binding/hash, bounded payload/depth/deadline, envelope validation and native ingress rejection. No CLR serializer names or message metadata authorize work. |
+| Caller transaction | Public native persistence/enlistment APIs stage on the caller connection/transaction. Actual AUD integration, owner/floor all-or-nothing, commit/rollback/crash and real lost-COMMIT-reply cases passed. Runtime uses no EF Internals/protected SQL/reflection fallback. |
+| Receipts and reconciliation | Full-key/hash immutable publication/logical receipts, original outcome/ID preservation, terminal deny, unique contention and CAS rollback. Independent read-only inspection returns observed matching/conflict/unknown/unavailable; absence never authorizes replay. |
+| Bounded recovery | Five actual attempts and native1/5/15/60-second timers, sequential restart, one successful effect and separately one sanitized exhausted-retry DLQ passed. UnknownCommit remains inspect/fenced, never generic automatic retry. |
+| Lifetime and storage | Native expired/25hour-old delivery rejection, confirmed rollback and postcommit cancellation, seven-day handled retention and bounded native cleanup protecting active/scheduled work and91day receipts passed. No owned automatic purge. |
+| Capacity | Actual10,001 pending rejects new publication and rolls back its staged receipt;10,000 accepts; unavailable storage denies without dropping committed rows. This is an availability watermark, not a concurrent hard quota. |
+| Schema and privilege | Exact package-generated native/owned DDL, ACL inventory and review manifest; current incoming/DLQ PK(id,received_at). Dedicated disposable PostgreSQL15.18 instance passed no-DDL restricted native startup, destination identity, DML rollback,7permission denials, cross-DB rejection and missing/mismatched readiness. It was stopped and deleted. |
+| Diagnostics | Explicit MessageDiagnosticLoggingProvider and MessageTrackerDiagnosticExport project only closed metadata before output. Native sentinel/provider, tracker-export and sampled-span tests plus protected actual-AUD/crash/UnknownCommit DB regression passed. Raw tracked sessions, arbitrary exporters and global host logging are not implicitly safe. |
+| CI and gates | Existing Product workflow prepares synthetic ephemeral-service manifests; MSG classes run serially to honor fixture budgets/process-global tracing. Canonical local gates passed:220tooling tests,1,770product tests,0failures; one optional live personal-Nomad case skipped because its separate operational scope was not activated. No tests were removed or weakened. |
+
+### Source and verification ownership
+
+MSG owns Contracts, Infrastructure/Persistence, Serialization, Transactions, Recovery and Diagnostics, with tests in Messaging.Tests. AUD changes are limited to the accepted guarded UUID test seam/model-cache binding in its three Infrastructure files. Solution/architecture checks preserve module isolation; API, Agent and ControlWorker composition remain unchanged. Other owner feature links record future integration boundaries, not authority adoption.
+
+Private exact approvals, original accepted proposal snapshots, failed evidence, per-case source hashes, cleanup receipts and coordinator checkpoints remain under `.amr-local/t12-1-design` / `.amr-local/approvals`. Original failed checkpoints are not replayed or relabeled. The latest configured canonical receipt is `full-gates-20261031-v1/gates.json`, with verified base main8f07308 (merged PR22; same tree as initial954c9e9). Documentation-only reconciliation reruns docs/scope/mapping/tooling and may reuse successful unchanged product gates only through explicit gates --reuse with the same fixture epoch and original freshness window.
+
+### Limits and publication
+
+Native retry booking is a separate action after a confirmed terminal root transaction. Native ClearAllAsync catches rollback failures and AUD RollbackAsync does not expose its internal confirmation result; successful method return alone is not no-commit/custody evidence. UnknownCommit never enters generic retry. No protected scheduling SQL or custom scheduler is substituted for native persistence.
+
+Local evidence is not hosted CI/native PR review or production readiness. Optional live provider/company access, automatic host/logger registration, distributed takeover, worker identity, replay, migration apply, disk sizing/hard quota and arbitrary telemetry extensions remain outside this kernel acceptance. Keep native failure diagnostics closed and raw exception/session data private; preserving caller exceptions does not permit exporting them. A future host must explicitly invoke schema readiness and select the protected output boundary. Feature PR/CI/Codex review and human merge remain separate gates.
+
+## PR23-MSG-BUDGET-001 — transaction staging admission
+
+Codex round 1 identified a per-call limit that allowed repeated batches/publications to exceed the accepted transaction budget. Every incoming/outgoing native persistence call now reserves from one weakly keyed budget for the exact caller DbTransaction, including replacement stagers and StagePublicationAsync's native enlistment. Admission checks cumulative ten envelopes and 160 KiB of serialized native Data before the store call; wire overhead is included, never discounted using untrusted inner JSON. A native staging failure does not release its reservation because partial staging is possible; caller root rollback remains mandatory. No commit/rollback ownership or tenant authority changes. Four no-I/O regressions cover mixed batches/stagers, a fresh root, exact byte/count boundaries, repeated native single-envelope publication enlistment, missing serialization and failed-store budget retention. Current PR follow-up gates remain required before publication.
+
+Budget identity additionally verifies the server full transaction ID via `SELECT pg_current_xact_id()::text` on the exact caller transaction (five-second command bound). Npgsql can recycle a transaction object after completion; a genuinely new server root gets a fresh budget, while a previously staged old stager rejects a changed root. Missing identity fails before native staging. This metadata query neither commits nor opens another connection. A fifth regression covers reused provider identity; the existing real PostgreSQL lifecycle/watermark loops cover successive roots. See [PostgreSQL transaction ID functions](https://www.postgresql.org/docs/15/functions-info.html).

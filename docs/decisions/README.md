@@ -67,3 +67,9 @@ T11 PR #21 đã merge thành main `69c5d86f3bc85a23636a475a8785543f1641df84`; re
 ## T12.0 scoped approval recorded — 2026-10-30
 
 NukeGeng duyệt ADR-0019 đúng phạm vi compatibility/fault PoC, candidate pins Wolverine 6.59.0, EF/Npgsql hiện có và test-only UUID fixtures trong kordra_test. Exact proposal hashes/approval receipt được lưu riêng; ADR-0019 được accepted cho scope đó, chưa triển khai và chưa có kết quả compatibility. Toàn bộ T12.1–T12.4, distributed authority, runtime ControlWorker và real-host/provider operations vẫn gated. Case runtime least-privilege chưa thể coi đạt bằng database-owner role; không có quyền tạo role bổ sung. Phiên Sol High hiện tại chỉ ghi nhận approval/handoff, không thực thi Developer task.
+
+
+| [0020](0020-messaging-runtime-adoption.md) | Proposed T12.1 MSG runtime kernel/public transaction adapter, schema/ACL, contract/retention and guarded AUD fixture seam; no activation or operational approval |
+
+
+ADR-0020 được NukeGeng accepted ngày 2026-10-30 đúng phạm vi runtime kernel T12.1a–f + guarded AUD isolated-test seam. Proposal bytes đã đóng băng trước annotation; không activation hoặc operational approval. Các dòng proposed trước đây giữ như dated proposal history.

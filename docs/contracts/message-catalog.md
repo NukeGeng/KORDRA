@@ -38,3 +38,8 @@ Producer PR → new schema version + consumer inventory → integration tests �
 ## T12.0 synthetic fixture types (not a public/runtime contract)
 
 [ADR-0019](../decisions/0019-durable-transport-workflow-bootstrap.md) permits only test-owned technical messages. `DeliveryProbe` v1 has case/logical IDs, synthetic tenant, deadline and a closed transient-failure flag. The fixture serializer has no arbitrary payload/secret field; unknown members, duplicate keys, wrong CLR type, oversize/deep JSON are rejected. This adds no production command/event or public schema version and has no Product consumer migration. Claimed tenant/case values are synthetic validation inputs, not trusted authorization. Candidate inbox/outbox persistence and the native PostgreSQL queue transport must both use the case UUID schema. No `deployment.dispatch` handler is registered.
+
+
+### T12.1 proposed kernel contract
+
+[Durable Messaging v1](durable-messaging-v1.md) defines the proposed closed envelope/registry and transaction/recovery rules under ADR-0020. No business type, production route or consumer is registered by this document. T12.0 technical messages remain fixture-only.

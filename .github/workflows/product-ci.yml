@@ -49,5 +49,9 @@ jobs:
         run: dotnet restore Kordra.slnx --locked-mode
       - name: Build product solution and tests
         run: dotnet build Kordra.slnx --configuration Release --no-restore
+      - name: Validate synthetic MSG CI fixture preparation
+        run: python3 -m unittest discover -s tests/Messaging.Tests -p test_ci_fixtures.py -v
+      - name: Prepare isolated MSG manifests for this ephemeral CI service
+        run: python3 tests/Messaging.Tests/prepare_ci_fixtures.py
       - name: Test product foundation and denied inventory boundaries
         run: dotnet test Kordra.slnx -m:1 --configuration Release --no-build --no-restore --logger trx
