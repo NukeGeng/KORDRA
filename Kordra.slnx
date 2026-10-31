@@ -1,6 +1,9 @@
 <Solution>
   <Folder Name="/Messaging/">
+    <Project Path="src/Modules/Messaging/Contracts/Kordra.Modules.Messaging.Contracts.csproj" />
+    <Project Path="src/Modules/Messaging/Infrastructure/Kordra.Modules.Messaging.Infrastructure.csproj" />
     <Project Path="tests/Messaging.Durability.Tests/Messaging.Durability.Tests.csproj" />
+    <Project Path="tests/Messaging.Tests/Messaging.Tests.csproj" />
   </Folder>
   <Folder Name="/ReleaseManagement/">
     <Project Path="src/Modules/ReleaseManagement/Contracts/Kordra.Modules.ReleaseManagement.Contracts.csproj" />

@@ -351,3 +351,8 @@ The shared `Kordra.slnx` adds only the test-owned Messaging.Durability.Tests com
 ### T12.0 test graph enforcement — 2026-10-30
 
 ArchitectureTests explicitly includes the accepted test-only Messaging.Durability.Tests project in the root solution graph. A new check asserts IsTestProject, non-packable/locked restore, zero Product project references and exact approved candidate/EF/Npgsql/test pins. Existing Product XML/restored/PE edge checks remain intact; no Product dependency is added. The initial missing-list failure is retained in the private full-gate receipt.
+
+
+### T12.1 shared solution/architecture integration — 2026-10-30
+
+The accepted ADR-0020 MSG Contracts/Infrastructure library and test harness are added to the shared solution. ArchitectureTests enforces MSG Contracts BCL-only and Infrastructure's exact two Wolverine pins plus Contracts reference, with no owner runtime/Host edge. This feature's runtime/authorization/package pins are unchanged. MSG harness still needs explicit approved disposable fixture manifest; no production consumer/activation follows from solution inclusion.

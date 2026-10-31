@@ -51,6 +51,23 @@ public sealed class AuditTransactionContext : IAsyncDisposable
 
     private IOfflineAuditLease? _offlineLease;
 
+    /// <summary>Isolated synthetic test target only; production CreateAsync remains unchanged.</summary>
+    public static async Task<AuditTransactionContext> CreateIsolatedTestAsync(DbConnection connection,
+        DbTransaction transaction, Guid caseId, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(connection);
+        ArgumentNullException.ThrowIfNull(transaction);
+        if (connection.State != System.Data.ConnectionState.Open || !ReferenceEquals(transaction.Connection, connection))
+            throw new InvalidOperationException("Isolated AUD requires its open caller-owned transaction.");
+        var context = AuditDbContextFactory.CreateIsolatedTestContext(connection, caseId);
+        try
+        {
+            await context.Database.UseTransactionAsync(transaction, cancellationToken);
+            return new AuditTransactionContext(transaction, context, cancellationToken, TimeProvider.System);
+        }
+        catch { await context.DisposeAsync(); throw; }
+    }
+
     public static async Task<AuditTransactionContext> CreateOfflineAsync(DbConnection connection, DbTransaction transaction,
         IOfflineAuditLease lease, CancellationToken cancellationToken = default)
     {

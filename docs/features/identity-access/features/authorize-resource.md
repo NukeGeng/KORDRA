@@ -567,3 +567,8 @@ Accepted ADR-0005 adds a BCL-only REL Domain and test project to the solution an
 ### Shared architecture-test integration — T12.0 (2026-10-30)
 
 The co-owned ArchitectureTests.cs now includes the ADR-0019-approved Messaging.Durability.Tests solution project and checks its exact test-only package graph, locked restore and absence of Product project references. Existing IAM/tenant/Host graph checks and authorization contracts are unchanged. This adds no permission, authentication route or owner technology adoption.
+
+
+### T12.1 shared solution/architecture integration — 2026-10-30
+
+The accepted ADR-0020 MSG Contracts/Infrastructure library and test harness are added to the shared solution. ArchitectureTests enforces MSG Contracts BCL-only and Infrastructure's exact two Wolverine pins plus Contracts reference, with no owner runtime/Host edge. This feature's runtime/authorization/package pins are unchanged. MSG harness still needs explicit approved disposable fixture manifest; no production consumer/activation follows from solution inclusion.

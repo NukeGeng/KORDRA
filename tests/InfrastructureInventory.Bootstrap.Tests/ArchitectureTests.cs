@@ -53,6 +53,9 @@ public sealed class ArchitectureTests
     private const string ArtifactTests = "tests/ArtifactManagement.Domain.Tests/ArtifactManagement.Domain.Tests.csproj";
     private const string IdentityTests = "tests/IdentityAccess.Tests/IdentityAccess.Tests.csproj";
     private const string AuditTests = "tests/AuditCompliance.Tests/AuditCompliance.Tests.csproj";
+    private const string MessagingContracts = "src/Modules/Messaging/Contracts/Kordra.Modules.Messaging.Contracts.csproj";
+    private const string MessagingInfrastructure = "src/Modules/Messaging/Infrastructure/Kordra.Modules.Messaging.Infrastructure.csproj";
+    private const string MessagingRuntimeTests = "tests/Messaging.Tests/Messaging.Tests.csproj";
     private const string MessagingSpikeTests = "tests/Messaging.Durability.Tests/Messaging.Durability.Tests.csproj";
 
     [Fact]
@@ -76,7 +79,7 @@ public sealed class ArchitectureTests
         var solutionProjects = solution.Descendants("Project")
             .Select(element => Absolute(root, RequiredAttribute(element, "Path"))).Order().ToArray();
         Assert.Equal(graph.Keys.Concat([
-            Absolute(root, BootstrapTests), Absolute(root, ArtifactTests), Absolute(root, IdentityTests), Absolute(root, MessagingSpikeTests),
+            Absolute(root, BootstrapTests), Absolute(root, ArtifactTests), Absolute(root, IdentityTests), Absolute(root, MessagingSpikeTests), Absolute(root, MessagingRuntimeTests),
             Absolute(root, ReleaseRuntimeTests), Absolute(root, ReleaseDomainTests), Absolute(root, ApprovalDomainTests), Absolute(root, ApprovalRuntimeTests), Absolute(root, AuditTests), Absolute(root, TenantTests), Absolute(root, ProjectTests), Absolute(root, CredentialTests), Absolute(root, ArtifactRuntimeTests)
         ]).Order(), solutionProjects);
         var solutionList = new ProcessStartInfo("dotnet")
@@ -382,6 +385,8 @@ public sealed class ArchitectureTests
 
     private static Dictionary<string, string[]> ApprovedGraph(string root) => new(StringComparer.Ordinal)
     {
+        [Absolute(root, MessagingContracts)] = [],
+        [Absolute(root, MessagingInfrastructure)] = [Absolute(root, MessagingContracts)],
         [Absolute(root, CredentialContracts)] = [],
         [Absolute(root, Credentials)] = [Absolute(root, CredentialContracts), Absolute(root, IdentityContracts), Absolute(root, Security)],
         [Absolute(root, Contracts)] = [],
@@ -411,6 +416,9 @@ public sealed class ArchitectureTests
 
     private static IReadOnlyDictionary<string, string> ApprovedPackages(string root, string project)
     {
+        if (project == Absolute(root, MessagingInfrastructure))
+            return new Dictionary<string, string>(StringComparer.Ordinal)
+            { ["WolverineFx"] = "6.59.0", ["WolverineFx.Postgresql"] = "6.59.0" };
         var identity = Absolute(root, IdentityAccess);
         var audit = Absolute(root, AuditCompliance);
         var migrator = Absolute(root, DbMigrator);

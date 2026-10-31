@@ -12,7 +12,7 @@ Runbook phải có: **trigger**, blast radius, preflight, safe actions, verifica
 - [Deployment & validation](deployment-runbook.md)
 - [Rollback](rollback-runbook.md)
 - [Agent offline](agent-offline-runbook.md)
-- [Queue / DLQ recovery](messaging-recovery-runbook.md)
+- [Queue / DLQ recovery](messaging-recovery-runbook.md) — T12.1 kernel triage, Unknown custody, bounded retry/retention and fixture cleanup; no live replay/activation authority.
 - [Incident response](incident-runbook.md)
 - [Backup / restore](backup-restore-runbook.md)
 - [Credential rotation](credential-rotation-runbook.md)

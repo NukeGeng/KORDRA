@@ -7,6 +7,28 @@ namespace Kordra.Modules.AuditCompliance.Infrastructure;
 /// <summary>Design-time factory and exact local database-role boundaries for AUD persistence.</summary>
 public sealed class AuditDbContextFactory : IDesignTimeDbContextFactory<AuditDbContext>
 {
+    /// <summary>ADR-0020 isolated test seam; never opens a connection or provisions a schema.</summary>
+    public static AuditDbContext CreateIsolatedTestContext(System.Data.Common.DbConnection connection, Guid caseId)
+    {
+        ArgumentNullException.ThrowIfNull(connection);
+        if (caseId == Guid.Empty) throw new InvalidOperationException("Explicit isolated AUD case required.");
+        ValidateTestTarget(connection.ConnectionString);
+        var parsed = new NpgsqlConnectionStringBuilder(connection.ConnectionString);
+        if (!string.IsNullOrEmpty(parsed.SearchPath) || !string.IsNullOrEmpty(parsed.Options))
+            throw new InvalidOperationException("Isolated AUD does not permit session overrides.");
+        var schema = "t12_" + caseId.ToString("N");
+        var options = new DbContextOptionsBuilder<AuditDbContext>().UseNpgsql(connection,
+            postgres => postgres.MigrationsHistoryTable(AuditDbContext.MigrationHistoryTableName, schema))
+            .ReplaceService<Microsoft.EntityFrameworkCore.Infrastructure.IModelCacheKeyFactory, IsolatedModelKey>();
+        return new AuditDbContext(options.Options, schema);
+    }
+
+    public sealed class IsolatedModelKey : Microsoft.EntityFrameworkCore.Infrastructure.IModelCacheKeyFactory
+    {
+        public object Create(DbContext context, bool designTime) =>
+            (context.GetType(), ((AuditDbContext)context).ModelSchema, designTime);
+    }
+
     private const string DesignTimeConnectionString =
         "Host=127.0.0.1;Port=5432;Database=kordra_design_time;Username=kordra_design_time;Timeout=1";
 

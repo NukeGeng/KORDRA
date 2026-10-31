@@ -518,3 +518,9 @@ The full PoC implementation is locally validated. Hosted CI, exact PR review evi
 
 
 FEAT-AMR-001 additionally owns the bounded gate timeout option and two regression cases in test_amr.py (14 gate tests; all 220 tooling tests passed). FEAT-CLIENTS-001 co-owner acknowledgment preserves pin-only validation. No AMR model/review/approval policy changed; additive receipt metadata keeps existing schemaVersion 1 history readable.
+
+## T12.1 — bounded MSG kernel implementation, 2026-10-31
+
+FEAT-MSG-001 / MOD-MSG implements accepted ADR-0020/Durable Messaging v1: closed contracts/wire, public caller-owned native transaction staging with actual AUD, immutable receipts/reconciliation, native bounded recovery/capacity/retention and explicit closed diagnostic outputs. AUD receives only its approved guarded test seam. Package pins, architecture isolation and empty business catalog remain as designed; no Product API/worker activation, new architecture decision or production authority. The [owner feature](../features/messaging/features/durable-delivery.md) records current conformance and limits.
+
+Canonical local gates passed220tooling and1,770product tests with0failures; one separately scoped optional live-Nomad test skipped. Actual synthetic DB/Keychain/native process evidence and isolated restricted startup cleanup are retained privately, with source-bound receipts and original failed checkpoints unchanged. Final documentation reconciliation must rerun current docs/scope/mapping/tooling and reuse unchanged product evidence only through the deterministic one-hour gate policy. Hosted CI/native PR review and human merge remain pending publication gates. Incremental public draft notes were consolidated here; their complete prior contents/hashes remain in the private pre-final snapshot alongside progress checkpoints.

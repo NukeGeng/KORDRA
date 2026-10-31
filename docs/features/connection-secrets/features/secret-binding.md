@@ -218,3 +218,8 @@ The accepted ADR-0005 Release slice adds a BCL-only REL Domain and test project 
 ### Shared solution integration — T12.0 (2026-10-30)
 
 The shared `Kordra.slnx` adds only the test-owned Messaging.Durability.Tests compatibility/fault spike accepted by [ADR-0019](../../../decisions/0019-durable-transport-workflow-bootstrap.md). This feature's production source, package pins, contracts, permission model and owner persistence remain unchanged. New messaging evidence belongs to FEAT-MSG-001 and does not establish runtime messaging adoption for this owner.
+
+
+### T12.1 shared solution/architecture integration — 2026-10-30
+
+The accepted ADR-0020 MSG Contracts/Infrastructure library and test harness are added to the shared solution. ArchitectureTests enforces MSG Contracts BCL-only and Infrastructure's exact two Wolverine pins plus Contracts reference, with no owner runtime/Host edge. This feature's runtime/authorization/package pins are unchanged. MSG harness still needs explicit approved disposable fixture manifest; no production consumer/activation follows from solution inclusion.
