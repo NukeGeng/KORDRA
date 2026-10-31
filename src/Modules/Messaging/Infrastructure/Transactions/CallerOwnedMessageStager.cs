@@ -1,5 +1,6 @@
 using System.Data;
 using System.Data.Common;
+using System.Runtime.CompilerServices;
 using Wolverine;
 using Wolverine.RDBMS;
 using Kordra.Modules.Messaging.Infrastructure.Persistence;
@@ -16,6 +17,11 @@ namespace Kordra.Modules.Messaging.Infrastructure.Transactions;
 /// </summary>
 public sealed class CallerOwnedMessageStager
 {
+    // Shared by every stager/enlistment for the same root transaction. Weak keys keep
+    // completed transactions collectible without a process-wide transaction registry.
+    private static readonly ConditionalWeakTable<DbTransaction, StagingBudget> Budgets = new();
+    private readonly StagingBudget _budget;
+    private string? _generation;
     private readonly DbConnection _connection;
     private readonly DbTransaction _transaction;
     private readonly IMessageDatabase _store;
@@ -34,13 +40,14 @@ public sealed class CallerOwnedMessageStager
         _store = store;
         _schema = expectedSchema;
         RequireBinding();
+        _budget = Budgets.GetValue(transaction, _ => new StagingBudget());
     }
 
-    public Task StageOutgoingAsync(Envelope[] envelopes)
+    public async Task StageOutgoingAsync(Envelope[] envelopes)
     {
         RequireBinding();
-        ValidateBatch(envelopes);
-        return _store.StoreOutgoingAsync(_transaction, envelopes);
+        await ReserveBatchAsync(envelopes).ConfigureAwait(false);
+        await _store.StoreOutgoingAsync(_transaction, envelopes).ConfigureAwait(false);
     }
 
     /// <summary>Receipt first, native outbox only for a new key. Still provisional until the owner commits.</summary>
@@ -91,11 +98,11 @@ public sealed class CallerOwnedMessageStager
         return result;
     }
 
-    public Task StageIncomingAsync(Envelope[] envelopes)
+    public async Task StageIncomingAsync(Envelope[] envelopes)
     {
         RequireBinding();
-        ValidateBatch(envelopes);
-        return _store.StoreIncomingAsync(_transaction, envelopes);
+        await ReserveBatchAsync(envelopes).ConfigureAwait(false);
+        await _store.StoreIncomingAsync(_transaction, envelopes).ConfigureAwait(false);
     }
 
     /// <summary>Provisional logical uniqueness gate; only Staged may proceed to an owner effect.</summary>
@@ -140,11 +147,49 @@ public sealed class CallerOwnedMessageStager
             _connection, _transaction, envelope, keepUntil, cancellationToken);
     }
 
-    private static void ValidateBatch(Envelope[] envelopes)
+    private async Task ReserveBatchAsync(Envelope[] envelopes)
     {
         ArgumentNullException.ThrowIfNull(envelopes);
-        if (envelopes.Length is < 1 or > 10 || envelopes.Any(e => e is null))
-            throw new ArgumentException("A bounded nonempty envelope batch is required.", nameof(envelopes));
+        if (envelopes.Length is < 1 or > 10 || envelopes.Any(e => e is null || e.Data is null))
+            throw new ArgumentException("A bounded nonempty serialized envelope batch is required.", nameof(envelopes));
+        // Native Data is the serialized payload persisted by Wolverine. Include all wire
+        // overhead: never trust an inner JSON length or defer serialization until after admission.
+        var bytes = envelopes.Sum(e => (long)e.Data!.Length);
+        // Npgsql recycles the same transaction object after completion. Object identity alone
+        // cannot distinguish its next root transaction. Read the server's full transaction ID
+        // on the caller connection/root; no fallback connection or native persistence SQL.
+        using var command = _connection.CreateCommand();
+        command.Transaction = _transaction; command.CommandTimeout = 5;
+        command.CommandText = "SELECT pg_current_xact_id()::text";
+        var generation = await command.ExecuteScalarAsync().ConfigureAwait(false) as string;
+        if (!ulong.TryParse(generation, System.Globalization.NumberStyles.None,
+                System.Globalization.CultureInfo.InvariantCulture, out var transactionId) || transactionId == 0)
+            throw new InvalidOperationException("Caller transaction identity unavailable.");
+        lock (_budget)
+        {
+            if (_generation is not null && _generation != generation)
+                throw new InvalidOperationException("Caller transaction generation changed.");
+            _generation = generation;
+            if (_budget.Generation != generation)
+            {
+                _budget.Generation = generation;
+                _budget.Envelopes = 0; _budget.Bytes = 0;
+            }
+            if (envelopes.Length > 10 - _budget.Envelopes || bytes > 160 * 1024 - _budget.Bytes)
+                throw new InvalidOperationException("Caller transaction staging limit exceeded.");
+            _budget.Envelopes += envelopes.Length;
+            _budget.Bytes += bytes;
+        }
+        // Do not release reservations after a native failure: writes may already have been
+        // staged. Caller must roll back the root, not obtain a fresh budget via another stager.
+        // StagePublication's public native send uses this same outgoing enlistment exactly once.
+    }
+
+    private sealed class StagingBudget
+    {
+        internal string? Generation;
+        internal int Envelopes;
+        internal long Bytes;
     }
 
     private void RequireBinding()
