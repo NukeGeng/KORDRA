@@ -44,3 +44,11 @@ NukeGeng accepted ADR-0018 / Artifact registration v1 for T10.1a–f, supersedin
 ## T11 exact owner acceptance — 2026-10-27
 
 NukeGeng accepted ADR-0005, Release and approval v1 and FEAT-APR-002/REL-001/APR-001 for T11.0–T11.3. This supersedes pending-approval wording in the earlier T11 proposal, not historical evidence. Exact pre-annotation hashes and private acceptance receipt are recorded in ADR-0005. T11 runtime implementation and validation remain in progress; no deployment, real database/secret/target operation or merge is authorized by this design acceptance. The user explicitly selected gpt-6.1-terra/xhigh for T11; actual turn metadata and native model catalog confirm this profile.
+
+## T12 remaining adoption package — proposed 2026-10-31
+
+[Durable Workflow v1](durable-workflow-v1.md) and [Worker Authority v1](worker-authority-v1.md) specify T12.2/T12.3; [qualification plan](../engineering/t12-conformance-plan.md) and [Vietnamese design](../engineering/t12-remaining-design.vi.md) cover T12.4. ADR-0021/0022/0023 are proposed. Existing accepted authority/messaging contracts retain their scope until exact additional approval.
+
+## T12.2–T12.4 scoped design accepted — 2026-10-31
+
+NukeGeng accepted the exact ADR-0021/0022/0023 and companion contract/design/conformance/runbook package after all18 frozen proposal hashes matched. This supersedes the immediately preceding pending-acceptance wording only for that scoped design. No WFL/worker implementation, permission grant, consumer activation, remote qualification or operational authority is claimed. Developer starts12.2a (Domain/Contracts and pure tests) under an allowed native Developer profile; no repeat design approval or Sol review is needed for covered slices. SQL/fixture/host effects retain separate operation approvals; preserve existing checkpoints and user drafts.

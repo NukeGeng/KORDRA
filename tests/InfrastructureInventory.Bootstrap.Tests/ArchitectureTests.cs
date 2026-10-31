@@ -53,6 +53,9 @@ public sealed class ArchitectureTests
     private const string ArtifactTests = "tests/ArtifactManagement.Domain.Tests/ArtifactManagement.Domain.Tests.csproj";
     private const string IdentityTests = "tests/IdentityAccess.Tests/IdentityAccess.Tests.csproj";
     private const string AuditTests = "tests/AuditCompliance.Tests/AuditCompliance.Tests.csproj";
+    private const string WorkflowDomain = "src/Modules/WorkflowOrchestration/Domain/Kordra.Modules.WorkflowOrchestration.Domain.csproj";
+    private const string WorkflowContracts = "src/Modules/WorkflowOrchestration/Contracts/Kordra.Modules.WorkflowOrchestration.Contracts.csproj";
+    private const string WorkflowTests = "tests/WorkflowOrchestration.Tests/WorkflowOrchestration.Tests.csproj";
     private const string MessagingContracts = "src/Modules/Messaging/Contracts/Kordra.Modules.Messaging.Contracts.csproj";
     private const string MessagingInfrastructure = "src/Modules/Messaging/Infrastructure/Kordra.Modules.Messaging.Infrastructure.csproj";
     private const string MessagingRuntimeTests = "tests/Messaging.Tests/Messaging.Tests.csproj";
@@ -79,7 +82,7 @@ public sealed class ArchitectureTests
         var solutionProjects = solution.Descendants("Project")
             .Select(element => Absolute(root, RequiredAttribute(element, "Path"))).Order().ToArray();
         Assert.Equal(graph.Keys.Concat([
-            Absolute(root, BootstrapTests), Absolute(root, ArtifactTests), Absolute(root, IdentityTests), Absolute(root, MessagingSpikeTests), Absolute(root, MessagingRuntimeTests),
+            Absolute(root, WorkflowTests), Absolute(root, BootstrapTests), Absolute(root, ArtifactTests), Absolute(root, IdentityTests), Absolute(root, MessagingSpikeTests), Absolute(root, MessagingRuntimeTests),
             Absolute(root, ReleaseRuntimeTests), Absolute(root, ReleaseDomainTests), Absolute(root, ApprovalDomainTests), Absolute(root, ApprovalRuntimeTests), Absolute(root, AuditTests), Absolute(root, TenantTests), Absolute(root, ProjectTests), Absolute(root, CredentialTests), Absolute(root, ArtifactRuntimeTests)
         ]).Order(), solutionProjects);
         var solutionList = new ProcessStartInfo("dotnet")
@@ -385,6 +388,8 @@ public sealed class ArchitectureTests
 
     private static Dictionary<string, string[]> ApprovedGraph(string root) => new(StringComparer.Ordinal)
     {
+        [Absolute(root, WorkflowDomain)] = [],
+        [Absolute(root, WorkflowContracts)] = [],
         [Absolute(root, MessagingContracts)] = [],
         [Absolute(root, MessagingInfrastructure)] = [Absolute(root, MessagingContracts)],
         [Absolute(root, CredentialContracts)] = [],

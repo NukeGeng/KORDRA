@@ -7,7 +7,7 @@ last_reviewed: 2026-10-18
 
 # src/Modules/WorkflowOrchestration
 
-Reserved folder requested by the maintainer after ADR-0010 bootstrap validation. This README tracks the directory in Git; no project, package, implementation or deployment is provided here.
+T12.2a now adds BCL-only Domain and Contracts libraries plus pure WorkflowOrchestration.Tests under accepted ADR-0021. Scoped identity, structural state/version guards and canonical checkpoint specification have local source/tests. Persistence, transaction integration, HTTP/worker activation and independent-host qualification remain pending; this is not a deployed workflow engine.
 
 Product ownership: [canonical module specification](../../../docs/features/workflow-orchestration/module.md).
 

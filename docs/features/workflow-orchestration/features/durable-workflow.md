@@ -6,8 +6,10 @@ last_reviewed: 2026-10-20
 module_id: MOD-WFL
 feature_id: FEAT-WFL-001
 phase: MVP
-source_paths: []
-test_paths: []
+source_paths: ["src/Modules/WorkflowOrchestration/Domain/", "src/Modules/WorkflowOrchestration/Contracts/", "Kordra.slnx"]
+test_paths: ["tests/WorkflowOrchestration.Tests/", "tests/InfrastructureInventory.Bootstrap.Tests/ArchitectureTests.cs"]
+planned_source_paths: ["src/Modules/WorkflowOrchestration/", "src/Host/Kordra.ControlWorker/"]
+planned_test_paths: ["tests/WorkflowOrchestration.Tests/", "tests/ControlWorker.Tests/"]
 ---
 
 # FEAT-WFL-001 — Durable deployment workflow through failures
@@ -65,3 +67,21 @@ Crash at each transition leads to one logical deployment operation and consisten
 ## T12 bounded design — 2026-10-30
 
 [Thiết kế T12 tiếng Việt](../../../engineering/t12-design.vi.md) và [ADR-0019](../../../decisions/0019-durable-transport-workflow-bootstrap.md) đề xuất compatibility/fault PoC trước runtime adoption. T12.0 chỉ kiểm chứng MSG bằng test-only PostgreSQL fixture; không hoàn tất WFL, distributed authorization hoặc Mac-close. Source/test mappings vẫn chưa implemented. Chưa có package, process, permission hoặc technology adoption nào được cấp quyền bởi ghi chú này.
+
+## T12.2–T12.4 detailed proposal — 2026-10-31
+
+[Full Vietnamese design](../../../engineering/t12-remaining-design.vi.md), [Durable Workflow v1](../../../contracts/durable-workflow-v1.md), [Worker Authority v1](../../../contracts/worker-authority-v1.md) and ADR-0021/0022/0023 define the next scoped adoption, pending exact human acceptance. Custodian proposed NukeGeng. Source/test paths remain unimplemented; planned roots are WorkflowOrchestration Domain/Contracts/Infrastructure, WorkflowOrchestration.Tests and the existing reserved ControlWorker host with ControlWorker.Tests. IAM/AUD existing owner projects provide proposed public transaction/fence/service ports.
+
+Acceptance uses WF01–WF08, AU01–AU05, DB01–DB02, HO01–HO03 and RH01–RH03 in the [conformance plan](../../../engineering/t12-conformance-plan.md). New workflow.start/read/cancel/reconcile permissions are proposals with no implicit grants; pilot is Development/Test checkpoint workflow, not deployment execution. Driver effects remain T13. No accepted architecture, runtime source, existing approvals or operational rights are changed by this document update.
+
+## T12.2–T12.4 scoped design accepted — 2026-10-31
+
+NukeGeng accepted the exact ADR-0021/0022/0023 and companion contract/design/conformance/runbook package after all18 frozen proposal hashes matched. This supersedes the immediately preceding pending-acceptance wording only for that scoped design. No WFL/worker implementation, permission grant, consumer activation, remote qualification or operational authority is claimed. Developer starts12.2a (Domain/Contracts and pure tests) under an allowed native Developer profile; no repeat design approval or Sol review is needed for covered slices. SQL/fixture/host effects retain separate operation approvals; preserve existing checkpoints and user drafts.
+
+## T12.2a first source increment — 2026-10-31
+
+Domain and Contracts projects now implement tenant/installation/instance identity, closed workflow/step states and pure structural transition/version guards. Tests cover terminal resurrection, Unknown versus cancel/expiry, boundary edges, invalid enums, stale/future/overflow versions and dependency isolation. Solution and actual architecture XML graph include only these two BCL libraries and the test project. This is a partial12.2a increment: canonical immutable specification/template/golden vectors and full pure conformance remain pending, before any persistence/worker/HTTP activation. Domain structural approval is never current authority or database CAS evidence.
+
+## T12.2a immutable specification source — 2026-10-31
+
+Added immutable full resource/release/request binding, closed checkpoint template, strict bounded canonical storage reader/writer and SHA256 business hash. Independent fixed byte/hash vector and negative tests cover resource substitution, unsupported fields/versions/environments, duplicate/authority/secret fields, ordered steps/nulls, bad schedules/IDs/hashes, UTC normalization, version exhaustion and terminal/Unknown state guards. Code remains BCL-only with no HTTP/DB/worker activation. Full feature gates/publication are pending; no persistence or independent-host evidence is inferred from pure tests.

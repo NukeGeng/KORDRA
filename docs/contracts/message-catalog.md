@@ -43,3 +43,11 @@ Producer PR → new schema version + consumer inventory → integration tests �
 ### T12.1 proposed kernel contract
 
 [Durable Messaging v1](durable-messaging-v1.md) defines the proposed closed envelope/registry and transaction/recovery rules under ADR-0020. No business type, production route or consumer is registered by this document. T12.0 technical messages remain fixture-only.
+
+## T12.2/T12.3 candidate registrations — proposed, disabled
+
+WFL proposes workflow.transition-requested.v1 and workflow.transition-recorded.v1, exact schema/route/producer/consumer rules in [Durable Workflow v1](durable-workflow-v1.md). These are not active deployment messages or new generic broker topics. MSG wire v1 remains unchanged; no default consumer or public client publication.
+
+## T12.2–T12.4 scoped design accepted — 2026-10-31
+
+NukeGeng accepted the exact ADR-0021/0022/0023 and companion contract/design/conformance/runbook package after all18 frozen proposal hashes matched. This supersedes the immediately preceding pending-acceptance wording only for that scoped design. No WFL/worker implementation, permission grant, consumer activation, remote qualification or operational authority is claimed. Developer starts12.2a (Domain/Contracts and pure tests) under an allowed native Developer profile; no repeat design approval or Sol review is needed for covered slices. SQL/fixture/host effects retain separate operation approvals; preserve existing checkpoints and user drafts.

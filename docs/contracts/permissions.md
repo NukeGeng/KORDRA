@@ -78,3 +78,11 @@ Create data-backed role template, permission mapping, UI display and grant polic
 ## Candidate policy proof evidence — 2026-10-18
 
 [FEAT-IAM-001/I1](../features/identity-access/features/authorize-resource.md#i1--synthetic-policy-proof-authorized-test-only-candidate) validates the existing `target.read` project/environment scope candidate in synthetic fixtures. Exact subject/organization/owner-chain matching, exclusive expiry, revocation, missing authority, platform-only denial and explicit policy deny are covered by 66 locally passing cases. The proof models one grant per evaluation with no implicit scope conversion or grant inheritance. It adds no public API/message contract, permission key, schema version or consumer migration. Trusted provenance is assumed by the fixture. [ADR-0003](../decisions/0003-tenant-authorization.md) is now human-accepted only for its narrow policy baseline; this broader catalog remains proposed and actual identity/session, membership/resource-owner, policy freshness, audit and support-grant contracts remain prerequisites before runtime adoption.
+
+## Workflow runtime pairs — proposed T12.2/T12.3, not active grants
+
+ADR-0021/0022 propose environment-scoped workflow.start, workflow.read, workflow.cancel and workflow.reconcile with complete current denies/resource/delegation policy. They do not imply deployment.execute, deployment.rollback, platform authority or permission provisioning. Start additionally requires release.read and exact current owner facts. Existing accepted catalog is unchanged pending exact adoption. See [Durable Workflow v1](durable-workflow-v1.md).
+
+## T12.2–T12.4 scoped design accepted — 2026-10-31
+
+NukeGeng accepted the exact ADR-0021/0022/0023 and companion contract/design/conformance/runbook package after all18 frozen proposal hashes matched. This supersedes the immediately preceding pending-acceptance wording only for that scoped design. No WFL/worker implementation, permission grant, consumer activation, remote qualification or operational authority is claimed. Developer starts12.2a (Domain/Contracts and pure tests) under an allowed native Developer profile; no repeat design approval or Sol review is needed for covered slices. SQL/fixture/host effects retain separate operation approvals; preserve existing checkpoints and user drafts.

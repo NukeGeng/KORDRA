@@ -73,3 +73,7 @@ NukeGeng duyệt ADR-0019 đúng phạm vi compatibility/fault PoC, candidate pi
 
 
 ADR-0020 được NukeGeng accepted ngày 2026-10-30 đúng phạm vi runtime kernel T12.1a–f + guarded AUD isolated-test seam. Proposal bytes đã đóng băng trước annotation; không activation hoặc operational approval. Các dòng proposed trước đây giữ như dated proposal history.
+
+| [0021](0021-durable-workflow-persistence.md) | Accepted scoped design T12.2 persisted workflow/CAS/timer/recovery and scoped workflow actions |
+| [0022](0022-controlworker-authority.md) | Accepted scoped design T12.3 service identity/current distributed admission/owner SQL ports and independent ControlWorker |
+| [0023](0023-workflow-qualification.md) | Accepted scoped design T12.4 fault and independent-host/Mac-close qualification; operation approval remains separate |

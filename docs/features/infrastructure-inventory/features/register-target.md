@@ -356,3 +356,7 @@ ArchitectureTests explicitly includes the accepted test-only Messaging.Durabilit
 ### T12.1 shared solution/architecture integration — 2026-10-30
 
 The accepted ADR-0020 MSG Contracts/Infrastructure library and test harness are added to the shared solution. ArchitectureTests enforces MSG Contracts BCL-only and Infrastructure's exact two Wolverine pins plus Contracts reference, with no owner runtime/Host edge. This feature's runtime/authorization/package pins are unchanged. MSG harness still needs explicit approved disposable fixture manifest; no production consumer/activation follows from solution inclusion.
+
+## T12.2a shared graph integration — 2026-11-01
+
+The shared solution/architecture graph adds only WFL BCL Domain/Contracts and pure tests under accepted ADR-0021. This owner's project edges, package pins, contracts and runtime behavior are unchanged. The shared guard retains existing invariants and explicitly checks the added WFL boundaries. Owner implementation/authority claims remain as previously evidenced; WFL persistence/worker activation is not included.

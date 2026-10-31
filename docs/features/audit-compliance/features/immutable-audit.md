@@ -213,3 +213,7 @@ FEAT-MSG-001 prepares a UUID-only actual-AUD/native MSG fixture for the dedicate
 ### T12.1e actual native ingress result and timer preparation — 2026-10-31
 
 The separately approved UUID ingress/DLQ case passed using the actual isolated AUD model: one valid message produced one effect/logical receipt/AUD, while four synthetic invalid deliveries were retained as safe native dead letters without a token sentinel in body/exception/captured logs. The dedicated new schema was dropped and independently confirmed absent. No AUD production table, role/HBA/grant or authority semantics changed. A new timer/restart fixture reuses the same offline model-DDL factory for a different exact UUID; it is compiled but awaits its own operation approval. Seed rollback/commit concerns native scheduling metadata, not a new independent business/AUD commit path.
+
+## T12.2a shared graph integration — 2026-11-01
+
+The shared solution/architecture graph adds only WFL BCL Domain/Contracts and pure tests under accepted ADR-0021. This owner's project edges, package pins, contracts and runtime behavior are unchanged. The shared guard retains existing invariants and explicitly checks the added WFL boundaries. Owner implementation/authority claims remain as previously evidenced; WFL persistence/worker activation is not included.

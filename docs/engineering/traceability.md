@@ -530,3 +530,19 @@ Canonical local gates passed220tooling and1,770product tests with0failures; one 
 CallerOwnedMessageStager now shares cumulative envelope/serialized-byte admission by exact caller transaction. HandledRetentionTests reproduces repeated-batch/publication-enlistment bypass and verifies mixed directions/replacement stagers, byte/count edges, fresh-root independence and conservative failed-store reservations. Accepted ADR-0020 and Durable Messaging v1 limits are unchanged; current deterministic gate and PR review evidence remain separate.
 
 Budget identity additionally verifies the server full transaction ID via `SELECT pg_current_xact_id()::text` on the exact caller transaction (five-second command bound). Npgsql can recycle a transaction object after completion; a genuinely new server root gets a fresh budget, while a previously staged old stager rejects a changed root. Missing identity fails before native staging. This metadata query neither commits nor opens another connection. A fifth regression covers reused provider identity; the existing real PostgreSQL lifecycle/watermark loops cover successive roots. See [PostgreSQL transaction ID functions](https://www.postgresql.org/docs/15/functions-info.html).
+
+## T12.2–T12.4 design mapping — proposed, 2026-10-31
+
+FEAT-WFL-001/MOD-WFL owns Durable Workflow v1, ADR-0021 and planned WFL source/test roots; FEAT-IAM-001 with AUD and Host composition owns Worker Authority v1/ADR-0022 and exact cross-owner writer changes. ADR-0023/conformance/runbook maps WF/AU/DB/HO/RH cases to local and independent-host gates. These are planned artifacts only; no implementation/test pass or remote qualification is claimed. See the bounded [design/handoff](t12-remaining-design.vi.md) for all source roots and dependencies.
+
+## T12.2–T12.4 scoped design accepted — 2026-10-31
+
+NukeGeng accepted the exact ADR-0021/0022/0023 and companion contract/design/conformance/runbook package after all18 frozen proposal hashes matched. This supersedes the immediately preceding pending-acceptance wording only for that scoped design. No WFL/worker implementation, permission grant, consumer activation, remote qualification or operational authority is claimed. Developer starts12.2a (Domain/Contracts and pure tests) under an allowed native Developer profile; no repeat design approval or Sol review is needed for covered slices. SQL/fixture/host effects retain separate operation approvals; preserve existing checkpoints and user drafts.
+
+## T12.2a structural foundation source — 2026-10-31
+
+FEAT-WFL-001 owns the first pure Domain/Contracts identity/state/version implementation and WorkflowOrchestration.Tests, with BCL-only solution/architecture graph additions. Canonical spec/template, golden vectors and remaining12.2a work are pending; no database, permission activation, actual authority, evidence-based reconciliation or worker runtime is claimed by structural guards. Existing accepted contracts/ADRs are unchanged. Targeted validation evidence is private under .amr-local/t12-remaining-design/.
+
+## T12.2a immutable specification source — 2026-10-31
+
+Added immutable full resource/release/request binding, closed checkpoint template, strict bounded canonical storage reader/writer and SHA256 business hash. Independent fixed byte/hash vector and negative tests cover resource substitution, unsupported fields/versions/environments, duplicate/authority/secret fields, ordered steps/nulls, bad schedules/IDs/hashes, UTC normalization, version exhaustion and terminal/Unknown state guards. Code remains BCL-only with no HTTP/DB/worker activation. Full feature gates/publication are pending; no persistence or independent-host evidence is inferred from pure tests.
