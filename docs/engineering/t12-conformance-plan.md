@@ -64,3 +64,9 @@ Developer được triển khai theo dependency12.2a–e →12.3a–f →12.4a�
 ## WF02 initial custody race evidence — 2026-11-01
 
 The separately approved T12.2b fixture now covers cancellation-first with an old tracked Running row and claim-first with exact lock-timeout SQLSTATE. Independent readers verify that no cancelled workflow receives new custody. Original failing evidence and successful cleanup remain retained. This proves the initial-claim serialization subset only, not distributed authority, successor takeover, multi-owner atomicity or the entire WF02 matrix.
+
+## T12.2c isolated root evidence — 2026-11-01
+
+The three separately approved local UUID-schema cases now exercise actual WFL/AUD/floor/MSG atomicity rather than mocks. WF03 includes six staging-boundary rollback/cancellation branches, independent zero-effect observations, no early flush, actual logical/inbox Handled pairing, shared ten-envelope/160KiB root budgets, exact operation publication and single-coordinator generation guards. A missing single-coordinator rejection was reproduced before the guard fix; a later actual root on the same connection remains eligible. Producer commit/rollback/hash-conflict/old-receipt and AUD replay-without-new-commit cases remain preserved.
+
+WF05 has actual backend COMMIT reply loss plus independent matching/conflict/wrong-tenant receipt inspection after the recorded backend ended. This is its transaction-observation subset; it does not satisfy the planned restart/successor-before-terminal/custody-reclaim matrix. That lifecycle work follows C under T12.2d and later worker activation. The synthetic receiver and offline metadata tests do not prove distributed authority, production readiness or an independent host. Frozen proposal, exact successor queue-SQL approval, failed/build predecessors, current-source three-case success and namespace cleanup are private coordinator evidence; no new operation approval is inferred for D.

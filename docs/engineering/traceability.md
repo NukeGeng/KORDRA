@@ -556,3 +556,9 @@ T12.2b actual fixture passed after preserving/fixing the EF CAS-before-history r
 ## PR25 custody concurrency regression — 2026-11-01
 
 FEAT-WFL-001 maps WorkflowStore.ReadLockedInstanceAsync and the existing PostgreSQL fixture to the Codex finding discussion_r4434995618. Actual before-fix reproduction and after-fix cancellation-first/claim-first assertions, independent scope-safe readers and cleanup receipts are private under .amr-local/t12-remaining-design/pr25-custody-*. No local AI review or additional provider round was triggered.
+
+## FEAT-WFL-001 / FEAT-MSG-001 — T12.2c root composition — 2026-11-01
+
+Added inactive Host WFL/AUD/MSG caller-root composition, serialized lifecycle, one coordinator per real PostgreSQL transaction generation, exact owner operation/transition step publication, typed request codec/golden vectors and independent scoped WFL receipt observation. Native transport destinations and metadata export are normalized through the pinned public APIs. Existing pinned transitive locks and exact Host architecture assertions are synchronized; no version upgrade or runtime activation.
+
+Three operation-approved C PostgreSQL fixtures pass with cleanup, including six staging-failure boundaries, shared ten-envelope/160KiB budgets, reproduced duplicate-coordinator refusal and later-root eligibility, publication/receipt conflict and old receipt refusal, lost-COMMIT exact reconciliation, AUD replay without a new commit and actual native receiver atomicity. Private evidence retains failed predecessors, exact approved queue SQL and current-source serial build. WF03's tested composition subset is distinct from successor restart/takeover, full owner commands, timers, distributed authority and independent-host work still pending under T12.2d/e–12.4. Full canonical gates and PR/CI/review remain exact-revision evidence. See [owner scope and mapping](../features/workflow-orchestration/features/durable-workflow.md).
