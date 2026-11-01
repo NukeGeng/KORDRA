@@ -247,6 +247,16 @@ public sealed class ArchitectureTests
         var artifactRuntimePath = ArtifactOwnedOutput(ArtifactRuntime, "Kordra.Modules.ArtifactManagement");
         var artifactRuntime = ReadAssembly(artifactRuntimePath);
         var artifactContracts = ReadAssembly(ArtifactOwnedOutput(ArtifactContracts, "Kordra.Modules.ArtifactManagement.Contracts"));
+        // ADR-0021 permits Host-only WFL/AUD/MSG root composition, not owner-to-owner edges.
+        var workflowCompositionReferences = new[] {
+            ReadAssembly(ArtifactOwnedOutput(WorkflowContracts, "Kordra.Modules.WorkflowOrchestration.Contracts")).Name,
+            ReadAssembly(ArtifactOwnedOutput(WorkflowDomain, "Kordra.Modules.WorkflowOrchestration.Domain")).Name,
+            ReadAssembly(ArtifactOwnedOutput(WorkflowInfrastructure, "Kordra.Modules.WorkflowOrchestration.Infrastructure")).Name,
+            ReadAssembly(ArtifactOwnedOutput(MessagingContracts, "Kordra.Modules.Messaging.Contracts")).Name,
+            ReadAssembly(ArtifactOwnedOutput(MessagingInfrastructure, "Kordra.Modules.Messaging.Infrastructure")).Name,
+            typeof(Wolverine.Runtime.MessageContext).Assembly.GetName().Name!,
+            typeof(Wolverine.RDBMS.IMessageDatabase).Assembly.GetName().Name!
+        };
         var persistencePackages = new[]
         {
             "Microsoft.AspNetCore.Identity.EntityFrameworkCore",
@@ -259,7 +269,7 @@ public sealed class ArchitectureTests
 
         Assert.Empty(AssemblyViolations(contracts, core));
         Assert.Empty(AssemblyViolations(inventory, core.Concat(persistencePackages).Concat([contracts.Name, projectContracts.Name])));
-        Assert.Empty(AssemblyViolations(host, core.Concat(web).Concat(persistencePackages).Concat(
+        Assert.Empty(AssemblyViolations(host, core.Concat(web).Concat(persistencePackages).Concat(workflowCompositionReferences).Concat(
             [contracts.Name, inventory.Name, identity.Name, identityContracts.Name, tenant.Name, tenantContracts.Name, auditContracts.Name, audit.Name, project.Name, projectContracts.Name, security.Name, credentials.Name, credentialContracts.Name, artifact.Name, artifactRuntime.Name, artifactContracts.Name, approvalDomain.Name, approvalContracts.Name, approvalRuntime.Name, releaseDomain.Name, releaseContracts.Name, releaseRuntime.Name])));
         Assert.Empty(AssemblyViolations(projectContracts, core));
         Assert.Empty(AssemblyViolations(project, core.Concat(persistencePackages).Append(projectContracts.Name)));
@@ -400,7 +410,7 @@ public sealed class ArchitectureTests
         [Absolute(root, Inventory)] = [Absolute(root, Contracts), Absolute(root, ProjectContracts)],
         [Absolute(root, ProjectContracts)] = [],
         [Absolute(root, ProjectEnvironment)] = [Absolute(root, ProjectContracts)],
-        [Absolute(root, Host)] = [Absolute(root, Inventory), Absolute(root, Contracts), Absolute(root, IdentityAccess),
+        [Absolute(root, Host)] = [Absolute(root, WorkflowInfrastructure), Absolute(root, MessagingInfrastructure), Absolute(root, Inventory), Absolute(root, Contracts), Absolute(root, IdentityAccess),
             Absolute(root, AuditCompliance), Absolute(root, AuditContracts), Absolute(root, TenantManagement), Absolute(root, ProjectEnvironment), Absolute(root, Credentials), Absolute(root, ArtifactRuntime), Absolute(root, ArtifactContracts), Absolute(root, ApprovalRuntime), Absolute(root, ReleaseRuntime)],
         [Absolute(root, ReleaseContracts)] = [],
         [Absolute(root, ReleaseRuntime)] = [Absolute(root, ReleaseDomain), Absolute(root, ReleaseContracts)],

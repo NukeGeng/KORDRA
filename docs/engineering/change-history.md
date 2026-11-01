@@ -535,3 +535,9 @@ T12.2b synthetic PostgreSQL fixture is now owner-approved and passed with cleanu
 ## PR25 initial custody race fix — 2026-11-01
 
 Serialized initial custody against instance cancellation under the accepted lock order. Added deterministic two-root PostgreSQL regressions (including a stale tracked instance) and preserved pre-fix evidence. Same approved disposable schema; no new operational authority, permissions, runtime activation or migration.
+
+## FEAT-WFL-001 / FEAT-MSG-001 — T12.2c root composition — 2026-11-01
+
+Added inactive Host WFL/AUD/MSG caller-root composition, serialized lifecycle, one coordinator per real PostgreSQL transaction generation, exact owner operation/transition step publication, typed request codec/golden vectors and independent scoped WFL receipt observation. Native transport destinations and metadata export are normalized through the pinned public APIs. Existing pinned transitive locks and exact Host architecture assertions are synchronized; no version upgrade or runtime activation.
+
+Three operation-approved C PostgreSQL fixtures pass with cleanup, including six staging-failure boundaries, shared ten-envelope/160KiB budgets, reproduced duplicate-coordinator refusal and later-root eligibility, publication/receipt conflict and old receipt refusal, lost-COMMIT exact reconciliation, AUD replay without a new commit and actual native receiver atomicity. Private evidence retains failed predecessors, exact approved queue SQL and current-source serial build. WF03's tested composition subset is distinct from successor restart/takeover, full owner commands, timers, distributed authority and independent-host work still pending under T12.2d/e–12.4. Full canonical gates and PR/CI/review remain exact-revision evidence. See [owner scope and mapping](../features/workflow-orchestration/features/durable-workflow.md).

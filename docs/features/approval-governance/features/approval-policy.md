@@ -130,3 +130,7 @@ FEAT-APR-001 adds requests, immutable decisions and command receipts to this mod
 The additive request/decision and deferred consistency migrations preserve policy tables, revision heads, command receipts and the existing policy inspect/apply contract. Runtime/offline factories retain exact target/role checks and installation custody. The new request recovery commands do not publish/rebind policy, replay a decision, create grants or authorize deployment. Policy canonical payload/binding hashes, permission semantics and accepted ADR-0005 are unchanged. Shared migration/runtime compatibility is covered by the existing policy tests together with request persistence/recovery and full Product validation; operational startup/restart acceptance is recorded in FEAT-REL-001/FEAT-APR-001.
 
 The first hosted PR #21 docs check exposed this missing owner update after squash-history reconciliation; the committed-range changeguard check is required in addition to the working-tree gate. The correction documents actual shared-owner impact and does not remove tests, bypass source mapping or claim hosted review approval.
+
+## T12.2c shared composition registration — 2026-11-01
+
+Accepted ADR-0021/0022 covers the inactive Host composition dependency on existing WFL and MSG owner adapters. Shared XML/package-lock tests now include those edges and the WFL commit/codec tests. No route, consumer, current-authority bypass or behavior of this owner feature was activated; actual WFL/AUD/MSG transaction qualification remains FEAT-WFL-001 work in progress.

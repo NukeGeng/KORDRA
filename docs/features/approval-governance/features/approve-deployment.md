@@ -187,3 +187,7 @@ The exact temporary trust was removed immediately afterward. Native Basic and SS
 ## PR21-REL-POLICY-001 — freeze error classification
 
 Codex Auto PR Review identified that REL freeze flattened missing/expired/denying policy into qualification rejection. Four actual HTTPS regression cases reproduced three wrong 422 responses while the Staging qualification case correctly stayed 422. The scoped fix preserves missing policy as 409 conflict, expired/denying policy as 403 denial and qualification/profile rejection as 422; unrecognized eligibility failure stays unavailable. It does not create a revision mutation or extra command receipt on rejection. Policy bodies/hashes, permissions and ADR-0005 remain unchanged; the published wire schema and its existing source bindings remain unchanged; the HTTPS regressions verify the accepted error behavior. Current regression/gate evidence and hosted follow-up are recorded separately; the finding is not declared independently reviewed or resolved merely because a fix is present.
+
+## T12.2c shared composition registration — 2026-11-01
+
+Accepted ADR-0021/0022 covers the inactive Host composition dependency on existing WFL and MSG owner adapters. Shared XML/package-lock tests now include those edges and the WFL commit/codec tests. No route, consumer, current-authority bypass or behavior of this owner feature was activated; actual WFL/AUD/MSG transaction qualification remains FEAT-WFL-001 work in progress.
