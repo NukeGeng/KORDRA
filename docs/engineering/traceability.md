@@ -546,3 +546,9 @@ FEAT-WFL-001 owns the first pure Domain/Contracts identity/state/version impleme
 ## T12.2a immutable specification source — 2026-10-31
 
 Added immutable full resource/release/request binding, closed checkpoint template, strict bounded canonical storage reader/writer and SHA256 business hash. Independent fixed byte/hash vector and negative tests cover resource substitution, unsupported fields/versions/environments, duplicate/authority/secret fields, ordered steps/nulls, bad schedules/IDs/hashes, UTC normalization, version exhaustion and terminal/Unknown state guards. Code remains BCL-only with no HTTP/DB/worker activation. Full feature gates/publication are pending; no persistence or independent-host evidence is inferred from pure tests.
+
+## T12.2b persistence source mapping — 2026-11-01
+
+FEAT-WFL-001 maps WorkflowOrchestration Infrastructure/Persistence, its project/lock, and WorkflowOrchestration.Tests model/store/fixture tests. Shared Kordra.slnx and actual XML graph/pin changes remain co-owned by their mapped features. Source/model targeted checks are separate from pending actual PostgreSQL, multi-owner AUD/MSG, worker authority and independent-host qualification.
+
+T12.2b actual fixture passed after preserving/fixing the EF CAS-before-history regression; exact source/SQL hashes, original failure and cleanup proof are private. Default operation-gated CI skips this test without approval flags; actual local execution is independently recorded. PR24 was observed merged at bf32c447d3e26d8e0c71eb673387b92345e5b1a1; the dependent persistence branch merged that identical source tree without touching user drafts.

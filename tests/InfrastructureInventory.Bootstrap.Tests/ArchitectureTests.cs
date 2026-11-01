@@ -53,6 +53,7 @@ public sealed class ArchitectureTests
     private const string ArtifactTests = "tests/ArtifactManagement.Domain.Tests/ArtifactManagement.Domain.Tests.csproj";
     private const string IdentityTests = "tests/IdentityAccess.Tests/IdentityAccess.Tests.csproj";
     private const string AuditTests = "tests/AuditCompliance.Tests/AuditCompliance.Tests.csproj";
+    private const string WorkflowInfrastructure = "src/Modules/WorkflowOrchestration/Infrastructure/Kordra.Modules.WorkflowOrchestration.Infrastructure.csproj";
     private const string WorkflowDomain = "src/Modules/WorkflowOrchestration/Domain/Kordra.Modules.WorkflowOrchestration.Domain.csproj";
     private const string WorkflowContracts = "src/Modules/WorkflowOrchestration/Contracts/Kordra.Modules.WorkflowOrchestration.Contracts.csproj";
     private const string WorkflowTests = "tests/WorkflowOrchestration.Tests/WorkflowOrchestration.Tests.csproj";
@@ -388,6 +389,7 @@ public sealed class ArchitectureTests
 
     private static Dictionary<string, string[]> ApprovedGraph(string root) => new(StringComparer.Ordinal)
     {
+        [Absolute(root, WorkflowInfrastructure)] = [Absolute(root, WorkflowDomain), Absolute(root, WorkflowContracts)],
         [Absolute(root, WorkflowDomain)] = [],
         [Absolute(root, WorkflowContracts)] = [],
         [Absolute(root, MessagingContracts)] = [],
@@ -421,6 +423,9 @@ public sealed class ArchitectureTests
 
     private static IReadOnlyDictionary<string, string> ApprovedPackages(string root, string project)
     {
+        if (project == Absolute(root, WorkflowInfrastructure))
+            return new Dictionary<string, string>(StringComparer.Ordinal)
+            { ["Microsoft.EntityFrameworkCore.Relational"] = "10.0.11", ["Npgsql.EntityFrameworkCore.PostgreSQL"] = "10.0.3" };
         if (project == Absolute(root, MessagingInfrastructure))
             return new Dictionary<string, string>(StringComparer.Ordinal)
             { ["WolverineFx"] = "6.59.0", ["WolverineFx.Postgresql"] = "6.59.0" };

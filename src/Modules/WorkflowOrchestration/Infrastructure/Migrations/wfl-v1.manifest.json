@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 1,
+  "owner": "MOD-WFL",
+  "schema": "wfl",
+  "revision": 1,
+  "sqlFile": "wfl-v1.sql",
+  "sha256": "52a9884d04203229f9b0b2b989db1e32de9c0c25e06f6f58404568c76ba9ef24",
+  "mode": "offline_only_no_startup_ddl",
+  "tables": [
+    "instances",
+    "steps",
+    "transitions",
+    "timers",
+    "operation_custody",
+    "recovery_decisions",
+    "request_receipts",
+    "clock_floor",
+    "authority_bindings"
+  ],
+  "compatibility": "Only revision1 model; no downgrade/history deletion. Runtime readiness/ACL activation remains gated on T12.3."
+}
