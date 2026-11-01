@@ -39,3 +39,11 @@ Worker crash, duplicate dispatch, lease takeover, canceled workflow active in ta
 
 ## Definition of done
 Tuân thủ [DoD](../../engineering/definition-of-done.md), [module boundaries](../../engineering/module-boundaries.md), [architecture](../../architecture/bounded-contexts.md).
+
+## Scoped next design — T12.2–T12.4
+
+The [detailed proposal](../../engineering/t12-remaining-design.vi.md) assigns WFL durable state/custody/recovery and proposes NukeGeng as custodian. Its owner ports/dependency graph take effect only after ADR-0021/0022/0023 acceptance. The older dependency list above is broader proposed vision, not permission for WFL/MSG cycles, Agent persistence dependencies or deployment.execute activation. No runtime projects exist yet.
+
+## T12.2–T12.4 scoped design accepted — 2026-10-31
+
+NukeGeng accepted the exact ADR-0021/0022/0023 and companion contract/design/conformance/runbook package after all18 frozen proposal hashes matched. This supersedes the immediately preceding pending-acceptance wording only for that scoped design. No WFL/worker implementation, permission grant, consumer activation, remote qualification or operational authority is claimed. Developer starts12.2a (Domain/Contracts and pure tests) under an allowed native Developer profile; no repeat design approval or Sol review is needed for covered slices. SQL/fixture/host effects retain separate operation approvals; preserve existing checkpoints and user drafts.

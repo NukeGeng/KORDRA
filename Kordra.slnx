@@ -1,4 +1,9 @@
 <Solution>
+  <Folder Name="/WorkflowOrchestration/">
+    <Project Path="src/Modules/WorkflowOrchestration/Domain/Kordra.Modules.WorkflowOrchestration.Domain.csproj" />
+    <Project Path="src/Modules/WorkflowOrchestration/Contracts/Kordra.Modules.WorkflowOrchestration.Contracts.csproj" />
+    <Project Path="tests/WorkflowOrchestration.Tests/WorkflowOrchestration.Tests.csproj" />
+  </Folder>
   <Folder Name="/Messaging/">
     <Project Path="src/Modules/Messaging/Contracts/Kordra.Modules.Messaging.Contracts.csproj" />
     <Project Path="src/Modules/Messaging/Infrastructure/Kordra.Modules.Messaging.Infrastructure.csproj" />
