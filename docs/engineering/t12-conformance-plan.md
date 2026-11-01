@@ -60,3 +60,7 @@ NukeGeng đã trả lời **“tôi duyệt”** cho bộ thiết kế T12.2–T
 Accepted chỉ cho exact design: workflow states/CAS/timer/recovery/reauthorization và permission pairs, closed message registrations, service identity/mTLS, current permits/global fence, owner-owned restricted SQL functions, additive MSG admission ledger và independent-host qualification. Những đoạn proposed/chưa duyệt trong nội dung proposal phía trên được giữ để đối chiếu lịch sử; annotation này xác lập acceptance thiết kế, không biến chúng thành implementation evidence.
 
 Developer được triển khai theo dependency12.2a–e →12.3a–f →12.4a–d, với gate compatibility/ACL/writer-coverage không được bỏ qua. **Không cấp quyền thao tác DB/role/HBA/credential/CA/trust/host/network/backup/Mac sleep hoặc hệ thống công ty/provider; không cấp quyền merge.** Mỗi fixture/target operation vẫn cần immutable manifest và approval riêng. Không tự approve T13, thay accepted single-process baseline ngoài phần bổ sung được chốt, hoặc chạy thêm AI review.
+
+## WF02 initial custody race evidence — 2026-11-01
+
+The separately approved T12.2b fixture now covers cancellation-first with an old tracked Running row and claim-first with exact lock-timeout SQLSTATE. Independent readers verify that no cancelled workflow receives new custody. Original failing evidence and successful cleanup remain retained. This proves the initial-claim serialization subset only, not distributed authority, successor takeover, multi-owner atomicity or the entire WF02 matrix.

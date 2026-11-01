@@ -118,8 +118,79 @@ public sealed class WorkflowPostgreSqlFixtureTests
                 var error = await Assert.ThrowsAsync<PostgresException>(() => invalid.ExecuteNonQueryAsync(ct));
                 Assert.Equal(PostgresErrorCodes.ForeignKeyViolation, error.SqlState); await negative.RollbackAsync(ct);
             }
+
             Assert.Equal(1L, await Count(locator, "transitions", ct));
             Assert.Equal(1L, await Count(locator, "request_receipts", ct));
+            // Cancellation wins while the claim context still tracks an earlier Running row.
+            var cancelled = await CreateRunningWorkflow();
+            await using (var claimContext = WorkflowDbContext.CreateFixture(connection, Guid.Parse(CaseId)))
+            await using (var claimRoot = await connection.BeginTransactionAsync(ct))
+            {
+                await claimContext.Database.UseTransactionAsync(claimRoot, ct);
+                var tracked = await claimContext.Set<WorkflowInstanceRecord>().SingleAsync(x => x.InstanceId == cancelled.Spec.InstanceId, ct);
+                Assert.Equal((int)WorkflowState.Running, tracked.State);
+                await WithRoot(second, async (context, root) => {
+                    var store = new WorkflowStore(context);
+                    await store.StageTransitionAsync(cancelled.Identity, cancelled.Step, Guid.NewGuid(), cancelled.Spec.SpecificationHash,
+                        2, WorkflowState.CancelRequested, cancelled.Spec.CreatedAtUtc, ct);
+                    await store.StageTransitionAsync(cancelled.Identity, cancelled.Step, Guid.NewGuid(), cancelled.Spec.SpecificationHash,
+                        3, WorkflowState.Cancelled, cancelled.Spec.CreatedAtUtc, ct);
+                    await root.CommitAsync(ct);
+                });
+                await Assert.ThrowsAsync<InvalidOperationException>(() => new WorkflowStore(claimContext).StageInitialCustodyAsync(
+                    cancelled.Identity, cancelled.Step, Guid.NewGuid(), cancelled.Spec.SpecificationHash,
+                    Guid.NewGuid(), Guid.NewGuid(), 1, cancelled.Spec.CreatedAtUtc, ct));
+                await claimRoot.RollbackAsync(ct);
+            }
+            // Claim wins: it must lock the instance before the step so cancellation cannot overtake its root.
+            var claimed = await CreateRunningWorkflow();
+            await using (var claimContext = WorkflowDbContext.CreateFixture(connection, Guid.Parse(CaseId)))
+            await using (var claimRoot = await connection.BeginTransactionAsync(ct))
+            {
+                await claimContext.Database.UseTransactionAsync(claimRoot, ct);
+                await new WorkflowStore(claimContext).StageInitialCustodyAsync(claimed.Identity, claimed.Step, Guid.NewGuid(),
+                    claimed.Spec.SpecificationHash, Guid.NewGuid(), Guid.NewGuid(), 1, claimed.Spec.CreatedAtUtc, ct);
+                await WithRoot(second, async (context, root) => {
+                    await using var limit = new NpgsqlCommand("SET LOCAL lock_timeout = '200ms'", second, root);
+                    await limit.ExecuteNonQueryAsync(ct);
+                    var failure = await Assert.ThrowsAsync<InvalidOperationException>(() => new WorkflowStore(context).StageTransitionAsync(
+                        claimed.Identity, claimed.Step, Guid.NewGuid(), claimed.Spec.SpecificationHash, 2,
+                        WorkflowState.CancelRequested, claimed.Spec.CreatedAtUtc, ct));
+                    var databaseFailure = Assert.IsType<DbUpdateException>(failure.InnerException);
+                    Assert.Equal(PostgresErrorCodes.LockNotAvailable, Assert.IsType<PostgresException>(databaseFailure.InnerException).SqlState);
+                    await root.RollbackAsync(ct);
+                });
+                await claimRoot.CommitAsync(ct);
+            }
+            await VerifyCancellationCustody(cancelled, WorkflowState.Cancelled, 0);
+            await VerifyCancellationCustody(claimed, WorkflowState.Running, 1);
+            Assert.Equal(5L, await Count(locator, "transitions", ct));
+            Assert.Equal(3L, await Count(locator, "request_receipts", ct));
+            async Task VerifyCancellationCustody((WorkflowSpecification Spec, WorkflowIdentity Identity, Guid Step) workflow,
+                WorkflowState state, long custodyCount)
+            {
+                await using var observer = new NpgsqlConnection(locator); await observer.OpenAsync(ct);
+                await using var query = new NpgsqlCommand("SELECT i.state, (SELECT count(*) FROM " + Schema +
+                    ".operation_custody c WHERE c.installation_id=i.installation_id AND c.tenant_id=i.tenant_id AND c.instance_id=i.instance_id) FROM " +
+                    Schema + ".instances i WHERE i.installation_id=@installation AND i.tenant_id=@tenant AND i.instance_id=@instance", observer);
+                query.Parameters.AddWithValue("installation", workflow.Identity.InstallationId);
+                query.Parameters.AddWithValue("tenant", workflow.Identity.TenantId); query.Parameters.AddWithValue("instance", workflow.Identity.InstanceId);
+                await using var rows = await query.ExecuteReaderAsync(ct);
+                Assert.True(await rows.ReadAsync(ct)); Assert.Equal((int)state, rows.GetInt32(0)); Assert.Equal(custodyCount, rows.GetInt64(1));
+            }
+            async Task<(WorkflowSpecification Spec, WorkflowIdentity Identity, Guid Step)> CreateRunningWorkflow()
+            {
+                var fresh = NewSpecification(); var scope = new WorkflowIdentity(fresh.InstallationId, fresh.TenantId, fresh.InstanceId);
+                Guid step = Guid.Empty;
+                await WithRoot(connection, async (context, root) => {
+                    var store = new WorkflowStore(context); await store.StageCreationAsync(fresh, ct);
+                    step = await context.Set<WorkflowStepRecord>().Where(x => x.InstanceId == fresh.InstanceId && x.Ordinal == 0)
+                        .Select(x => x.StepId).SingleAsync(ct);
+                    await store.StageTransitionAsync(scope, step, Guid.NewGuid(), fresh.SpecificationHash, 1,
+                        WorkflowState.Running, fresh.CreatedAtUtc, ct); await root.CommitAsync(ct);
+                });
+                return (fresh, scope, step);
+            }
         }
         finally
         {

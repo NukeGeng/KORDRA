@@ -106,3 +106,7 @@ Current pure implementation writes schemaVersion, ordered IDs (installation,tena
 ## T12.2b persistence preparation — 2026-11-01
 
 Revision1 owner records/model and caller-root-only staging now exist under WFL Infrastructure. No wire/API contract changes or runtime activation. Production DDL has not been applied. The separately approved synthetic UUID-schema PostgreSQL fixture passed and verified cleanup; this does not authorize a product migration. Append-only EF guards are not a claim of final worker SQL-function ACL enforcement; that remains T12.3. See the owning FEAT-WFL-001 for implementation limits.
+
+## Initial custody implementation conformance — 2026-11-01
+
+PR25-WFL-CUSTODY-001 now serializes the current instance read with cancellation using FOR UPDATE before the step, in the same caller root. Owner identifiers are closed/quoted and resource IDs remain parameters. Direct locked reads deliberately bypass stale tracked snapshots. This implements the existing instance-before-step rule; no contract version, authority or takeover semantics change.

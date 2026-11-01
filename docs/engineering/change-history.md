@@ -531,3 +531,7 @@ Added immutable full resource/release/request binding, closed checkpoint templat
 Added WFL EF/Npgsql model/offline schema artifacts, trusted-scope request/transition staging and initial custody guards under accepted ADR-0021. No product DB migration, permission grant, provider/worker activation, architecture change or merge. Actual new WFL fixture is gated on a separate operation manifest; broader T12 remains incomplete.
 
 T12.2b synthetic PostgreSQL fixture is now owner-approved and passed with cleanup. Fixed CAS/history ordering using two stage saves in the same caller root, retaining the concurrency assertion and original failure evidence. Added checked offline revision1 SQL/hash manifest. No product DB or runtime activation occurred.
+
+## PR25 initial custody race fix — 2026-11-01
+
+Serialized initial custody against instance cancellation under the accepted lock order. Added deterministic two-root PostgreSQL regressions (including a stale tracked instance) and preserved pre-fix evidence. Same approved disposable schema; no new operational authority, permissions, runtime activation or migration.

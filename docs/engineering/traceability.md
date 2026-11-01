@@ -552,3 +552,7 @@ Added immutable full resource/release/request binding, closed checkpoint templat
 FEAT-WFL-001 maps WorkflowOrchestration Infrastructure/Persistence, its project/lock, and WorkflowOrchestration.Tests model/store/fixture tests. Shared Kordra.slnx and actual XML graph/pin changes remain co-owned by their mapped features. Source/model targeted checks are separate from pending actual PostgreSQL, multi-owner AUD/MSG, worker authority and independent-host qualification.
 
 T12.2b actual fixture passed after preserving/fixing the EF CAS-before-history regression; exact source/SQL hashes, original failure and cleanup proof are private. Default operation-gated CI skips this test without approval flags; actual local execution is independently recorded. PR24 was observed merged at bf32c447d3e26d8e0c71eb673387b92345e5b1a1; the dependent persistence branch merged that identical source tree without touching user drafts.
+
+## PR25 custody concurrency regression — 2026-11-01
+
+FEAT-WFL-001 maps WorkflowStore.ReadLockedInstanceAsync and the existing PostgreSQL fixture to the Codex finding discussion_r4434995618. Actual before-fix reproduction and after-fix cancellation-first/claim-first assertions, independent scope-safe readers and cleanup receipts are private under .amr-local/t12-remaining-design/pr25-custody-*. No local AI review or additional provider round was triggered.
