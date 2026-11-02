@@ -1,6 +1,8 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
+    <OutputType>Exe</OutputType>
+    <StartupObject>Kordra.InfrastructureInventory.Bootstrap.Tests.WorkflowFixtureProgram</StartupObject>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
@@ -19,4 +21,7 @@
   </ItemGroup>
   <ItemGroup><Compile Include="../Shared/NomadTlsFixture.cs" Link="Fixtures/NomadTlsFixture.cs" /></ItemGroup>
   <ItemGroup><Compile Include="../Shared/KubernetesTlsFixture.cs" Link="Fixtures/KubernetesTlsFixture.cs" /></ItemGroup>
+  <ItemGroup><None Update="Fixtures/workflow-transition-requested-v1.*" CopyToOutputDirectory="PreserveNewest" /></ItemGroup>
+  <ItemGroup Condition="'$(T12CodegenBootstrap)' == 'true'"><Compile Remove="Internal/Generated/**/*.cs" /></ItemGroup>
+  <ItemGroup><Compile Include="../Messaging.Tests/CommitReplyFault.cs" Link="Fixtures/CommitReplyFault.cs" /></ItemGroup>
 </Project>

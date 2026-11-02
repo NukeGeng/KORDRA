@@ -29,6 +29,47 @@
         "resolved": "3.1.5",
         "contentHash": "tKi7dSTwP4m5m9eXPM2Ime4Kn7xNf4x4zT9sdLO/G4hZVnQCRiMTWoSZqI/pYTVeI27oPPqHBKYI/DjJ9GsYgA=="
       },
+      "Cronos": {
+        "type": "Transitive",
+        "resolved": "0.11.0",
+        "contentHash": "ovNrFIuKTbeNYx+1Tne8DkY/nJ+bRoS0/bTrCBzeAuMvLbX2nJprwcdRqZIwwLRsaghqBU932QvJ6mryTycc/A=="
+      },
+      "FastExpressionCompiler": {
+        "type": "Transitive",
+        "resolved": "5.4.1",
+        "contentHash": "nqMykMspK5cQd35Y8ulQzAujxCcCwZVUne32pC5xNpXqrbPCuKOPMWkKHJ3LveAZPm6dsVvump0TJ1SZ9RzfTQ=="
+      },
+      "ImTools": {
+        "type": "Transitive",
+        "resolved": "4.0.0",
+        "contentHash": "dms0JfLKC9AQbQX/EdpRjn59EjEvaCxIgv1z9YxbEQb5SiOVoo7vlIKdEySeEwUkWhN05rZnNpUpG+aw5VqPVQ=="
+      },
+      "JasperFx": {
+        "type": "Transitive",
+        "resolved": "2.96.1",
+        "contentHash": "v18ZoBNSz4x+DcNJV36hNsQ6fuXsoeP7KI3HtnyzQSSo2fHqIw4Ssg72HtlyvgDkWRfK0s1+UiMrBWD2oMkhSg==",
+        "dependencies": {
+          "FastExpressionCompiler": "5.4.1",
+          "ImTools": "4.0.0",
+          "Microsoft.Bcl.TimeProvider": "10.0.0",
+          "Polly.Core": "8.6.5",
+          "Spectre.Console": "0.55.0",
+          "System.Linq.Dynamic.Core": "1.7.4"
+        }
+      },
+      "JasperFx.Events": {
+        "type": "Transitive",
+        "resolved": "2.96.1",
+        "contentHash": "psPNxP27GBu5QjlmaBGnQtaZ0udUu1X6tzIgCTyxWp3QTkIC5+tiKIjifHuIl3jmdRkqi2xQi6nGEVkbX2Br7A==",
+        "dependencies": {
+          "JasperFx": "2.96.1"
+        }
+      },
+      "JasperFx.SourceGenerator": {
+        "type": "Transitive",
+        "resolved": "2.96.1",
+        "contentHash": "m5KC5GDbZ1uYjwJm3bXd43Tocs4RJOfPhhYcPvFEhPaE1szl6WGqUVWA0efBB3pmCg2HkWIU8CDCV711MsI/tg=="
+      },
       "Microsoft.AspNetCore.Identity.EntityFrameworkCore": {
         "type": "Transitive",
         "resolved": "10.0.11",
@@ -36,6 +77,11 @@
         "dependencies": {
           "Microsoft.EntityFrameworkCore.Relational": "10.0.11"
         }
+      },
+      "Microsoft.Bcl.TimeProvider": {
+        "type": "Transitive",
+        "resolved": "10.0.0",
+        "contentHash": "bUubrBD6tRJE3V1kvRloYc6NymH3R5oFKjAS9e0ELNx6u0ZR+zjps9dDQyjgqN/rArzl7f+21KGszj3YRN7F2Q=="
       },
       "Microsoft.CodeCoverage": {
         "type": "Transitive",
@@ -82,6 +128,24 @@
           "Microsoft.TestPlatform.ObjectModel": "18.10.1"
         }
       },
+      "NetTopologySuite": {
+        "type": "Transitive",
+        "resolved": "2.5.0",
+        "contentHash": "5/+2O2ADomEdUn09mlSigACdqvAf0m/pVPGtIPEPQWnyrVykYY0NlfXLIdkMgi41kvH9kNrPqYaFBTZtHYH7Xw=="
+      },
+      "NetTopologySuite.IO.PostGis": {
+        "type": "Transitive",
+        "resolved": "2.1.0",
+        "contentHash": "3W8XTFz8iP6GQ5jDXK1/LANHiU+988k1kmmuPWNKcJLpmSg6CvFpbTpz+s4+LBzkAp64wHGOldSlkSuzYfrIKA==",
+        "dependencies": {
+          "NetTopologySuite": "[2.0.0, 3.0.0-A)"
+        }
+      },
+      "NewId": {
+        "type": "Transitive",
+        "resolved": "4.0.1",
+        "contentHash": "jegBasNndmG21G3BmT51suFDCIz/sLN81j+IxmkZ4iWoaDi8LygeHiyNnYbXz5OQh9nCRJFIx1+PJrlYi1Gc9Q=="
+      },
       "Npgsql": {
         "type": "Transitive",
         "resolved": "10.0.3",
@@ -95,6 +159,103 @@
           "Microsoft.EntityFrameworkCore": "[10.0.4, 11.0.0)",
           "Microsoft.EntityFrameworkCore.Relational": "[10.0.4, 11.0.0)",
           "Npgsql": "10.0.3"
+        }
+      },
+      "Npgsql.NetTopologySuite": {
+        "type": "Transitive",
+        "resolved": "9.0.4",
+        "contentHash": "7AwBLPz8EPmgAXveZ55K0Tz/9bNb8j4VI4pkTOQjyHrce8wWfAA9pefm3REidy+Kt2UFiAWef34YVi7sb/kB4A==",
+        "dependencies": {
+          "NetTopologySuite": "2.5.0",
+          "NetTopologySuite.IO.PostGIS": "2.1.0",
+          "Npgsql": "9.0.4"
+        }
+      },
+      "Patched.DistributedLock.Core": {
+        "type": "Transitive",
+        "resolved": "1.0.11",
+        "contentHash": "JUDAhM5ca24AxE+3OGFYGQoPszKkEOLX7jykJgglJxam668Cf5aHmB/MOJR7/fWZPWFC0egwQ9S9yQyzrFaECA=="
+      },
+      "Patched.DistributedLock.Postgres": {
+        "type": "Transitive",
+        "resolved": "1.3.3",
+        "contentHash": "dCk328m177iENwX1TpUhoYapIAncPwYbeahz8YPb3IXMalteLl6p2w+cSmhDMptlu9zesjUGBYLmHi4Mu3X5fw==",
+        "dependencies": {
+          "Npgsql": "8.0.6",
+          "Patched.DistributedLock.Core": "[1.0.11, 1.1.0)"
+        }
+      },
+      "Polly.Core": {
+        "type": "Transitive",
+        "resolved": "8.6.5",
+        "contentHash": "t+sUVrIwvo7UmsgHGgOG9F0GDZSRIm47u2ylH17Gvcv1q5hNEwgD5GoBlFyc0kh/pebmPyrAgvGsR/65ZBaXlg=="
+      },
+      "Spectre.Console": {
+        "type": "Transitive",
+        "resolved": "0.55.0",
+        "contentHash": "2TVhUHFsDux0Z+y2Hv4bFsOMuON4SuotEEKkMparFkp5Rm259naaaEQrN4Sv6C1cbsiGKPjfkJDGgUp+hZPjTw==",
+        "dependencies": {
+          "Spectre.Console.Ansi": "0.55.0"
+        }
+      },
+      "Spectre.Console.Ansi": {
+        "type": "Transitive",
+        "resolved": "0.55.0",
+        "contentHash": "GIfgOvuF8MpU52bprhwtDEtx0gmVIGOepM8bw0lH/TSMD0rg1Xp+5Y53kPG8rFVdcpbNANlhDQ5mEVVPO3/2Tg=="
+      },
+      "System.Linq.Dynamic.Core": {
+        "type": "Transitive",
+        "resolved": "1.7.4",
+        "contentHash": "2VJGKUdPjA59aqv/ehvBS+oVoFQqqsiVZlbcyDmuwypgy96Ss1/b8U13Yufk0TXtzveMWAPQAfnZzH+bs1r7Vw=="
+      },
+      "Weasel.Core": {
+        "type": "Transitive",
+        "resolved": "9.47.1",
+        "contentHash": "RVlNuFRaOGrna0w4fqQrrkShrTJvUGJIT8hYHiJK/P3vHzy5LF0cXgL04Q0F0a2Uqy+RBf0bftDpx0g5gcDnPg==",
+        "dependencies": {
+          "JasperFx": "2.90.2"
+        }
+      },
+      "Weasel.Postgresql": {
+        "type": "Transitive",
+        "resolved": "9.47.1",
+        "contentHash": "tAmYv7ImmFmvd/PxIE+C684TVu1OHv/4y9dIlTnU25e3FmONsGnPeOuUZoqE3DPtrTr4vn6wMVBFFpsXs4N2+Q==",
+        "dependencies": {
+          "JasperFx.Events": "2.90.2",
+          "Npgsql": "9.0.4",
+          "Npgsql.NetTopologySuite": "9.0.4",
+          "Patched.DistributedLock.Postgres": "1.3.3",
+          "Weasel.Core": "9.47.1"
+        }
+      },
+      "WolverineFx": {
+        "type": "Transitive",
+        "resolved": "6.59.0",
+        "contentHash": "Jg1xHXogDWd9C7Ti1DWxM97B8Udc0rXo6ru4aJ5/KK0qbQRl0WnZ/MOi1J9iljRCaBx41YIk88vijlOQWGFUfw==",
+        "dependencies": {
+          "Cronos": "0.11.0",
+          "JasperFx": "2.96.1",
+          "JasperFx.Events": "2.96.1",
+          "JasperFx.SourceGenerator": "2.96.1",
+          "NewId": "4.0.1"
+        }
+      },
+      "WolverineFx.Postgresql": {
+        "type": "Transitive",
+        "resolved": "6.59.0",
+        "contentHash": "8hql21qHlRUiTL7ojTU5VZhQYaXlzjBrhsahkCjXVOMkF6e/oqCz/YBTdmpjhfMd+KkybiPFcbB5RFkVBTzy2Q==",
+        "dependencies": {
+          "Weasel.Postgresql": "9.47.1",
+          "WolverineFx.RDBMS": "6.59.0"
+        }
+      },
+      "WolverineFx.RDBMS": {
+        "type": "Transitive",
+        "resolved": "6.59.0",
+        "contentHash": "c6peCaX7wL/pmp2dl+NiMDnfbxt7j4Ena1Q5365d8rWnxkGK9yiPR/72zDO8ybPshtVA4WzTuOXIuay6+0XpaA==",
+        "dependencies": {
+          "Weasel.Core": "9.47.1",
+          "WolverineFx": "6.59.0"
         }
       },
       "xunit.abstractions": {
@@ -149,9 +310,11 @@
           "Kordra.Modules.IdentityAccess": "[1.0.0, )",
           "Kordra.Modules.InfrastructureInventory": "[1.0.0, )",
           "Kordra.Modules.InfrastructureInventory.Contracts": "[1.0.0, )",
+          "Kordra.Modules.Messaging.Infrastructure": "[1.0.0, )",
           "Kordra.Modules.ProjectEnvironment": "[1.0.0, )",
           "Kordra.Modules.ReleaseManagement": "[1.0.0, )",
-          "Kordra.Modules.TenantManagement": "[1.0.0, )"
+          "Kordra.Modules.TenantManagement": "[1.0.0, )",
+          "Kordra.Modules.WorkflowOrchestration.Infrastructure": "[1.0.0, )"
         }
       },
       "kordra.approvalgovernance.domain": {
@@ -247,6 +410,17 @@
       "kordra.modules.infrastructureinventory.contracts": {
         "type": "Project"
       },
+      "kordra.modules.messaging.contracts": {
+        "type": "Project"
+      },
+      "kordra.modules.messaging.infrastructure": {
+        "type": "Project",
+        "dependencies": {
+          "Kordra.Modules.Messaging.Contracts": "[1.0.0, )",
+          "WolverineFx": "[6.59.0, )",
+          "WolverineFx.Postgresql": "[6.59.0, )"
+        }
+      },
       "kordra.modules.projectenvironment": {
         "type": "Project",
         "dependencies": {
@@ -281,6 +455,21 @@
       },
       "kordra.modules.tenantmanagement.contracts": {
         "type": "Project"
+      },
+      "kordra.modules.workfloworchestration.contracts": {
+        "type": "Project"
+      },
+      "kordra.modules.workfloworchestration.domain": {
+        "type": "Project"
+      },
+      "kordra.modules.workfloworchestration.infrastructure": {
+        "type": "Project",
+        "dependencies": {
+          "Kordra.Modules.WorkflowOrchestration.Contracts": "[1.0.0, )",
+          "Kordra.Modules.WorkflowOrchestration.Domain": "[1.0.0, )",
+          "Microsoft.EntityFrameworkCore.Relational": "[10.0.11, )",
+          "Npgsql.EntityFrameworkCore.PostgreSQL": "[10.0.3, )"
+        }
       },
       "kordra.releasemanagement.domain": {
         "type": "Project"

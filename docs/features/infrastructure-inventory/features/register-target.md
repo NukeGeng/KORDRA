@@ -364,3 +364,7 @@ The shared solution/architecture graph adds only WFL BCL Domain/Contracts and pu
 ## T12.2b shared architecture registration — 2026-11-01
 
 The co-owned solution/architecture test now includes WFL Infrastructure → its own Domain/Contracts, with the existing approved EF Relational10.0.11 / Npgsql EF10.0.3 pins under ADR-0021. No dependency or runtime behavior of this feature changed; WFL persistence evidence remains owned by FEAT-WFL-001 and does not activate a worker or grant authority.
+
+## T12.2c shared composition registration — 2026-11-01
+
+Accepted ADR-0021/0022 covers the inactive Host composition dependency on existing WFL and MSG owner adapters. Shared XML/package-lock tests now include those edges and the WFL commit/codec tests. No route, consumer, current-authority bypass or behavior of this owner feature was activated; actual WFL/AUD/MSG transaction qualification remains FEAT-WFL-001 work in progress.

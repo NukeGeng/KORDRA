@@ -110,3 +110,7 @@ Revision1 owner records/model and caller-root-only staging now exist under WFL I
 ## Initial custody implementation conformance — 2026-11-01
 
 PR25-WFL-CUSTODY-001 now serializes the current instance read with cancellation using FOR UPDATE before the step, in the same caller root. Owner identifiers are closed/quoted and resource IDs remain parameters. Direct locked reads deliberately bypass stale tracked snapshots. This implements the existing instance-before-step rule; no contract version, authority or takeover semantics change.
+
+## T12.2c transition-requested codec increment — 2026-11-01
+
+Command DTO and Host schema codec now implement the ten fields listed above. TimerDue requires nonempty timerId/positive generation, while other kinds require explicit null values for both. Canonical writer uses listed field order; unknown/duplicate/missing fields, non-lowercase-D IDs, non-integer/invalid revisions, invalid hashes/kinds and authority-shaped extra fields reject. No native registration or handler is activated, and data is not authority. Result/recovery protocols and actual multi-owner qualification remain pending.
