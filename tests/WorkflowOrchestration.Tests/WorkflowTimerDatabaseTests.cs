@@ -67,6 +67,7 @@ public sealed class WorkflowTimerDatabaseTests
         await using var connection = Openable(); await connection.OpenAsync(ct);
         Assert.Equal(0L, await Count("SELECT count(*) FROM pg_namespace WHERE nspname='" + Schema + "'"));
         var created = false;
+        var canonicalSpecifications = new Dictionary<Guid, byte[]>();
         try
         {
             await using (var setup = await connection.BeginTransactionAsync(ct))
@@ -158,6 +159,63 @@ public sealed class WorkflowTimerDatabaseTests
                 Assert.Equal(due.Select(x => x.TimerId.ToString("D")).Order(StringComparer.Ordinal), due.Select(x => x.TimerId.ToString("D")));
                 Assert.Single(await store.DiscoverDueAsync(Case, Case, Created.AddHours(1), 1, ct));
             }
+            // Canonical bytes keep 100ns ticks; provider timestamp columns cannot represent them.
+            foreach (var precision in new[] {
+                (Origin: Created, CreatedTicks: 1, DeadlineTicks: 1, DueTicks: 0),
+                (Origin: Created, CreatedTicks: 0, DeadlineTicks: 0, DueTicks: 7),
+                (Origin: Created, CreatedTicks: 9, DeadlineTicks: 2, DueTicks: 3),
+                (Origin: new DateTimeOffset(1999, 12, 31, 0, 0, 0, TimeSpan.Zero), CreatedTicks: 1, DeadlineTicks: 9, DueTicks: 7)
+            })
+            {
+                var fractional = await Prepare(origin: precision.Origin, createdTicks: precision.CreatedTicks,
+                    deadlineTicks: precision.DeadlineTicks, dueTicks: precision.DueTicks);
+                WorkflowTimerScheduleResult? committed = null;
+                await WithRoot(connection, async (context, transaction) => {
+                    committed = await new WorkflowTimerStore(context).StageWaitingAsync(fractional, ct);
+                    Assert.False(committed.Duplicate); await transaction.CommitAsync(ct);
+                });
+                await WithRoot(connection, async (context, transaction) => {
+                    var duplicate = await new WorkflowTimerStore(context).StageWaitingAsync(fractional, ct);
+                    Assert.True(duplicate.Duplicate); Assert.Equal(committed!.TimerId, duplicate.TimerId);
+                    Assert.Equal(committed.WorkflowVersion, duplicate.WorkflowVersion); await transaction.RollbackAsync(ct);
+                });
+                await using var read = Openable(); await read.OpenAsync(ct);
+                await using var observed = WorkflowDbContext.CreateFixture(read, Case);
+                var stored = await observed.Set<WorkflowInstanceRecord>().AsNoTracking()
+                    .SingleAsync(x => x.InstanceId == fractional.Identity.InstanceId, ct);
+                Assert.Equal(canonicalSpecifications[fractional.Identity.InstanceId], stored.Specification);
+                var canonical = WorkflowSpecification.ReadCanonical(stored.Specification);
+                Assert.Equal(fractional.SpecificationHash, canonical.SpecificationHash);
+                if (precision.CreatedTicks != 0) Assert.NotEqual(canonical.CreatedAtUtc, stored.CreatedAtUtc);
+                if (precision.DeadlineTicks != 0) Assert.NotEqual(canonical.DeadlineUtc, stored.DeadlineUtc);
+                var storedTimer = await observed.Set<WorkflowTimerRecord>().AsNoTracking()
+                    .SingleAsync(x => x.InstanceId == fractional.Identity.InstanceId, ct);
+                if (precision.DueTicks != 0)
+                {
+                    Assert.NotEqual(canonical.DueAtUtc, storedTimer.DueAtUtc);
+                    await using (var corrupt = new NpgsqlCommand("UPDATE " + Schema +
+                        ".timers SET due_at_utc=due_at_utc+interval '1 microsecond' WHERE instance_id=@instance", connection))
+                    { corrupt.Parameters.AddWithValue("instance", fractional.Identity.InstanceId); await corrupt.ExecuteNonQueryAsync(ct); }
+                    await WithRoot(connection, async (context, transaction) => {
+                        await Assert.ThrowsAsync<InvalidOperationException>(() => new WorkflowTimerStore(context).StageWaitingAsync(fractional, ct));
+                        await transaction.RollbackAsync(ct);
+                    });
+                }
+            }
+            // Adjacent persisted microseconds are real binding changes, even when <1us from canonical.
+            foreach (var column in new[] { "created_at_utc", "deadline_utc" })
+            {
+                var damaged = await Prepare(origin: Created, createdTicks: 7, deadlineTicks: 7);
+                await using (var corrupt = new NpgsqlCommand("UPDATE " + Schema + ".instances SET " + column + "=" +
+                    column + "+interval '1 microsecond' WHERE instance_id=@instance", connection))
+                { corrupt.Parameters.AddWithValue("instance", damaged.Identity.InstanceId); await corrupt.ExecuteNonQueryAsync(ct); }
+                await WithRoot(connection, async (context, transaction) => {
+                    await Assert.ThrowsAsync<InvalidOperationException>(() => new WorkflowTimerStore(context).StageWaitingAsync(damaged, ct));
+                    await transaction.RollbackAsync(ct);
+                });
+            }
+            Assert.Equal(106L, await TimerCount());
+
         }
         finally
         {
@@ -185,18 +243,22 @@ public sealed class WorkflowTimerDatabaseTests
             await using var context = WorkflowDbContext.CreateFixture(c, Case); await using var transaction = await c.BeginTransactionAsync(ct);
             await context.Database.UseTransactionAsync(transaction, ct); await action(context, transaction);
         }
-        async Task<WorkflowTimerScheduleRequest> Prepare(bool completeEarlier = true)
+        async Task<WorkflowTimerScheduleRequest> Prepare(bool completeEarlier = true, DateTimeOffset? origin = null,
+            int createdTicks = 0, int deadlineTicks = 0, int dueTicks = 0)
         {
             WorkflowTimerScheduleRequest? result = null;
             await WithRoot(connection, async (context, transaction) => {
+                var start = origin ?? Created;
                 var spec = new WorkflowSpecification(Case, Case, Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(),
-                    Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), 1, new string('a', 64), WorkflowEnvironment.Test, Created, Created.AddHours(24), Created.AddHours(1));
+                    Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), 1, new string('a', 64), WorkflowEnvironment.Test, start.AddTicks(createdTicks),
+                    start.AddHours(origin.HasValue ? 23 : 24).AddTicks(deadlineTicks), start.AddHours(1).AddTicks(dueTicks));
+                canonicalSpecifications.Add(spec.InstanceId, spec.WriteCanonical());
                 var store = new WorkflowStore(context); await store.StageCreationAsync(spec, ct);
                 var identity = new WorkflowIdentity(Case, Case, spec.InstanceId); var worker = Guid.NewGuid(); var boot = Guid.NewGuid();
                 var step0 = await context.Set<WorkflowStepRecord>().SingleAsync(x => x.InstanceId == spec.InstanceId && x.Ordinal == 0, ct);
-                await store.StageTransitionAsync(identity, step0.StepId, Guid.NewGuid(), spec.SpecificationHash, 1, WorkflowState.Running, Created, ct);
+                await store.StageTransitionAsync(identity, step0.StepId, Guid.NewGuid(), spec.SpecificationHash, 1, WorkflowState.Running, spec.CreatedAtUtc, ct);
                 var checkpoint = Guid.NewGuid();
-                var custody0 = await store.StageInitialCustodyAsync(identity, step0.StepId, checkpoint, spec.SpecificationHash, worker, boot, 1, Created, ct);
+                var custody0 = await store.StageInitialCustodyAsync(identity, step0.StepId, checkpoint, spec.SpecificationHash, worker, boot, 1, spec.CreatedAtUtc, ct);
                 if (completeEarlier)
                 {
                     // Synthetic admitted prior checkpoint facts only, not a production checkpoint executor.
@@ -205,14 +267,14 @@ public sealed class WorkflowTimerDatabaseTests
                     custody0.Phase = 3; custody0.Version++; custody0.LastCommitReceiptId = checkpoint; instance.Version++;
                     context.Add(new WorkflowTransitionRecord { InstallationId = Case, TenantId = Case, InstanceId = spec.InstanceId,
                         StepId = step0.StepId, OperationId = checkpoint, SpecificationHash = spec.SpecificationHash,
-                        ResultingState = (int)WorkflowState.Running, ResultingVersion = instance.Version, RecordedAtUtc = Created.AddMinutes(1) });
+                        ResultingState = (int)WorkflowState.Running, ResultingVersion = instance.Version, RecordedAtUtc = spec.CreatedAtUtc.AddMinutes(1) });
                     await context.SaveChangesAsync(ct);
                 }
                 var step = await context.Set<WorkflowStepRecord>().SingleAsync(x => x.InstanceId == spec.InstanceId && x.Ordinal == 1, ct);
                 var operation = Guid.NewGuid();
-                await store.StageInitialCustodyAsync(identity, step.StepId, operation, spec.SpecificationHash, worker, boot, 1, Created.AddMinutes(2), ct);
+                await store.StageInitialCustodyAsync(identity, step.StepId, operation, spec.SpecificationHash, worker, boot, 1, spec.CreatedAtUtc.AddMinutes(2), ct);
                 result = new(identity, step.StepId, operation, spec.SpecificationHash, completeEarlier ? 3 : 2, 2,
-                    new(worker, boot, 1, 1), Created.AddMinutes(5));
+                    new(worker, boot, 1, 1), spec.CreatedAtUtc.AddMinutes(5));
                 await transaction.CommitAsync(ct);
             });
             return result!;

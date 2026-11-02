@@ -26,9 +26,14 @@ public sealed class WorkflowTimerStore(WorkflowDbContext context)
         var specification = WorkflowSpecification.ReadCanonical(instance.Specification);
         if (specification.SpecificationHash != request.SpecificationHash || specification.InstallationId != identity.InstallationId ||
             specification.TenantId != identity.TenantId || specification.InstanceId != identity.InstanceId ||
-            specification.RequestId != instance.RequestId || specification.CreatedAtUtc != instance.CreatedAtUtc ||
-            specification.DeadlineUtc != instance.DeadlineUtc)
+            specification.RequestId != instance.RequestId)
             throw new InvalidOperationException("Timer canonical binding conflict.");
+        // Compare through PostgreSQL parameters, using exactly the provider precision used at insertion.
+        // Canonical bytes/hash retain all seven fractional digits; no tolerance or canonical truncation.
+        var datesMatch = await context.Set<WorkflowInstanceRecord>().AsNoTracking().AnyAsync(x =>
+            x.InstallationId == identity.InstallationId && x.TenantId == identity.TenantId && x.InstanceId == identity.InstanceId &&
+            x.CreatedAtUtc == specification.CreatedAtUtc && x.DeadlineUtc == specification.DeadlineUtc, ct);
+        if (!datesMatch) throw new InvalidOperationException("Timer canonical binding conflict.");
         var step = await context.Set<WorkflowStepRecord>().SingleOrDefaultAsync(x =>
             x.InstallationId == identity.InstallationId && x.TenantId == identity.TenantId &&
             x.InstanceId == identity.InstanceId && x.StepId == request.StepId, ct)
@@ -48,13 +53,15 @@ public sealed class WorkflowTimerStore(WorkflowDbContext context)
             x.InstanceId == identity.InstanceId && x.OperationId == request.OperationId, ct);
         if (previous is not null)
         {
-            var timer = await context.Set<WorkflowTimerRecord>().AsNoTracking().SingleOrDefaultAsync(x =>
+            var timer = await context.Set<WorkflowTimerRecord>().AsNoTracking().Where(x =>
                 x.InstallationId == identity.InstallationId && x.TenantId == identity.TenantId &&
-                x.InstanceId == identity.InstanceId && x.StepId == request.StepId && x.Generation == 1, ct);
+                x.InstanceId == identity.InstanceId && x.StepId == request.StepId && x.Generation == 1)
+                .Select(x => new { x.TimerId, x.Generation, MatchesCanonicalDue = x.DueAtUtc == specification.DueAtUtc })
+                .SingleOrDefaultAsync(ct);
             if (custody.Phase != SettledCustody || custody.LastCommitReceiptId != request.OperationId ||
                 previous.StepId != request.StepId || previous.SpecificationHash != request.SpecificationHash ||
                 previous.ResultingState != (int)WorkflowState.WaitingTimer ||
-                previous.ResultingVersion != request.ExpectedWorkflowVersion + 1 || timer is null || timer.DueAtUtc != specification.DueAtUtc)
+                previous.ResultingVersion != request.ExpectedWorkflowVersion + 1 || timer is null || !timer.MatchesCanonicalDue)
                 throw new InvalidOperationException("Existing waiting-timer operation conflicts.");
             return new(timer.TimerId, timer.Generation, previous.ResultingVersion, true);
         }
