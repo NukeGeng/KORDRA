@@ -159,6 +159,16 @@ public sealed class WorkflowDbContext : DbContext
                 if (oldState != newState && !WorkflowStateRules.CanChangeStepState(oldState, newState))
                     throw new InvalidOperationException("Workflow step transition requires the accepted graph or recovery evidence.");
             }
+            if (entry.Entity is WorkflowTimerRecord timer)
+            {
+                foreach (var property in entry.Properties.Where(p => p.IsModified))
+                    if (property.Metadata.Name is not ("Version" or "Status" or "SchedulerAttempts"))
+                        throw new InvalidOperationException("Workflow timer identity and original due time are immutable.");
+                var before = (int)entry.Property("SchedulerAttempts").OriginalValue!;
+                if (entry.Property("SchedulerAttempts").IsModified &&
+                    (before is < 0 or >= WorkflowTimingRules.MaximumSchedulerAttempts || timer.SchedulerAttempts != before + 1))
+                    throw new InvalidOperationException("Workflow scheduler attempts cannot reset, skip or exceed their budget.");
+            }
             if (entry.Entity is WorkflowClockFloorRecord floor &&
                 floor.FloorUtc < (DateTimeOffset)entry.Property("FloorUtc").OriginalValue!)
                 throw new InvalidOperationException("Workflow clock floor cannot decrease.");
