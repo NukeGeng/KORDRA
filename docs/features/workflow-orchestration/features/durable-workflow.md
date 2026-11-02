@@ -6,7 +6,7 @@ last_reviewed: 2026-10-20
 module_id: MOD-WFL
 feature_id: FEAT-WFL-001
 phase: MVP
-source_paths: ["src/Modules/WorkflowOrchestration/Domain/", "src/Modules/WorkflowOrchestration/Contracts/", "Kordra.slnx"]
+source_paths: ["src/Modules/WorkflowOrchestration/Domain/", "src/Modules/WorkflowOrchestration/Contracts/", "src/Modules/WorkflowOrchestration/Infrastructure/", "Kordra.slnx"]
 test_paths: ["tests/WorkflowOrchestration.Tests/", "tests/InfrastructureInventory.Bootstrap.Tests/ArchitectureTests.cs"]
 planned_source_paths: ["src/Modules/WorkflowOrchestration/", "src/Host/Kordra.ControlWorker/"]
 planned_test_paths: ["tests/WorkflowOrchestration.Tests/", "tests/ControlWorker.Tests/"]
@@ -85,3 +85,19 @@ Domain and Contracts projects now implement tenant/installation/instance identit
 ## T12.2a immutable specification source — 2026-10-31
 
 Added immutable full resource/release/request binding, closed checkpoint template, strict bounded canonical storage reader/writer and SHA256 business hash. Independent fixed byte/hash vector and negative tests cover resource substitution, unsupported fields/versions/environments, duplicate/authority/secret fields, ordered steps/nulls, bad schedules/IDs/hashes, UTC normalization, version exhaustion and terminal/Unknown state guards. Code remains BCL-only with no HTTP/DB/worker activation. Full feature gates/publication are pending; no persistence or independent-host evidence is inferred from pure tests.
+
+## T12.2b persistence increment — 2026-11-01
+
+Infrastructure now contains the EF/Npgsql revision1 owner model for all nine WFL tables, scoped composite keys/FKs, version concurrency tokens, request uniqueness, bounded/hash/state constraints, isolated model-cache keys and offline DDL generation. The owner context rejects history rewrites/deletes, altered canonical initial binding, mutable business specification, skipped versions and autocommit. WorkflowStore stages creation/immutable request receipts, instance CAS/history and initial step custody on a caller-owned root; it never commits or grants authority. Initial custody cannot become takeover merely because time passes. No runtime DI, HTTP routes, worker activation or automatic migration was added.
+
+Targeted tests cover model/DDL, scope associations, fixture isolation, sanitized target rejection, immutable history and fail-closed owner-root guards. The separately approved isolated PostgreSQL fixture has now passed creation/rollback/duplicate/hash-conflict/wrong-tenant/composite-FK/CAS/initial-custody checks and verified schema cleanup. General CI leaves this operation-gated test skipped without its exact fixture flag; its actual execution evidence is separate. SQL artifacts/proposal and coordinator evidence are private under `.amr-local/t12-remaining-design/`. Model constraints and EF mutation guards do not prove restricted worker SQL ACLs (T12.3), multi-owner atomicity (T12.2c), timer/recovery completion (T12.2d) or distributed authority. Offline revision1 SQL and checksum manifest are checked against the current EF model. All eight local canonical gates passed (220 tooling / 1,846 Product tests; two explicitly accounted skips), with source stable. Publication/CI/native PR review are tracked separately; T12.2c–e and all distributed-worker/independent-host gates remain incomplete.
+
+### T12.2b CAS regression and local evidence
+
+First actual fixture failed because EF inserted the unique resulting-version history row before the instance CAS, exposing a uniqueness exception instead of the expected concurrency conflict. The owner store now stages the instance/step CAS first, then history/custody on the same uncommitted caller root. The stale-version assertion was preserved; the exact bounded fixture rerun passed, including rollback/independent reader checks and cleanup. Original failed evidence remains private, followed by a successor repair receipt. No retry, authority, root-commit or cleanup scope was expanded. AUD/MSG integration and lost-COMMIT handling are still T12.2c, not supplied by this store alone.
+
+## PR25-WFL-CUSTODY-001 — cancellation / initial custody serialization — 2026-11-01
+
+Codex round1 on reviewed head `0ec233fa5a9e4c0d4e860dcf12eee93d8b710c1d` reported [the P2 custody race](https://github.com/NukeGeng/KORDRA/pull/25#discussion_r4434995618). A read-only tracked Running instance was not protected by the step CAS. Initial custody now reads current instance state/hash with a parameterized `SELECT ... FOR UPDATE`, using only the closed, quoted owner schema, before any step/custody read or write. This bypasses stale EF identity-map snapshots and holds the instance lock through the caller root; no authority, retry policy or commit boundary changed.
+
+The actual isolated PostgreSQL fixture reproduced acceptance after another root committed Cancelled. The fixed fixture passed both orders: cancellation-first rejects even with a stale Running row tracked; claim-first blocks cancellation with exact PostgreSQL lock-timeout evidence, and independent readers verify Running + one custody versus Cancelled + zero custody. Original assertions remain before additional synthetic instances; final aggregate counts cover the additional cases. Native exception wrappers and fixture-oracle corrections are recorded separately from production changes. All runs retained original failures and verified cleanup of the same approved UUID schema. General CI keeps this operation-gated test skipped without explicit flags; actual execution evidence is private. Publication/current-head CI and follow-up native review remain separate gates. ADR-0021 and accepted contracts are unchanged.

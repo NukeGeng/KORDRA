@@ -199,3 +199,7 @@ The accepted ADR-0020 MSG Contracts/Infrastructure library and test harness are 
 ## T12.2a shared graph integration — 2026-11-01
 
 The shared solution/architecture graph adds only WFL BCL Domain/Contracts and pure tests under accepted ADR-0021. This owner's project edges, package pins, contracts and runtime behavior are unchanged. The shared guard retains existing invariants and explicitly checks the added WFL boundaries. Owner implementation/authority claims remain as previously evidenced; WFL persistence/worker activation is not included.
+
+## T12.2b shared architecture registration — 2026-11-01
+
+The co-owned solution/architecture test now includes WFL Infrastructure → its own Domain/Contracts, with the existing approved EF Relational10.0.11 / Npgsql EF10.0.3 pins under ADR-0021. No dependency or runtime behavior of this feature changed; WFL persistence evidence remains owned by FEAT-WFL-001 and does not activate a worker or grant authority.

@@ -525,3 +525,13 @@ FEAT-WFL-001 owns the first pure Domain/Contracts identity/state/version impleme
 ## T12.2a immutable specification source — 2026-10-31
 
 Added immutable full resource/release/request binding, closed checkpoint template, strict bounded canonical storage reader/writer and SHA256 business hash. Independent fixed byte/hash vector and negative tests cover resource substitution, unsupported fields/versions/environments, duplicate/authority/secret fields, ordered steps/nulls, bad schedules/IDs/hashes, UTC normalization, version exhaustion and terminal/Unknown state guards. Code remains BCL-only with no HTTP/DB/worker activation. Full feature gates/publication are pending; no persistence or independent-host evidence is inferred from pure tests.
+
+## T12.2b owner persistence increment — 2026-11-01
+
+Added WFL EF/Npgsql model/offline schema artifacts, trusted-scope request/transition staging and initial custody guards under accepted ADR-0021. No product DB migration, permission grant, provider/worker activation, architecture change or merge. Actual new WFL fixture is gated on a separate operation manifest; broader T12 remains incomplete.
+
+T12.2b synthetic PostgreSQL fixture is now owner-approved and passed with cleanup. Fixed CAS/history ordering using two stage saves in the same caller root, retaining the concurrency assertion and original failure evidence. Added checked offline revision1 SQL/hash manifest. No product DB or runtime activation occurred.
+
+## PR25 initial custody race fix — 2026-11-01
+
+Serialized initial custody against instance cancellation under the accepted lock order. Added deterministic two-root PostgreSQL regressions (including a stale tracked instance) and preserved pre-fix evidence. Same approved disposable schema; no new operational authority, permissions, runtime activation or migration.

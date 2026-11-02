@@ -12,3 +12,5 @@ T12.2a now adds BCL-only Domain and Contracts libraries plus pure WorkflowOrches
 Product ownership: [canonical module specification](../../../docs/features/workflow-orchestration/module.md).
 
 See [current folder framework](../../../docs/engineering/repository-folder-framework.md) for implemented paths and exceptions. The [source architecture ADR-0009](../../../docs/decisions/0009-source-architecture.md) remains proposed; this reservation does not accept its technology, trust boundaries or integrations. Add source only for an approved, mapped feature with applicable tests and review.
+
+T12.2b work-in-progress adds owner persistence records/context/store and offline DDL/model tests. The separately approved isolated PostgreSQL fixture passed with cleanup; all eight local canonical gates passed. Publication/CI/native PR review are tracked separately. The checked offline revision1 SQL/checksum manifest is not permission to migrate the product database. No runtime registration or startup DDL is enabled.
