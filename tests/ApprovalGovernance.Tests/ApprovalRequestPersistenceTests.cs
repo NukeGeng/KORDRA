@@ -1,3 +1,4 @@
+using Kordra.Testing;
 using Kordra.Modules.ApprovalGovernance.Infrastructure;
 using Kordra.Modules.ApprovalGovernance;
 using Kordra.ApprovalGovernance.Domain;
@@ -14,10 +15,14 @@ public sealed class ApprovalRequestPersistenceTests : IAsyncLifetime
     private IDbContextTransaction _tx = null!;
     private readonly Guid _installation = Guid.NewGuid(), _tenant = Guid.NewGuid(), _project = Guid.NewGuid(), _environment = Guid.NewGuid();
     private readonly DateTimeOffset _now = new(2026, 10, 29, 0, 0, 0, TimeSpan.Zero);
+    private static DbContextOptions<ApprovalDbContext> Options(string locator) => RegressionPostgreSqlSelection.LoadRunnerProfile() is { } profile
+            ? ApprovalDbContextFactory.CreateDisposableTestOptions(locator, profile.OwnerBinding)
+            : ApprovalDbContextFactory.CreateTestOptions(locator);
+
     public async Task InitializeAsync()
     {
         var locator = Environment.GetEnvironmentVariable("KORDRA_IAM_TEST_CONNECTION_STRING") ?? throw new InvalidOperationException("Isolated test database required.");
-        _db = new(ApprovalDbContextFactory.CreateTestOptions(locator)); await _db.Database.MigrateAsync();
+        _db = new(Options(locator)); await _db.Database.MigrateAsync();
         _tx = await _db.Database.BeginTransactionAsync();
     }
     public async Task DisposeAsync() { await _tx.RollbackAsync(); await _tx.DisposeAsync(); await _db.DisposeAsync(); }
@@ -84,7 +89,11 @@ public sealed class ApprovalRequestPersistenceTests : IAsyncLifetime
     public async Task EnlistedContextParticipatesInCallerRollback()
     {
         var row = Request();
-        await using (var enlisted = new ApprovalDbContext(ApprovalDbContextFactory.CreateEnlistedOptions(_db.Database.GetDbConnection())))
+        var connection = _db.Database.GetDbConnection();
+        var options = RegressionPostgreSqlSelection.LoadRunnerProfile() is { } profile
+            ? ApprovalDbContextFactory.CreateDisposableEnlistedTestOptions(connection, profile.OwnerBinding)
+            : ApprovalDbContextFactory.CreateEnlistedOptions(connection);
+        await using (var enlisted = new ApprovalDbContext(options))
         {
             await enlisted.Database.UseTransactionAsync(_tx.GetDbTransaction());
             new ApprovalRequestStore(enlisted).StageRequest(row);
@@ -170,14 +179,14 @@ public sealed class ApprovalRequestPersistenceTests : IAsyncLifetime
         await _tx.RollbackAsync(); await _tx.DisposeAsync();
         _tx = await _db.Database.BeginTransactionAsync(); // replace fixture transaction after testing a separate context
         var locator = Environment.GetEnvironmentVariable("KORDRA_IAM_TEST_CONNECTION_STRING")!;
-        await using var outside = new ApprovalDbContext(ApprovalDbContextFactory.CreateTestOptions(locator));
+        await using var outside = new ApprovalDbContext(Options(locator));
         Assert.Throws<InvalidOperationException>(() => new ApprovalRequestStore(outside).StageRequest(Request()));
     }
     [Fact]
     public async Task CompetingDecisionsOnIndependentTransactionsCannotBothCommit()
     {
         var locator = Environment.GetEnvironmentVariable("KORDRA_IAM_TEST_CONNECTION_STRING")!;
-        var options = ApprovalDbContextFactory.CreateTestOptions(locator);
+        var options = Options(locator);
         var row = Request();
         await using (var seed = new ApprovalDbContext(options))
         await using (var seedTx = await seed.Database.BeginTransactionAsync())

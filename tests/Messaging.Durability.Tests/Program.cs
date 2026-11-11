@@ -29,7 +29,7 @@ public static class Program
         var restricted = args[1] == "consumer-restricted";
         var locator = Environment.GetEnvironmentVariable(restricted ? "KORDRA_T12_RESTRICTED_RUNTIME_CONNECTION_STRING" : "KORDRA_IAM_TEST_CONNECTION_STRING")
             ?? throw new InvalidOperationException("Private fixture locator required.");
-        var fixture = restricted ? FixtureDatabaseScope.RestrictedRuntime(locator, caseId) : new FixtureDatabaseScope(locator, caseId);
+        var fixture = FixtureDatabaseScope.ForRunner(locator, caseId, restricted);
         var scenario = args.Length == 5 ? args[4] : "normal";
         if (scenario is not ("normal" or "transient" or "expired" or "wrong-case" or "unsupported-schema" or "wrong-tenant" or "unknown-type" or "expires-in-queue"))
             throw new InvalidOperationException("Unknown fixture scenario.");
@@ -116,7 +116,7 @@ public sealed class DeliveryProbeHandler
     public static async Task Handle(DeliveryProbe message, DeliveryState state, IMessageContext context, CancellationToken cancellation)
     {
         if (state.CrashBeforeEffect) Environment.Exit(74);
-        var fixture = state.Restricted ? FixtureDatabaseScope.RestrictedRuntime(state.Locator, state.CaseId) : new FixtureDatabaseScope(state.Locator, state.CaseId);
+        var fixture = FixtureDatabaseScope.ForRunner(state.Locator, state.CaseId, state.Restricted);
         await using var connection = fixture.CreateConnection(); await connection.OpenAsync(cancellation);
         await using (var attempt = new NpgsqlCommand($"INSERT INTO {fixture.Schema}.fixture_attempt(at) VALUES (clock_timestamp())", connection))
             await attempt.ExecuteNonQueryAsync(cancellation);

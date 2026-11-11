@@ -1,3 +1,4 @@
+using DisposableTestBinding = (System.Guid RunId, string SourceSha256, string OperationManifestSha256, System.DateTimeOffset ExpiresAtUtc);
 using System.Security.Cryptography;
 using System.Text;
 using Kordra.ApprovalGovernance.Domain;
@@ -30,21 +31,37 @@ public sealed class OfflineApprovalPolicyCoordinator(Guid installationId, IDbCon
     IAuditAppendPort auditLookup, FairAsyncReaderWriterAdmissionGate gate, IAuthorityClock clock,
     IOfflinePolicyAuditTransactionFactory? auditTransactions = null)
 {
+    private readonly DisposableTestBinding? disposableTest;
+    private OfflineApprovalPolicyCoordinator(Guid installationId, IDbContextFactory<KordraIdentityDbContext> identities,
+    IAuditAppendPort auditLookup, FairAsyncReaderWriterAdmissionGate gate, IAuthorityClock clock,
+    IOfflinePolicyAuditTransactionFactory? auditTransactions, DisposableTestBinding profile)
+        : this(installationId, identities, auditLookup, gate, clock, auditTransactions) => disposableTest = profile;
+    public static OfflineApprovalPolicyCoordinator CreateDisposableTestCoordinator(Guid installationId, IDbContextFactory<KordraIdentityDbContext> identities,
+    IAuditAppendPort auditLookup, FairAsyncReaderWriterAdmissionGate gate, IAuthorityClock clock,
+    IOfflinePolicyAuditTransactionFactory? auditTransactions, DisposableTestBinding profile)
+        => new(installationId, identities, auditLookup, gate, clock, auditTransactions, profile);
+
     public async Task<ApprovalPolicyInspectResult?> InspectAsync(IOfflineProvisioningLease custody, ReadOnlyMemory<byte> input,
         CancellationToken cancellationToken = default)
     {
         custody.RequireHeld();
         ApprovalPolicyManifest manifest;
-        try { manifest = ApprovalPolicyManifest.Parse(input); } catch (ArgumentException) { return null; }
+        try { manifest = ParseManifest(input); } catch (ArgumentException) { return null; }
         if (manifest.InstallationId != installationId) return null;
         using var budget = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken); budget.CancelAfter(TimeSpan.FromSeconds(10));
         await using var admission = await gate.AcquireReadAsync(budget.Token);
         await using var identity = await identities.CreateDbContextAsync(budget.Token);
         if (!MatchesDatabase(identity, manifest)) return null;
         await identity.Database.OpenConnectionAsync(budget.Token);
-        await using var apr = new ApprovalDbContext(ApprovalDbContextFactory.CreateOfflineEnlistedOptions(identity.Database.GetDbConnection()));
-        await using var prj = new ProjectDbContext(ProjectDbContextFactory.CreateOfflineEnlistedOptions(identity.Database.GetDbConnection()));
-        await using var ten = new TenantDbContext(TenantDbContextFactory.CreateOfflineEnlistedOptions(identity.Database.GetDbConnection()));
+        await using var apr = new ApprovalDbContext(disposableTest is { } approvalProfile
+            ? ApprovalDbContextFactory.CreateDisposableEnlistedTestOptions(identity.Database.GetDbConnection(), approvalProfile)
+            : ApprovalDbContextFactory.CreateOfflineEnlistedOptions(identity.Database.GetDbConnection()));
+        await using var prj = new ProjectDbContext(disposableTest is { } projectProfile
+            ? ProjectDbContextFactory.CreateDisposableEnlistedTestOptions(identity.Database.GetDbConnection(), projectProfile)
+            : ProjectDbContextFactory.CreateOfflineEnlistedOptions(identity.Database.GetDbConnection()));
+        await using var ten = new TenantDbContext(disposableTest is { } tenantProfile
+            ? TenantDbContextFactory.CreateDisposableEnlistedTestOptions(identity.Database.GetDbConnection(), tenantProfile)
+            : TenantDbContextFactory.CreateOfflineEnlistedOptions(identity.Database.GetDbConnection()));
         if (!await ValidOwnerAsync(manifest, prj, ten, budget.Token)) return null;
         var head = await apr.Heads.AsNoTracking().SingleOrDefaultAsync(x => x.InstallationId == installationId && x.TenantId == manifest.TenantId &&
             x.ProjectId == manifest.ProjectId && x.PolicyId == manifest.PolicyId, budget.Token);
@@ -67,7 +84,7 @@ public sealed class OfflineApprovalPolicyCoordinator(Guid installationId, IDbCon
     {
         custody.RequireHeld();
         ApprovalPolicyManifest manifest;
-        try { manifest = ApprovalPolicyManifest.Parse(input); } catch (ArgumentException) { return new("invalid"); }
+        try { manifest = ParseManifest(input); } catch (ArgumentException) { return new("invalid"); }
         if (installationId == Guid.Empty || manifest.InstallationId != installationId) return new("invalid");
         if (manifest.CommandHash != approvedHash) return new("denied");
         using var budget = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken); budget.CancelAfter(TimeSpan.FromSeconds(10));
@@ -80,7 +97,9 @@ public sealed class OfflineApprovalPolicyCoordinator(Guid installationId, IDbCon
             if (!MatchesDatabase(identity, manifest)) return new("denied");
             await using var transaction = await identity.Database.BeginTransactionAsync(budget.Token);
             var connection = identity.Database.GetDbConnection(); var dbTransaction = transaction.GetDbTransaction();
-            await using var apr = new ApprovalDbContext(ApprovalDbContextFactory.CreateOfflineEnlistedOptions(connection));
+            await using var apr = new ApprovalDbContext(disposableTest is { } approvalProfile
+            ? ApprovalDbContextFactory.CreateDisposableEnlistedTestOptions(connection, approvalProfile)
+            : ApprovalDbContextFactory.CreateOfflineEnlistedOptions(connection));
             await apr.Database.UseTransactionAsync(dbTransaction, budget.Token);
             var store = new ApprovalPolicyStore(apr);
             var previous = await store.ReadCommandUnderAdmissionAsync(installationId, manifest.ManifestId, budget.Token);
@@ -105,9 +124,13 @@ public sealed class OfflineApprovalPolicyCoordinator(Guid installationId, IDbCon
                 return new("success", 1, previous.ManifestId, previous.PolicyId, previous.PolicyRevision,
                     Convert.ToHexStringLower(previous.PayloadHash), previous.CommandId, true);
             }
-            await using var prj = new ProjectDbContext(ProjectDbContextFactory.CreateOfflineEnlistedOptions(connection));
+            await using var prj = new ProjectDbContext(disposableTest is { } projectProfile
+            ? ProjectDbContextFactory.CreateDisposableEnlistedTestOptions(connection, projectProfile)
+            : ProjectDbContextFactory.CreateOfflineEnlistedOptions(connection));
             await prj.Database.UseTransactionAsync(dbTransaction, budget.Token);
-            await using var ten = new TenantDbContext(TenantDbContextFactory.CreateOfflineEnlistedOptions(connection));
+            await using var ten = new TenantDbContext(disposableTest is { } tenantProfile
+            ? TenantDbContextFactory.CreateDisposableEnlistedTestOptions(connection, tenantProfile)
+            : TenantDbContextFactory.CreateOfflineEnlistedOptions(connection));
             await ten.Database.UseTransactionAsync(dbTransaction, budget.Token);
             if (!await ValidOwnerAsync(manifest, prj, ten, budget.Token)) return new("denied");
             var owner = new ReleasePolicyEnvironmentReader(prj);
@@ -125,7 +148,8 @@ public sealed class OfflineApprovalPolicyCoordinator(Guid installationId, IDbCon
             store.StageCommand(new ApprovalLease(custody), manifest, commandId, intent.IntentId, AuditIntentCanonicalizer.ComputeHash(intent), now);
             await apr.SaveChangesAsync(budget.Token);
             await AuthorityClockFloorStore.StageAsync(identity, installationId, Now(), budget.Token);
-            await using var auditTransaction = await (auditTransactions ?? new OfflinePolicyAuditTransactionFactory())
+            await using var auditTransaction = await (auditTransactions ?? (disposableTest is { } auditProfile
+                ? OfflinePolicyAuditTransactionFactory.CreateDisposableTestFactory(auditProfile) : new OfflinePolicyAuditTransactionFactory()))
                 .EnlistAsync(connection, dbTransaction, new AuditLease(custody), budget.Token);
             var staged = await auditTransaction.StageAsync(intent, budget.Token);
             if (staged.Status == AuditTransactionStageStatus.AlreadyDurable ||
@@ -216,8 +240,15 @@ public sealed class OfflineApprovalPolicyCoordinator(Guid installationId, IDbCon
         }
         catch { gate.Close(); throw; }
     }
-    private static bool MatchesDatabase(KordraIdentityDbContext db, ApprovalPolicyManifest manifest)
+    private ApprovalPolicyManifest ParseManifest(ReadOnlyMemory<byte> input) => disposableTest is { } profile
+        ? ApprovalPolicyManifest.ParseDisposableTest(input, profile) : ApprovalPolicyManifest.Parse(input);
+    private bool MatchesDatabase(KordraIdentityDbContext db, ApprovalPolicyManifest manifest)
     {
+        if (disposableTest is { } profile)
+        {
+            IdentityAccessDbContextFactory.ValidateDisposableTestTarget(db.Database.GetConnectionString()!, profile);
+            return manifest.ExpectedDatabase == "kordra_test_" + profile.RunId.ToString("N") && manifest.ExpectedRole == "kordra_test";
+        }
         var parsed = new NpgsqlConnectionStringBuilder(db.Database.GetConnectionString());
         return parsed.Host == "127.0.0.1" && parsed.Port == 5432 && parsed.Database == manifest.ExpectedDatabase &&
             (parsed.Username == "kordra_admin" || parsed.Database == "kordra_test" && parsed.Username == "kordra_test");

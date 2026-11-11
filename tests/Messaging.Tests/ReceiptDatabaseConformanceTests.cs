@@ -41,7 +41,7 @@ public sealed class ReceiptDatabaseConformanceTests
             throw new InvalidOperationException("Fixture SQL differs from the approved review artifact.");
         var locator = Environment.GetEnvironmentVariable("KORDRA_IAM_TEST_CONNECTION_STRING")
             ?? throw new InvalidOperationException("Private test locator required.");
-        AuditDbContextFactory.ValidateTestTarget(locator);
+        MessagingFixtureSelection.ValidateTestTarget(locator);
         var target = new NpgsqlConnectionStringBuilder(locator);
         if (!string.IsNullOrEmpty(target.SearchPath) || !string.IsNullOrEmpty(target.Options) || target.Multiplexing)
             throw new InvalidOperationException("Receipt fixture rejects session overrides and multiplexing.");

@@ -89,12 +89,12 @@ public sealed class ProjectCatalogTests : CatalogTestFixture
     {
         var project = await Project(); Policy.Valid.Add((Tenant, project.Id, "Production", 1));
         var command = new CatalogCommand(Key(), "create", "environment", Tenant, project.Id, Name: "prod", Classification: "Production", PolicyRevision: 1);
-        Assert.Equal("unavailable", (await Catalog(command, new FaultAudit(beforeSave: () => Policy.Valid.Clear()))).Status);
+        Assert.Equal("unavailable", (await Catalog(command, new FaultAudit(Selection.CatalogAudit(), beforeSave: () => Policy.Valid.Clear()))).Status);
         await using var db = await Projects.CreateDbContextAsync(); Assert.Empty(await db.Environments.Where(x => x.TenantId == Tenant).ToArrayAsync());
         Policy.Valid.Add((Tenant, project.Id, "Production", 1));
         Assert.Equal("success", (await Catalog(command)).Status);
         var next = new CatalogCommand(Key(), "create", "application", Tenant, project.Id, Name: "app");
-        Assert.Equal("unavailable", (await Catalog(next, new FaultAudit(beforeSave: () => CurrentSubject.Principal = null))).Status);
+        Assert.Equal("unavailable", (await Catalog(next, new FaultAudit(Selection.CatalogAudit(), beforeSave: () => CurrentSubject.Principal = null))).Status);
         CurrentSubject.Principal = Principal; Assert.Equal("success", (await Catalog(next)).Status);
     }
 

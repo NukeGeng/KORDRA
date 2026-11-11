@@ -1,3 +1,4 @@
+using Kordra.Testing;
 using Kordra.Modules.ApprovalGovernance.Infrastructure;
 using Kordra.Modules.ApprovalGovernance;
 using Kordra.Modules.ApprovalGovernance.Contracts;
@@ -24,7 +25,9 @@ public sealed class ApprovalPolicyPersistenceTests : IAsyncLifetime
     {
         var locator = Environment.GetEnvironmentVariable("KORDRA_IAM_TEST_CONNECTION_STRING")
             ?? throw new InvalidOperationException("Private isolated kordra_test locator required.");
-        _db = new ApprovalDbContext(ApprovalDbContextFactory.CreateTestOptions(locator));
+        _db = new ApprovalDbContext(RegressionPostgreSqlSelection.LoadRunnerProfile() is { } profile
+            ? ApprovalDbContextFactory.CreateDisposableTestOptions(locator, profile.OwnerBinding)
+            : ApprovalDbContextFactory.CreateTestOptions(locator));
         await _db.Database.MigrateAsync();
         _transaction = await _db.Database.BeginTransactionAsync();
         _db.Heads.Add(new() { InstallationId = _installation, TenantId = _tenant, ProjectId = _project, PolicyId = _policy, CurrentRevision = 1 });
@@ -211,9 +214,10 @@ public sealed class ApprovalPolicyPersistenceTests : IAsyncLifetime
     {
         var now = DateTimeOffset.UtcNow; return now.AddTicks(-(now.Ticks % 10));
     }
-    private static ApprovalPolicyManifest Manifest(Guid installation, Guid tenant, Guid project, Guid policy,
+    private ApprovalPolicyManifest Manifest(Guid installation, Guid tenant, Guid project, Guid policy,
         Guid environment, long revision, bool includeBinding, Guid? expectedBindingId = null, long expectedBindingRevision = 0)
     {
+        var profile = RegressionPostgreSqlSelection.LoadRunnerProfile();
         var binding = new[] { new { environmentId = environment.ToString("D"), expectedEnvironmentRevision = 2,
             expectedBindingId = expectedBindingId?.ToString("D"), expectedBindingRevision } };
         var value = new
@@ -221,8 +225,8 @@ public sealed class ApprovalPolicyPersistenceTests : IAsyncLifetime
             schemaVersion = 1,
             manifestId = Guid.NewGuid().ToString("D"),
             installationId = installation.ToString("D"),
-            expectedDatabase = "kordra_test",
-            expectedRole = "kordra_admin",
+            expectedDatabase = profile?.Database ?? "kordra_test",
+            expectedRole = profile is null ? "kordra_admin" : "kordra_test",
             tenantId = tenant.ToString("D"),
             projectId = project.ToString("D"),
             policyId = policy.ToString("D"),
@@ -240,7 +244,8 @@ public sealed class ApprovalPolicyPersistenceTests : IAsyncLifetime
             },
             bindingChanges = includeBinding ? binding : []
         };
-        return ApprovalPolicyManifest.Parse(Encoding.UTF8.GetBytes(JsonSerializer.Serialize(value)));
+        var input = JsonSerializer.SerializeToUtf8Bytes(value);
+        return profile is null ? ApprovalPolicyManifest.Parse(input) : ApprovalPolicyManifest.ParseDisposableTest(input, profile.OwnerBinding);
     }
     private sealed class Custody : IOfflineApprovalCustody
     {

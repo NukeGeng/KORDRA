@@ -11,8 +11,8 @@ internal static class NativeWireFixture
 {
     internal const string TypeId = "fixture.native";
     internal sealed record Payload(Guid CaseId, Guid LogicalId, bool Enabled);
-    internal static CompiledMessageRegistry Registry() => new([new CompiledMessageRegistration<Payload>(
-        new(TypeId, 1, MessageScopeKind.Tenant, false), new Codec(), new RefuseConsumer(), "nativecompatibility", new())]);
+    internal static CompiledMessageRegistry Registry(string route = "nativecompatibility") => new([new CompiledMessageRegistration<Payload>(
+        new(TypeId, 1, MessageScopeKind.Tenant, false), new Codec(), new RefuseConsumer(), route, new())]);
 
     internal static VerifiedMessageEnvelope Create(Guid caseId, Guid logicalId, DateTimeOffset occurredAt, bool enabled = true)
     {

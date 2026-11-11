@@ -44,7 +44,7 @@ public sealed class TransactionAdapterCompatibilityTests
             ?? throw new InvalidOperationException("Private exact test locator required.");
         // Reuse the actual AUD target/session guards before opening any connection.
         await using var setup = new NpgsqlConnection(locator);
-        await using var model = AuditDbContextFactory.CreateIsolatedTestContext(setup, caseId);
+        await using var model = MessagingFixtureSelection.AuditContext(setup, caseId);
         using var budget = new CancellationTokenSource(TimeSpan.FromSeconds(30));
         await setup.OpenAsync(budget.Token);
         var created = false;
@@ -90,7 +90,7 @@ public sealed class TransactionAdapterCompatibilityTests
             var ownerLocator = new NpgsqlConnectionStringBuilder(locator) { Pooling = false, Multiplexing = false }.ConnectionString;
             await using var connection = new NpgsqlConnection(ownerLocator); await connection.OpenAsync(budget.Token);
             await using var transaction = await connection.BeginTransactionAsync(budget.Token);
-            await using var audit = await AuditTransactionContext.CreateIsolatedTestAsync(connection, transaction, caseId, budget.Token);
+            await using var audit = await MessagingFixtureSelection.AuditTransaction(connection, transaction, caseId, budget.Token);
             var stager = new CallerOwnedMessageStager(connection, transaction, store, schema);
             Assert.Throws<InvalidOperationException>(() => new CallerOwnedMessageStager(connection, transaction, store, "unbound_schema"));
             using (var differentConnection = new NpgsqlConnection(locator))
@@ -110,7 +110,7 @@ public sealed class TransactionAdapterCompatibilityTests
                 ContentType = "application/json", MessageType = "kordra.fixture.compatibility.v1",
                 Status = EnvelopeStatus.Outgoing
             };
-            var receipts = CallerOwnedReceiptStore.CreateIsolatedTestStore(connection, transaction, caseId);
+            var receipts = MessagingFixtureSelection.ReceiptStore(connection, transaction, caseId);
             var publicationContext = new MessageContext(host.Services.GetRequiredService<IWolverineRuntime>());
             await publicationContext.EnlistInOutboxAsync(new CallerOwnedEnvelopeEnlistment(stager, async () => await audit.RollbackAsync()));
             var registry = new CompiledMessageRegistry([new CompiledMessageRegistration<Guid>(
@@ -148,7 +148,7 @@ public sealed class TransactionAdapterCompatibilityTests
                 {
                     Assert.True(fault.Dropped);
                     await using var lookupConnection = new NpgsqlConnection(locator);
-                    await using var lookup = AuditDbContextFactory.CreateIsolatedTestContext(lookupConnection, caseId);
+                    await using var lookup = MessagingFixtureSelection.AuditContext(lookupConnection, caseId);
                     var stored = await lookup.Entries.AsNoTracking().SingleAsync(x => x.IntentId == intent.IntentId, budget.Token);
                     Assert.Equal(AuditIntentCanonicalizer.ComputeHash(intent), Convert.ToHexString(stored.CanonicalIntentHash).ToLowerInvariant());
                 }

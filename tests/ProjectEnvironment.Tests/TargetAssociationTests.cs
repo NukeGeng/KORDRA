@@ -24,7 +24,7 @@ public sealed class TargetAssociationTests : CatalogTestFixture
         Assert.Null(await ReadTarget(Guid.NewGuid(), result.Resource.TargetId));
         await using var prj = await Projects.CreateDbContextAsync(); await using var inv = await Inventory.CreateDbContextAsync();
         Assert.Equal(1, await prj.Associations.CountAsync(x => x.TenantId == Tenant)); Assert.Equal(1, await inv.Targets.CountAsync(x => x.TenantId == Tenant));
-        await using var audit = new AuditDbContext(AuditDbContextFactory.CreateTestOptions(Locator));
+        await using var audit = new AuditDbContext(Selection.Audit());
         var entry = Assert.Single(await audit.Entries.Where(x => x.TenantRef == Tenant && x.ResourceRef == result.Resource.TargetId).ToArrayAsync());
         Assert.Equal(Principal, entry.SubjectRef); Assert.Equal("target.manage", entry.Permission);
         Assert.Equal(withEnvironment ? "environment" : "project", entry.ScopeKind);
@@ -137,7 +137,7 @@ public sealed class TargetAssociationTests : CatalogTestFixture
                 Assert.Empty(await prj.Associations.Where(x => x.TenantId == Tenant).ToArrayAsync());
                 Assert.Equal(1, (await prj.Projects.SingleAsync(x => x.TenantId == Tenant && x.Id == project.Id)).Revision);
                 Assert.Empty(await db.Targets.Where(x => x.TenantId == Tenant).ToArrayAsync());
-                await using var audit = new AuditDbContext(AuditDbContextFactory.CreateTestOptions(Locator));
+                await using var audit = new AuditDbContext(Selection.Audit());
                 Assert.Equal(0, await audit.Entries.CountAsync(x => x.TenantRef == Tenant && x.Permission == "target.manage"));
             }
             finally { await FixtureDdl($"DROP TRIGGER {trigger} ON app.inv_targets"); }
@@ -152,7 +152,7 @@ public sealed class TargetAssociationTests : CatalogTestFixture
     public async Task Unknown_commit_requires_fresh_gate_and_exact_receipt_reconciliation(bool actuallyCommitted)
     {
         var project = await Project(); var command = new TargetCommand(Key(), "register", Tenant, project.Id, Name: "metadata", Kind: "kubernetes");
-        Assert.Equal("unavailable", (await Target(command, new FaultAudit(unknownAfterCommit: actuallyCommitted, unknownWithoutCommit: !actuallyCommitted))).Status);
+        Assert.Equal("unavailable", (await Target(command, new FaultAudit(Selection.CatalogAudit(), unknownAfterCommit: actuallyCommitted, unknownWithoutCommit: !actuallyCommitted))).Status);
         await Assert.ThrowsAsync<InvalidOperationException>(async () => { await using var admission = await Gate.AcquireReadAsync(); });
         Gate = new();
         var recovered = await Target(command); Assert.Equal("success", recovered.Status);
@@ -165,8 +165,8 @@ public sealed class TargetAssociationTests : CatalogTestFixture
     public async Task Setup_failure_and_subject_revocation_before_save_do_not_poison_gate_or_leave_a_binding()
     {
         var project = await Project(); var command = new TargetCommand(Key(), "register", Tenant, project.Id, Name: "metadata", Kind: "kubernetes");
-        await Assert.ThrowsAsync<TimeoutException>(() => Target(command, new FaultAudit(failSetup: true)));
-        Assert.Equal("unavailable", (await Target(command, new FaultAudit(beforeSave: () => CurrentSubject.Principal = null))).Status);
+        await Assert.ThrowsAsync<TimeoutException>(() => Target(command, new FaultAudit(Selection.CatalogAudit(), failSetup: true)));
+        Assert.Equal("unavailable", (await Target(command, new FaultAudit(Selection.CatalogAudit(), beforeSave: () => CurrentSubject.Principal = null))).Status);
         CurrentSubject.Principal = Principal; Assert.Equal("success", (await Target(command)).Status);
     }
     private async Task FixtureDdl(string sql)

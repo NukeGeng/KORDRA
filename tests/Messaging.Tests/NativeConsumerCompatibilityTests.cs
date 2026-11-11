@@ -25,7 +25,7 @@ public sealed class NativeConsumerCompatibilityTests
         Assert.Matches("^t12_[0-9a-f]{32}$", schema); var caseId = Guid.ParseExact(schema[4..], "N");
         var locator = Environment.GetEnvironmentVariable("KORDRA_IAM_TEST_CONNECTION_STRING") ?? throw new InvalidOperationException("Private fixture locator required.");
         await using var setup = new NpgsqlConnection(locator);
-        await using var model = AuditDbContextFactory.CreateIsolatedTestContext(setup, caseId);
+        await using var model = MessagingFixtureSelection.AuditContext(setup, caseId);
         await setup.OpenAsync(); var created = false; var children = new List<Child>(); var logicalId = Guid.NewGuid();
         var occurredAt = DateTimeOffset.UtcNow;
         try

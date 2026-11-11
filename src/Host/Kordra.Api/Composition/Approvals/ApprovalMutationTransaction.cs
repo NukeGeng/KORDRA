@@ -1,3 +1,4 @@
+using DisposableTestBinding = (System.Guid RunId, string SourceSha256, string OperationManifestSha256, System.DateTimeOffset ExpiresAtUtc);
 using System.Text.Json;
 using Kordra.ApprovalGovernance.Domain;
 using Kordra.BuildingBlocks.Security;
@@ -32,6 +33,20 @@ public sealed class ApprovalMutationTransaction(Guid installation, IDbContextFac
     ApprovalSubjectReader subjects, IArtifactAuditTransactionFactory audits, IAuditMutationEvidenceReader auditEvidence,
     FairAsyncReaderWriterAdmissionGate gate, IAuthorityClock clock)
 {
+    private readonly DisposableTestBinding? disposableTest;
+    private ApprovalMutationTransaction(Guid installation, IDbContextFactory<KordraIdentityDbContext> identity,
+    IDbContextFactory<ReleaseDbContext> releases, ApprovalAuthorityCapture authority, StoredApprovalAuthorityReader durableAuthority,
+    ApprovalSubjectReader subjects, IArtifactAuditTransactionFactory audits, IAuditMutationEvidenceReader auditEvidence,
+    FairAsyncReaderWriterAdmissionGate gate, IAuthorityClock clock, DisposableTestBinding profile)
+        : this(installation, identity, releases, authority, durableAuthority, subjects, audits, auditEvidence, gate, clock) => disposableTest = profile;
+
+    /// <summary>Explicit ADR-0025 test composition; runtime construction remains unchanged.</summary>
+    public static ApprovalMutationTransaction CreateDisposableTestTransaction(Guid installation, IDbContextFactory<KordraIdentityDbContext> identity,
+    IDbContextFactory<ReleaseDbContext> releases, ApprovalAuthorityCapture authority, StoredApprovalAuthorityReader durableAuthority,
+    ApprovalSubjectReader subjects, IArtifactAuditTransactionFactory audits, IAuditMutationEvidenceReader auditEvidence,
+    FairAsyncReaderWriterAdmissionGate gate, IAuthorityClock clock, DisposableTestBinding profile)
+        => new(installation, identity, releases, authority, durableAuthority, subjects, audits, auditEvidence, gate, clock, profile);
+
     private Task<ApprovalAuthorityCaptureResult?> Capture(ApprovalUseTicket ticket, CancellationToken ct) => ticket.Command.Action switch
     {
         "request" => authority.CaptureRequesterUnderAdmissionAsync(ticket.Subject, ticket.Original.Project.ProjectId, ticket.Command.EnvironmentId, ct),
@@ -56,9 +71,13 @@ public sealed class ApprovalMutationTransaction(Guid installation, IDbContextFac
             // Startup integrity scans use owner-specific prefixes; APR receipts must never look like orphan REL mutations.
             var reason = "approval-m-" + ReleaseCommandHash.AuditReason(installation, ticket.KeyHash, command.BusinessHash)["release-m-".Length..];
             await using var iam = await identity.CreateDbContextAsync(token);
-            IdentityAccessDbContextFactory.ValidateRuntimeOrTestTransactionTarget(iam.Database.GetDbConnection().ConnectionString);
+            if (disposableTest is { } target)
+                IdentityAccessDbContextFactory.ValidateDisposableTestTarget(iam.Database.GetDbConnection().ConnectionString, target);
+            else IdentityAccessDbContextFactory.ValidateRuntimeOrTestTransactionTarget(iam.Database.GetDbConnection().ConnectionString);
             await using var tx = await iam.Database.BeginTransactionAsync(token);
-            await using var apr = new ApprovalDbContext(ApprovalDbContextFactory.CreateEnlistedOptions(iam.Database.GetDbConnection()));
+            await using var apr = new ApprovalDbContext(disposableTest is { } ownerProfile
+                ? ApprovalDbContextFactory.CreateDisposableEnlistedTestOptions(iam.Database.GetDbConnection(), ownerProfile)
+                : ApprovalDbContextFactory.CreateEnlistedOptions(iam.Database.GetDbConnection()));
             await apr.Database.UseTransactionAsync(tx.GetDbTransaction(), token);
             var receipts = new ApprovalRequestReceiptStore(apr);
             var receipt = await receipts.FindUnderAdmissionAsync(installation, tenant, project, environment, original.Subject.PrincipalId,

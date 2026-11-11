@@ -42,7 +42,7 @@ public sealed class NativeTimerDatabaseTests
         }
         var locator = Environment.GetEnvironmentVariable("KORDRA_IAM_TEST_CONNECTION_STRING")
             ?? throw new InvalidOperationException("Private exact timer fixture locator required.");
-        AuditDbContextFactory.ValidateTestTarget(locator);
+        MessagingFixtureSelection.ValidateTestTarget(locator);
         var target = new NpgsqlConnectionStringBuilder(locator);
         if (target.Multiplexing || !string.IsNullOrEmpty(target.Options) || !string.IsNullOrEmpty(target.SearchPath))
             throw new InvalidOperationException("Timer fixture rejects session overrides.");

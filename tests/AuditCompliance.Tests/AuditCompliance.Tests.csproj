@@ -18,4 +18,8 @@
     <ProjectReference Include="../../src/Modules/AuditCompliance/Kordra.Modules.AuditCompliance.csproj" />
     <ProjectReference Include="../../src/Modules/AuditCompliance/Contracts/Kordra.Modules.AuditCompliance.Contracts.csproj" />
   </ItemGroup>
+  <ItemGroup>
+    <Compile Include="../Shared/DisposablePostgreSqlProfile.cs" Link="Fixtures/DisposablePostgreSqlProfile.cs" />
+    <Compile Include="../Shared/RegressionPostgreSqlSelection.cs" Link="Fixtures/RegressionPostgreSqlSelection.cs" />
+  </ItemGroup>
 </Project>

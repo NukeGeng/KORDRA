@@ -1,3 +1,6 @@
+using System.Data.Common;
+using Kordra.Modules.AuditCompliance.Infrastructure;
+using Kordra.Testing;
 using Npgsql;
 
 namespace Kordra.Modules.IdentityAccess.Tests;
@@ -7,6 +10,27 @@ public static class TestDatabaseConfiguration
 {
     public const string ConnectionEnvironmentVariable = "KORDRA_IAM_TEST_CONNECTION_STRING";
 
+    internal static string ExpectedFixtureDatabase => RegressionPostgreSqlSelection.LoadRunnerProfile()?.Database ?? "kordra_test";
+    internal static void ValidateFixtureLocator(string locator)
+    {
+        var profile = RegressionPostgreSqlSelection.LoadRunnerProfile();
+        if (profile is { } selected) selected.ValidateLocator(locator, DateTimeOffset.UtcNow);
+        else ValidateTarget(locator);
+    }
+    internal static AuditDbContext IsolatedAuditContext(DbConnection connection, Guid caseId)
+    {
+        var profile = RegressionPostgreSqlSelection.LoadRunnerProfile();
+        return profile is { } p ? AuditDbContextFactory.CreateDisposableIsolatedTestContext(connection, caseId, p.OwnerBinding)
+            : AuditDbContextFactory.CreateIsolatedTestContext(connection, caseId);
+    }
+    internal static Task<AuditTransactionContext> IsolatedAuditTransactionAsync(DbConnection connection, DbTransaction root,
+        Guid caseId, CancellationToken ct = default)
+    {
+        var profile = RegressionPostgreSqlSelection.LoadRunnerProfile();
+        return profile is { } p ? AuditTransactionContext.CreateDisposableIsolatedTestAsync(connection, root, caseId, p.OwnerBinding, ct)
+            : AuditTransactionContext.CreateIsolatedTestAsync(connection, root, caseId, ct);
+    }
+
     public static string? TryGetConnectionString()
     {
         var connectionString = Environment.GetEnvironmentVariable(ConnectionEnvironmentVariable);
@@ -15,7 +39,9 @@ public static class TestDatabaseConfiguration
             return null;
         }
 
-        ValidateTarget(connectionString);
+        var profile = RegressionPostgreSqlSelection.LoadRunnerProfile();
+        if (profile is null) ValidateTarget(connectionString);
+        else profile.ValidateLocator(connectionString, DateTimeOffset.UtcNow);
         return connectionString;
     }
 

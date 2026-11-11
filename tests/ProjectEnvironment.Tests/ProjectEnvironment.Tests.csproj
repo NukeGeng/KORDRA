@@ -20,4 +20,7 @@
   <ProjectReference Include="../../src/Modules/ProjectEnvironment/Kordra.Modules.ProjectEnvironment.csproj" />
 <ProjectReference Include="../../src/Modules/InfrastructureInventory/Kordra.Modules.InfrastructureInventory.csproj" />
 </ItemGroup>
+  <ItemGroup><Compile Include="../Shared/DisposablePostgreSqlProfile.cs" Link="Fixtures/DisposablePostgreSqlProfile.cs" /></ItemGroup>
+  <ItemGroup><Compile Include="../Shared/RegressionPostgreSqlSelection.cs" Link="Fixtures/RegressionPostgreSqlSelection.cs" /></ItemGroup>
+  <ItemGroup><Compile Include="../Shared/ProductPostgreSqlFixtureSelection.cs" Link="Fixtures/ProductPostgreSqlFixtureSelection.cs" /></ItemGroup>
 </Project>

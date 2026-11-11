@@ -19,14 +19,14 @@ public sealed class ResourcePolicyIntegrationTests : CatalogTestFixture
 {
     private readonly Guid _installation = Guid.NewGuid();
     private readonly PolicyClock _clock = new();
-    private OfflineResourcePolicyCoordinator PolicyCoordinator(IOfflinePolicyAuditTransactionFactory? audits = null) => new(_installation, Identity, TenantService,
-        new AuditAppendStore(new PooledDbContextFactory<AuditDbContext>(AuditDbContextFactory.CreateTestOptions(Locator))), Gate, _clock, audits);
+    private OfflineResourcePolicyCoordinator PolicyCoordinator(IOfflinePolicyAuditTransactionFactory? audits = null) => Selection.PolicyCoordinator(_installation, Identity, TenantService,
+        Selection.AuditStore(new PooledDbContextFactory<AuditDbContext>(Selection.Audit())), Gate, _clock, audits);
     private ResourcePolicyPayload Payload(string scope = "project_without_environment") => new(1, "target.read", scope, "active", _clock.Now.AddMinutes(-1), null,
         scope == "environment" ? [new("Production", "allow"), new("Staging", "allow")] : [new("NoEnvironment", "allow")]);
     private ResourcePolicyManifest Manifest(Guid project, ResourcePolicyPayload? payload, params PolicyBindingChange[] bindings) =>
-        new(1, Guid.NewGuid(), _installation, new("kordra_test", "kordra_test"), Tenant, project, "create", null, 0, payload, Array.AsReadOnly(bindings));
+        new(1, Guid.NewGuid(), _installation, new(Selection.Database, "kordra_test"), Tenant, project, "create", null, 0, payload, Array.AsReadOnly(bindings));
     private async Task<ResourcePolicyOperationResult> Apply(ResourcePolicyManifest m)
-    { using var lease = new OfflineLease(); return await PolicyCoordinator().ExecuteAsync(lease, Encoding.UTF8.GetString(m.CanonicalBytes()), m.Hash()); }
+    { using var lease = new OfflineLease(); return await PolicyCoordinator().ExecuteAsync(lease, Encoding.UTF8.GetString(Selection.PolicyBytes(m)), Selection.PolicyHash(m)); }
 
     [Fact]
     public async Task Exact_current_policy_and_binding_replace_fixture_authority_without_an_implicit_grant()
@@ -36,7 +36,7 @@ public sealed class ResourcePolicyIntegrationTests : CatalogTestFixture
         Assert.Equal("success", target.Status);
         var m = Manifest(project.Id, Payload(), new PolicyBindingChange(null, "project_without_environment", null, 0));
         using var lease = new OfflineLease();
-        var preview = await PolicyCoordinator().InspectAsync(lease, Encoding.UTF8.GetString(m.CanonicalBytes()));
+        var preview = await PolicyCoordinator().InspectAsync(lease, Encoding.UTF8.GetString(Selection.PolicyBytes(m)));
         Assert.NotNull(preview); Assert.Equal(0, preview.ExistingBindings);
         var first = await Apply(m); Assert.Equal("success", first.Status);
         var policyReader = new CurrentResourcePolicyReader(Identity, Projects, _clock);
@@ -116,9 +116,9 @@ public sealed class ResourcePolicyIntegrationTests : CatalogTestFixture
         Assert.Equal("success", created.Status); var binding = Assert.Single(created.Bindings!);
         var bind = Manifest(project.Id, null, new PolicyBindingChange(binding.BindingId, "project_without_environment", null, 1))
             with { Operation = "bind", PolicyId = created.PolicyId, ExpectedCurrentRevision = 1 };
-        var staging = new AdvanceAfterStage(() => _clock.Now = payload.ExpiresAtUtc!.Value);
+        var staging = new AdvanceAfterStage(Selection.PolicyAudit(), () => _clock.Now = payload.ExpiresAtUtc!.Value);
         using var lease = new OfflineLease();
-        var result = await PolicyCoordinator(staging).ExecuteAsync(lease, Encoding.UTF8.GetString(bind.CanonicalBytes()), bind.Hash());
+        var result = await PolicyCoordinator(staging).ExecuteAsync(lease, Encoding.UTF8.GetString(Selection.PolicyBytes(bind)), Selection.PolicyHash(bind));
         Assert.Equal("denied", result.Status); Assert.Equal(1, staging.Stages); Assert.Equal(0, staging.Commits);
         await AssertRejectedBindHasNoEffects(bind, true);
     }
@@ -153,16 +153,16 @@ public sealed class ResourcePolicyIntegrationTests : CatalogTestFixture
         Assert.Equal(existing ? 1 : 0, await prj.Set<PolicyBindingHistoryRecord>().CountAsync(x => x.TenantId == Tenant && x.ProjectId == bind.ProjectId));
         await using var iam = await Identity.CreateDbContextAsync();
         Assert.False(await iam.Set<ResourcePolicyCommandReceipt>().AnyAsync(x => x.InstallationId == _installation && x.ManifestId == bind.ManifestId));
-        await using var aud = new AuditDbContext(AuditDbContextFactory.CreateTestOptions(Locator));
+        await using var aud = new AuditDbContext(Selection.Audit());
         Assert.False(await aud.Entries.AnyAsync(x => x.IntentId == bind.ManifestId));
         await using var admission = await Gate.AcquireReadAsync(); // known rollback must not poison admission
     }
 
-    private sealed class AdvanceAfterStage(Action advance) : IOfflinePolicyAuditTransactionFactory
+    private sealed class AdvanceAfterStage(IOfflinePolicyAuditTransactionFactory inner, Action advance) : IOfflinePolicyAuditTransactionFactory
     {
         public int Stages, Commits;
         public async ValueTask<IOfflinePolicyAuditTransaction> EnlistAsync(System.Data.Common.DbConnection connection, System.Data.Common.DbTransaction transaction, IOfflineAuditLease lease, CancellationToken ct = default)
-            => new Transaction(await new OfflinePolicyAuditTransactionFactory().EnlistAsync(connection, transaction, lease, ct), this, advance);
+            => new Transaction(await inner.EnlistAsync(connection, transaction, lease, ct), this, advance);
         private sealed class Transaction(IOfflinePolicyAuditTransaction real, AdvanceAfterStage owner, Action advance) : IOfflinePolicyAuditTransaction
         {
             public async Task<AuditTransactionStageOutcome> StageAsync(AuditIntent intent, CancellationToken ct = default)
@@ -197,11 +197,11 @@ public sealed class ResourcePolicyIntegrationTests : CatalogTestFixture
     public async Task Publication_requires_exact_hash_installation_live_custody_and_explicit_scope()
     {
         var project = await Project(); var m = Manifest(project.Id, Payload(), new PolicyBindingChange(null, "project_without_environment", null, 0));
-        using var lease = new OfflineLease(); var coordinator = PolicyCoordinator(); var json = Encoding.UTF8.GetString(m.CanonicalBytes());
+        using var lease = new OfflineLease(); var coordinator = PolicyCoordinator(); var json = Encoding.UTF8.GetString(Selection.PolicyBytes(m));
         Assert.Equal("denied", (await coordinator.ExecuteAsync(lease, json, new string('0', 64))).Status);
         var foreign = m with { InstallationId = Guid.NewGuid() };
-        Assert.Equal("invalid", (await coordinator.ExecuteAsync(lease, Encoding.UTF8.GetString(foreign.CanonicalBytes()), foreign.Hash())).Status);
-        lease.Dispose(); await Assert.ThrowsAsync<InvalidOperationException>(() => coordinator.ExecuteAsync(lease, json, m.Hash()));
+        Assert.Equal("invalid", (await coordinator.ExecuteAsync(lease, Encoding.UTF8.GetString(Selection.PolicyBytes(foreign)), Selection.PolicyHash(foreign))).Status);
+        lease.Dispose(); await Assert.ThrowsAsync<InvalidOperationException>(() => coordinator.ExecuteAsync(lease, json, Selection.PolicyHash(m)));
         Assert.Equal("denied", (await Apply(m with { Bindings = [new(null, "environment", Guid.NewGuid(), 0)] })).Status);
         await using var iam = await Identity.CreateDbContextAsync(); Assert.False(await iam.Set<ResourcePolicyIdentity>().AnyAsync(x => x.TenantId == Tenant));
     }
@@ -211,19 +211,19 @@ public sealed class ResourcePolicyIntegrationTests : CatalogTestFixture
     public async Task Setup_failure_is_reversible_but_lost_commit_ACK_fences_and_reconciles_without_republication(bool afterCommit)
     {
         var project = await Project(); var m = Manifest(project.Id, Payload(), new PolicyBindingChange(null, "project_without_environment", null, 0));
-        var lookup = new AuditAppendStore(new PooledDbContextFactory<AuditDbContext>(AuditDbContextFactory.CreateTestOptions(Locator)));
-        var coordinator = new OfflineResourcePolicyCoordinator(_installation, Identity, TenantService, lookup, Gate, _clock, new FaultPolicyAudit(afterCommit));
-        using var lease = new OfflineLease(); var json = Encoding.UTF8.GetString(m.CanonicalBytes());
-        Assert.Equal(afterCommit ? "unknown" : "unavailable", (await coordinator.ExecuteAsync(lease, json, m.Hash())).Status);
+        var lookup = Selection.AuditStore(new PooledDbContextFactory<AuditDbContext>(Selection.Audit()));
+        var coordinator = Selection.PolicyCoordinator(_installation, Identity, TenantService, lookup, Gate, _clock, new FaultPolicyAudit(Selection.PolicyAudit(), afterCommit));
+        using var lease = new OfflineLease(); var json = Encoding.UTF8.GetString(Selection.PolicyBytes(m));
+        Assert.Equal(afterCommit ? "unknown" : "unavailable", (await coordinator.ExecuteAsync(lease, json, Selection.PolicyHash(m))).Status);
         if (afterCommit)
             await Assert.ThrowsAsync<InvalidOperationException>(async () => { await using var denied = await Gate.AcquireReadAsync(); });
         else { await using var available = await Gate.AcquireReadAsync(); }
-        var fresh = new OfflineResourcePolicyCoordinator(_installation, Identity, TenantService, lookup, new FairAsyncReaderWriterAdmissionGate(), _clock);
-        var resolved = await fresh.ExecuteAsync(lease, json, m.Hash()); Assert.Equal("success", resolved.Status);
+        var fresh = Selection.PolicyCoordinator(_installation, Identity, TenantService, lookup, new FairAsyncReaderWriterAdmissionGate(), _clock);
+        var resolved = await fresh.ExecuteAsync(lease, json, Selection.PolicyHash(m)); Assert.Equal("success", resolved.Status);
         await using var db = await Identity.CreateDbContextAsync();
         Assert.Equal(1, await db.Set<ResourcePolicyIdentity>().CountAsync(x => x.TenantId == Tenant));
         Assert.Equal(1, await db.Set<ResourcePolicyCommandReceipt>().CountAsync(x => x.ManifestId == m.ManifestId));
-        await using var audit = new AuditDbContext(AuditDbContextFactory.CreateTestOptions(Locator));
+        await using var audit = new AuditDbContext(Selection.Audit());
         Assert.Equal(1, await audit.Entries.CountAsync(x => x.IntentId == m.ManifestId));
     }
 
@@ -286,12 +286,12 @@ public sealed class ResourcePolicyIntegrationTests : CatalogTestFixture
         Assert.Null(await store.ReadCurrentUnderAdmissionAsync(Tenant, project.Id, result.PolicyId, 99));
     }
 
-    private sealed class FaultPolicyAudit(bool afterCommit) : IOfflinePolicyAuditTransactionFactory
+    private sealed class FaultPolicyAudit(IOfflinePolicyAuditTransactionFactory inner, bool afterCommit) : IOfflinePolicyAuditTransactionFactory
     {
         public async ValueTask<IOfflinePolicyAuditTransaction> EnlistAsync(System.Data.Common.DbConnection connection, System.Data.Common.DbTransaction transaction, IOfflineAuditLease lease, CancellationToken ct = default)
         {
             if (!afterCommit) throw new IOException("Synthetic setup-only failure.");
-            return new LostAcknowledgement(await new OfflinePolicyAuditTransactionFactory().EnlistAsync(connection, transaction, lease, ct));
+            return new LostAcknowledgement(await inner.EnlistAsync(connection, transaction, lease, ct));
         }
         private sealed class LostAcknowledgement(IOfflinePolicyAuditTransaction real) : IOfflinePolicyAuditTransaction
         {

@@ -36,7 +36,7 @@ public sealed class MetadataFailureDatabaseTests
             throw new InvalidOperationException("Metadata fixture DDL differs from approved artifact.");
         var locator = Environment.GetEnvironmentVariable("KORDRA_IAM_TEST_CONNECTION_STRING")
             ?? throw new InvalidOperationException("Private metadata fixture locator required.");
-        AuditDbContextFactory.ValidateTestTarget(locator);
+        MessagingFixtureSelection.ValidateTestTarget(locator);
         var target = new NpgsqlConnectionStringBuilder(locator);
         if (target.Multiplexing || !string.IsNullOrEmpty(target.Options) || !string.IsNullOrEmpty(target.SearchPath))
             throw new InvalidOperationException("Metadata fixture rejects session overrides.");
@@ -65,11 +65,11 @@ public sealed class MetadataFailureDatabaseTests
             await host.StartAsync(ct);
             var runtime = host.Services.GetRequiredService<IWolverineRuntime>();
             var native = Assert.IsAssignableFrom<IMessageDatabase>(runtime.Storage);
-            var inspector = MessageReceiptInspector.CreateIsolatedTestInspector(observer, caseId);
+            var inspector = MessagingFixtureSelection.MessageReceipt(observer, caseId);
             var message = NativeWireFixture.Create(caseId, Guid.NewGuid(), DateTimeOffset.UtcNow);
             await using (var root = await writer.BeginTransactionAsync(ct))
             {
-                var receipts = CallerOwnedReceiptStore.CreateIsolatedTestStore(writer, root, caseId);
+                var receipts = MessagingFixtureSelection.ReceiptStore(writer, root, caseId);
                 Assert.Equal(ReceiptStageDisposition.Staged, (await receipts.StagePublicationAsync(message, DateTimeOffset.UtcNow, ct)).Disposition);
                 Assert.Equal(ReceiptInspectionStatus.StillUnknown, (await inspector.InspectPublicationAsync(message.Binding.Identity, message.PayloadHash, ct)).Status);
                 await root.RollbackAsync(ct);
@@ -77,7 +77,7 @@ public sealed class MetadataFailureDatabaseTests
             Assert.Equal(ReceiptInspectionStatus.StillUnknown, (await inspector.InspectPublicationAsync(message.Binding.Identity, message.PayloadHash, ct)).Status);
             await using (var root = await writer.BeginTransactionAsync(ct))
             {
-                var receipts = CallerOwnedReceiptStore.CreateIsolatedTestStore(writer, root, caseId);
+                var receipts = MessagingFixtureSelection.ReceiptStore(writer, root, caseId);
                 await receipts.StagePublicationAsync(message, DateTimeOffset.UtcNow, ct);
                 await receipts.StageLogicalAsync(message, LogicalReceiptOutcome.Denied, DateTimeOffset.UtcNow, ct);
                 await root.CommitAsync(ct);
@@ -112,14 +112,14 @@ public sealed class MetadataFailureDatabaseTests
             var transport = runtime.Options.Transports.GetOrCreate<PostgresqlTransport>();
             await using (var root = await writer.BeginTransactionAsync(ct))
             {
-                var guard = PublicationCapacityGuard.CreateIsolatedTestGuard(writer, root, caseId);
+                var guard = MessagingFixtureSelection.Capacity(writer, root, caseId);
                 Assert.Equal(PublicationCapacityStatus.AboveWatermark, await guard.CheckAsync(NativeWireFixture.Registry(), transport, ct));
                 var stager = new CallerOwnedMessageStager(writer, root, native, schema);
                 var context = new MessageContext(runtime);
                 await context.EnlistInOutboxAsync(new CallerOwnedEnvelopeEnlistment(stager, async () => await root.RollbackAsync()));
                 var fresh = NativeWireFixture.Create(caseId, Guid.NewGuid(), DateTimeOffset.UtcNow);
                 var rejected = await Assert.ThrowsAsync<InvalidOperationException>(() => stager.StagePublicationAsync(
-                    CallerOwnedReceiptStore.CreateIsolatedTestStore(writer, root, caseId), NativeWireFixture.Registry(), context, fresh, DateTimeOffset.UtcNow, ct));
+                    MessagingFixtureSelection.ReceiptStore(writer, root, caseId), NativeWireFixture.Registry(), context, fresh, DateTimeOffset.UtcNow, ct));
                 Assert.Equal("Publication capacity is unavailable or above its admission watermark.", rejected.Message);
                 Assert.Empty(context.Outstanding); await root.RollbackAsync(ct);
             }
@@ -133,14 +133,14 @@ public sealed class MetadataFailureDatabaseTests
             Assert.Equal(10000, await Count("wolverine_outgoing_envelopes"));
             await using (var root = await writer.BeginTransactionAsync(ct))
             {
-                Assert.Equal(PublicationCapacityStatus.WithinWatermark, await PublicationCapacityGuard.CreateIsolatedTestGuard(writer, root, caseId)
+                Assert.Equal(PublicationCapacityStatus.WithinWatermark, await MessagingFixtureSelection.Capacity(writer, root, caseId)
                     .CheckAsync(NativeWireFixture.Registry(), transport, ct));
                 await root.RollbackAsync(ct);
             }
             await Sql($"DROP TABLE {schema}.wolverine_queue_nativecompatibility"); // Own empty fixture queue only; simulate missing storage.
             await using (var root = await writer.BeginTransactionAsync(ct))
             {
-                Assert.Equal(PublicationCapacityStatus.Unavailable, await PublicationCapacityGuard.CreateIsolatedTestGuard(writer, root, caseId)
+                Assert.Equal(PublicationCapacityStatus.Unavailable, await MessagingFixtureSelection.Capacity(writer, root, caseId)
                     .CheckAsync(NativeWireFixture.Registry(), transport, ct));
                 await root.RollbackAsync(ct);
             }

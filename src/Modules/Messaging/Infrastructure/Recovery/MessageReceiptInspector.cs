@@ -1,3 +1,4 @@
+using DisposableTestBinding = (System.Guid RunId, string SourceSha256, string OperationManifestSha256, System.DateTimeOffset ExpiresAtUtc);
 using System.Data;
 using System.Data.Common;
 using Kordra.Modules.Messaging.Contracts;
@@ -37,6 +38,12 @@ public sealed class MessageReceiptInspector
 
     public static MessageReceiptInspector CreateIsolatedTestInspector(NpgsqlConnection connection, Guid caseId)
         => new(connection, IsolatedMessagingFixture.SchemaFor(connection, caseId));
+
+    public static MessageReceiptInspector CreateIsolatedTestInspector(DbConnection connection, Guid caseId)
+        => new(connection, IsolatedMessagingFixture.SchemaFor(connection, caseId));
+
+    public static MessageReceiptInspector CreateDisposableTestInspector(DbConnection connection, Guid caseId, DisposableTestBinding profile)
+        => new(connection, IsolatedMessagingFixture.SchemaForDisposableTest(connection, caseId, profile));
 
     public Task<ReceiptInspection> InspectPublicationAsync(MessageIdentity identity, string expectedHash, CancellationToken cancellationToken)
         => InspectAsync(identity, expectedHash, true, cancellationToken);

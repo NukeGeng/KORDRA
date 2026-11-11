@@ -67,18 +67,14 @@ public sealed class CallerOwnedMessageStager
             message.Binding.Identity.Scope, effectiveNow);
         if (!CanonicalMessageBinding.Matches(message.PayloadHash, rechecked.PayloadHash))
             throw new InvalidOperationException("Publication binding changed under the compiled registry.");
-        var destination = new Uri("postgresql://" + registry.RouteFor(message.Binding));
+        var destination = NativeDestination(context, registry.RouteFor(message.Binding));
         if (!context.Runtime.Endpoints.GetOrBuildSendingAgent(destination).IsDurable)
             throw new InvalidOperationException("Publication requires a native durable endpoint before staging receipts.");
         var result = await receipts.StagePublicationAsync(message, effectiveNow, cancellationToken).ConfigureAwait(false);
         if (result.Disposition != ReceiptStageDisposition.Staged) return result;
         // Duplicate/conflict has no new work to admit. For a new key, any capacity failure must
         // roll back this provisional receipt together with owner/AUD state; no native send occurs.
-        var capacity = _schema == "msg" ? new PublicationCapacityGuard(_connection, _transaction) :
-            _connection is Npgsql.NpgsqlConnection fixture && _schema.StartsWith("t12_", StringComparison.Ordinal) &&
-            Guid.TryParseExact(_schema[4..], "N", out var caseId)
-                ? PublicationCapacityGuard.CreateIsolatedTestGuard(fixture, _transaction, caseId)
-                : throw new InvalidOperationException("No approved publication capacity profile for this schema.");
+        var capacity = receipts.CreatePublicationCapacityGuard();
         capacity.RequireCaller(_connection, _transaction, _schema);
         var capacityStatus = await capacity.CheckAsync(registry,
             context.Runtime.Options.Transports.GetOrCreate<PostgresqlTransport>(), cancellationToken).ConfigureAwait(false);
@@ -118,7 +114,7 @@ public sealed class CallerOwnedMessageStager
             context.Transaction is not CallerOwnedEnvelopeEnlistment enlistment || !enlistment.IsFor(this) ||
             incoming is null || !incoming.WasPersistedInInbox || incoming.Id != message.Delivery.MessageId ||
             incoming.MessageType != message.Binding.Identity.TypeId ||
-            incoming.Destination != new Uri("postgresql://" + registry.RouteFor(message.Binding)) ||
+            incoming.Destination != NativeDestination(context, registry.RouteFor(message.Binding)) ||
             incoming.ContentType != MessageEnvelopeCodec.ContentType || incoming.Data is null)
             throw new InvalidOperationException("Consumption requires the exact enlisted native inbox identity and registered destination.");
         cancellationToken.ThrowIfCancellationRequested();
@@ -146,6 +142,9 @@ public sealed class CallerOwnedMessageStager
         return _store.MarkIncomingEnvelopeAsHandledInTransactionAsync(
             _connection, _transaction, envelope, keepUntil, cancellationToken);
     }
+
+    private static Uri NativeDestination(MessageContext context, string route) =>
+        new("postgresql://" + context.Runtime.Options.Transports.GetOrCreate<PostgresqlTransport>().SanitizeIdentifier(route));
 
     private async Task ReserveBatchAsync(Envelope[] envelopes)
     {

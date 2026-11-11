@@ -1,3 +1,4 @@
+using Kordra.Testing;
 using System.Data.Common;
 using Kordra.Api;
 using Kordra.ArtifactManagement.Domain;
@@ -16,6 +17,7 @@ namespace Kordra.Modules.IdentityAccess.Tests;
 [Collection("IdentityAccess PostgreSQL and local HTTPS")]
 public sealed class ArtifactOwnerTransactionTests : IAsyncLifetime
 {
+    private ProductPostgreSqlFixtureSelection _selection = null!;
     private readonly Guid _installation = Guid.NewGuid(), _tenant = Guid.NewGuid(), _project = Guid.NewGuid(), _principal = Guid.NewGuid();
     private readonly Clock _clock = new();
     private readonly FairAsyncReaderWriterAdmissionGate _gate = new();
@@ -26,10 +28,10 @@ public sealed class ArtifactOwnerTransactionTests : IAsyncLifetime
     {
         var locator = Environment.GetEnvironmentVariable("KORDRA_IAM_TEST_CONNECTION_STRING")
             ?? throw new InvalidOperationException("Private isolated kordra_test locator required.");
-        _art = new(ArtifactDbContextFactory.CreateTestOptions(locator));
-        _aud = new(AuditDbContextFactory.CreateTestOptions(locator));
-        _iam = new(new DbContextOptionsBuilder<KordraIdentityDbContext>().UseNpgsql(locator,
-            p => p.MigrationsHistoryTable(KordraIdentityDbContext.MigrationHistoryTableName, "app")).Options);
+        _selection = new(locator);
+        _art = new(_selection.Artifact());
+        _aud = new(_selection.Audit());
+        _iam = new(_selection.Identity());
         await using (var db = await _iam.CreateDbContextAsync()) await db.Database.MigrateAsync();
         await using (var db = await _art.CreateDbContextAsync()) await db.Database.MigrateAsync();
         await using (var db = await _aud.CreateDbContextAsync()) await db.Database.MigrateAsync();
@@ -61,13 +63,13 @@ public sealed class ArtifactOwnerTransactionTests : IAsyncLifetime
             // fixture installation. The attempted insert must fail at the real SQL PK.
             var seed = ArtifactRegistrationReceipt.Pending(pending.Id, Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(),
                 _principal, pending.Request, "synthetic-conflicting-id-seed", _clock.Now);
-            var seeder = new ArtifactOwnerTransaction(seed.InstallationId, _iam, new ArtifactAuditTransactionFactory(), _gate, _clock);
+            var seeder = _selection.ArtifactTransaction(seed.InstallationId, _iam, _selection.ArtifactAudit(), _gate, _clock);
             await using var seedHeld = await _gate.AcquireWriteAsync();
             Assert.Equal("durable", (await seeder.RunAsync(_ => Intent(seed),
                 async (store, ct) => await store.PreparePendingAsync(seed, ct), _ => Task.FromResult(true), default)).Status);
         }
-        var factory = new Faults(fault);
-        var runner = new ArtifactOwnerTransaction(_installation, _iam, factory, _gate, _clock);
+        var factory = new Faults(_selection, fault);
+        var runner = _selection.ArtifactTransaction(_installation, _iam, factory, _gate, _clock);
         ArtifactOwnerCommit result;
         await using (var held = await _gate.AcquireWriteAsync())
             result = await runner.RunAsync(_ => intent, async (store, ct) =>
@@ -86,8 +88,8 @@ public sealed class ArtifactOwnerTransactionTests : IAsyncLifetime
     [InlineData(true)]
     public async Task Real_shared_commit_persists_ART_AUD_floor_and_lost_ACK_fences_without_result(bool loseAck)
     {
-        var pending = Pending(); var intent = Intent(pending); var factory = new Faults(loseAck ? "ack" : "none");
-        var runner = new ArtifactOwnerTransaction(_installation, _iam, factory, _gate, _clock);
+        var pending = Pending(); var intent = Intent(pending); var factory = new Faults(_selection, loseAck ? "ack" : "none");
+        var runner = _selection.ArtifactTransaction(_installation, _iam, factory, _gate, _clock);
         ArtifactOwnerCommit result;
         await using (var held = await _gate.AcquireWriteAsync())
             result = await runner.RunAsync(_ => intent, (store, ct) => store.PreparePendingAsync(pending, ct)!,
@@ -117,13 +119,13 @@ public sealed class ArtifactOwnerTransactionTests : IAsyncLifetime
     }
     private sealed class Clock : IAuthorityClock
     { public DateTimeOffset Now { get; } = DateTimeOffset.FromUnixTimeMilliseconds(DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()); public DateTimeOffset GetTrustedUtcNow() => Now; }
-    private sealed class Faults(string fault) : IArtifactAuditTransactionFactory
+    private sealed class Faults(ProductPostgreSqlFixtureSelection selection, string fault) : IArtifactAuditTransactionFactory
     {
         public bool ActualCommitAttempted;
         public async ValueTask<IArtifactAuditTransaction> EnlistAsync(DbConnection c, DbTransaction t, CancellationToken ct)
         {
             if (fault == "enlist") throw new OperationCanceledException();
-            return new Enlisted(await new ArtifactAuditTransactionFactory().EnlistAsync(c, t, ct), this, fault);
+            return new Enlisted(await selection.ArtifactAudit().EnlistAsync(c, t, ct), this, fault);
         }
         private sealed class Enlisted(IArtifactAuditTransaction inner, Faults owner, string fault) : IArtifactAuditTransaction
         {

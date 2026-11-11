@@ -1,3 +1,4 @@
+using DisposableTestBinding = (System.Guid RunId, string SourceSha256, string OperationManifestSha256, System.DateTimeOffset ExpiresAtUtc);
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Design;
 using Npgsql;
@@ -7,6 +8,99 @@ namespace Kordra.Modules.AuditCompliance.Infrastructure;
 /// <summary>Design-time factory and exact local database-role boundaries for AUD persistence.</summary>
 public sealed class AuditDbContextFactory : IDesignTimeDbContextFactory<AuditDbContext>
 {
+    /// <summary>ADR-0025 explicit test selection only; never opens/provisions or grants operation rights.</summary>
+    public static DbContextOptions<AuditDbContext> CreateDisposableTestOptions(string locator, DisposableTestBinding profile)
+    {
+        ValidateDisposableTestTarget(locator, profile);
+        return CreateOptions(locator);
+    }
+
+    /// <summary>Explicit pool-exhaustion regression seam. Keeps the exact selected target and a single-connection pool;
+    /// the ordinary disposable/unpooled and all runtime/default guards remain unchanged.</summary>
+    public static DbContextOptions<AuditDbContext> CreateDisposableSingleConnectionPoolTestOptions(string locator, DisposableTestBinding profile)
+    {
+        ValidateDisposableSingleConnectionPoolTestTarget(locator, profile);
+        return CreateOptions(locator); // Keep the actual pooled locator.
+    }
+
+    private static void ValidateDisposableSingleConnectionPoolTestTarget(string locator, DisposableTestBinding profile)
+    {
+        NpgsqlConnectionStringBuilder parsed;
+        try { parsed = new(locator); }
+        catch (ArgumentException) { throw InvalidDisposableTarget(); }
+        if (!parsed.Pooling || parsed.MaxPoolSize != 1 || parsed.MinPoolSize != 0 ||
+            parsed.Timeout is < 1 or > 15 || parsed.CommandTimeout is < 1 or > 30) throw InvalidDisposableTarget();
+        // Validate the original target/session policy, excluding only these separately constrained pool settings.
+        var selection = new NpgsqlConnectionStringBuilder(locator) { Pooling = false };
+        selection.Remove("Maximum Pool Size"); selection.Remove("Minimum Pool Size");
+        ValidateDisposableTestTarget(selection.ConnectionString, profile);
+    }
+
+    internal static void ValidateDisposableAppendTestTarget(System.Data.Common.DbConnection connection,
+        DisposableTestBinding profile)
+    {
+        if (connection is not NpgsqlConnection) throw InvalidDisposableTarget();
+        var locator = connection.ConnectionString;
+        if (new NpgsqlConnectionStringBuilder(locator).Pooling)
+            ValidateDisposableSingleConnectionPoolTestTarget(locator, profile);
+        else
+            ValidateDisposableTestTarget(locator, profile);
+    }
+
+    internal static DbContextOptions<AuditDbContext> CreateDisposableAppendTestEnlistedOptions(
+        System.Data.Common.DbConnection connection, DisposableTestBinding profile)
+    {
+        ValidateDisposableAppendTestTarget(connection, profile);
+        return CreateEnlistedOptions(connection);
+    }
+
+    /// <summary>The caller owns and explicitly enlists this exact disposable test connection.</summary>
+    public static DbContextOptions<AuditDbContext> CreateDisposableEnlistedTestOptions(System.Data.Common.DbConnection connection,
+        DisposableTestBinding profile)
+    {
+        if (connection is not NpgsqlConnection) throw new InvalidOperationException("Explicit disposable PostgreSQL test connection required.");
+        ValidateDisposableTestTarget(connection.ConnectionString, profile);
+        return CreateEnlistedOptions(connection);
+    }
+
+    private static DbContextOptions<AuditDbContext> CreateEnlistedOptions(System.Data.Common.DbConnection connection) =>
+        new DbContextOptionsBuilder<AuditDbContext>().UseNpgsql(connection,
+            postgres => postgres.MigrationsHistoryTable(AuditDbContext.MigrationHistoryTableName, "app").CommandTimeout(2)).Options;
+
+    // The runner/profile loader verifies expected source/manifest and separate approval. This projection grants no authority.
+    public static void ValidateDisposableTestTarget(string locator, DisposableTestBinding profile)
+    {
+        var now = DateTimeOffset.UtcNow;
+        if (profile.RunId == Guid.Empty || !Hash(profile.SourceSha256) || !Hash(profile.OperationManifestSha256) ||
+            profile.ExpiresAtUtc.Offset != TimeSpan.Zero || profile.ExpiresAtUtc == DateTimeOffset.MaxValue || profile.ExpiresAtUtc <= now ||
+            string.IsNullOrWhiteSpace(locator)) throw InvalidDisposableTarget();
+        NpgsqlConnectionStringBuilder parsed;
+        try { parsed = new(locator); }
+        catch (ArgumentException) { throw InvalidDisposableTarget(); }
+        string[] keys = ["Host", "Port", "Database", "Username", "Password", "Pooling", "Multiplexing", "Include Error Detail",
+            "Timeout", "Command Timeout", "Enlist", "Application Name", "Persist Security Info"];
+        if (parsed.Host != "127.0.0.1" || parsed.Port != 5432 || parsed.Username != "kordra_test" ||
+            parsed.Database != "kordra_test_" + profile.RunId.ToString("N") || parsed.Pooling || parsed.Multiplexing ||
+            parsed.IncludeErrorDetail || parsed.PersistSecurityInfo || !string.IsNullOrEmpty(parsed.SearchPath) || !string.IsNullOrEmpty(parsed.Options) ||
+            parsed.Keys.Cast<string>().Any(key => !keys.Contains(key, StringComparer.OrdinalIgnoreCase))) throw InvalidDisposableTarget();
+        static bool Hash(string value) => value is { Length: 64 } && value.All(c => c is >= '0' and <= '9' or >= 'a' and <= 'f');
+    }
+    private static InvalidOperationException InvalidDisposableTarget() => new("Disposable test target/profile is invalid; locator and profile values omitted.");
+
+    /// <summary>Explicit disposable database plus a separate isolated schema; never opens/provisions.</summary>
+    public static AuditDbContext CreateDisposableIsolatedTestContext(System.Data.Common.DbConnection connection, Guid caseId,
+        DisposableTestBinding profile)
+    {
+        if (connection is not NpgsqlConnection || caseId == Guid.Empty)
+            throw new InvalidOperationException("Explicit disposable AUD connection/case required.");
+        ValidateDisposableTestTarget(connection.ConnectionString, profile);
+        var schema = "t12_" + caseId.ToString("N");
+        var options = new DbContextOptionsBuilder<AuditDbContext>().UseNpgsql(connection,
+            postgres => postgres.MigrationsHistoryTable(AuditDbContext.MigrationHistoryTableName, schema))
+            .ReplaceService<Microsoft.EntityFrameworkCore.Infrastructure.IModelCacheKeyFactory, IsolatedModelKey>();
+        return new AuditDbContext(options.Options, schema);
+    }
+
     /// <summary>ADR-0020 isolated test seam; never opens a connection or provisions a schema.</summary>
     public static AuditDbContext CreateIsolatedTestContext(System.Data.Common.DbConnection connection, Guid caseId)
     {
@@ -104,6 +198,14 @@ public sealed class AuditDbContextFactory : IDesignTimeDbContextFactory<AuditDbC
     }
 
     /// <summary>Neutral receipt inspection on the stopped owner's approved shared connection; never grants a runtime append.</summary>
+    public static DbContextOptions<AuditDbContext> CreateDisposableOfflineReceiptReadOptions(System.Data.Common.DbConnection connection,
+        Kordra.Modules.AuditCompliance.Contracts.IOfflineAuditLease custody, DisposableTestBinding profile)
+    {
+        ArgumentNullException.ThrowIfNull(custody);
+        custody.RequireHeld();
+        return CreateDisposableEnlistedTestOptions(connection, profile);
+    }
+
     public static DbContextOptions<AuditDbContext> CreateOfflineReceiptReadOptions(System.Data.Common.DbConnection connection,
         Kordra.Modules.AuditCompliance.Contracts.IOfflineAuditLease custody)
     {

@@ -1,3 +1,6 @@
+using DisposableTestBinding = (System.Guid RunId, string SourceSha256, string OperationManifestSha256, System.DateTimeOffset ExpiresAtUtc);
+using Kordra.Modules.IdentityAccess.Infrastructure;
+using Npgsql;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
@@ -11,7 +14,9 @@ public sealed record ResourcePolicyManifest(int SchemaVersion, Guid ManifestId, 
     ResourcePolicyDatabaseIdentity DatabaseIdentity, Guid TenantId, Guid ProjectId, string Operation, Guid? PolicyId,
     long ExpectedCurrentRevision, ResourcePolicyPayload? Payload, IReadOnlyList<PolicyBindingChange> Bindings)
 {
-    public static ResourcePolicyManifest? Parse(string json)
+    public static ResourcePolicyManifest? Parse(string json) => ParseCore(json, null);
+    public static ResourcePolicyManifest? ParseDisposableTest(string json, DisposableTestBinding profile) => ParseCore(json, profile);
+    private static ResourcePolicyManifest? ParseCore(string json, DisposableTestBinding? profile)
     {
         try
         {
@@ -33,13 +38,15 @@ public sealed record ResourcePolicyManifest(int SchemaVersion, Guid ManifestId, 
             var m = new ResourcePolicyManifest(e.GetProperty("schemaVersion").GetInt32(), e.GetProperty("manifestId").GetGuid(), e.GetProperty("installationId").GetGuid(),
                 new(database.GetProperty("databaseName").GetString()!, database.GetProperty("provisioningRole").GetString()!), e.GetProperty("tenantId").GetGuid(), e.GetProperty("projectId").GetGuid(),
                 e.GetProperty("operation").GetString()!, OptionalGuid(e.GetProperty("policyId")), e.GetProperty("expectedCurrentRevision").GetInt64(), payload, items.AsReadOnly());
-            return m.IsValid() ? m : null;
+            return m.IsValidCore(profile) ? m : null;
         }
         catch (Exception e) when (e is JsonException or InvalidOperationException or FormatException or ArgumentException or OverflowException) { return null; }
     }
     private static Guid? OptionalGuid(JsonElement e) => e.ValueKind == JsonValueKind.Null ? null : e.GetGuid();
-    public bool IsValid() => SchemaVersion == 1 && ManifestId != Guid.Empty && InstallationId != Guid.Empty && TenantId != Guid.Empty && ProjectId != Guid.Empty &&
-        DatabaseIdentity is not null && (DatabaseIdentity.DatabaseName == "kordra" && DatabaseIdentity.ProvisioningRole == "kordra_admin" ||
+    public bool IsValid() => IsValidCore(null);
+    public bool IsValidDisposableTest(DisposableTestBinding profile) => IsValidCore(profile);
+    private bool IsValidCore(DisposableTestBinding? profile) => SchemaVersion == 1 && ManifestId != Guid.Empty && InstallationId != Guid.Empty && TenantId != Guid.Empty && ProjectId != Guid.Empty &&
+        DatabaseIdentity is not null && (profile is { } selected ? MatchesDisposableTarget(selected) : DatabaseIdentity.DatabaseName == "kordra" && DatabaseIdentity.ProvisioningRole == "kordra_admin" ||
             DatabaseIdentity.DatabaseName == "kordra_test" && DatabaseIdentity.ProvisioningRole == "kordra_test") &&
         Operation is "create" or "publish" or "bind" && ExpectedCurrentRevision >= 0 && ExpectedCurrentRevision < long.MaxValue &&
         (Operation == "create" ? PolicyId is null && ExpectedCurrentRevision == 0 : PolicyId is { } id && id != Guid.Empty && ExpectedCurrentRevision > 0) &&
@@ -50,9 +57,23 @@ public sealed record ResourcePolicyManifest(int SchemaVersion, Guid ManifestId, 
         Bindings.Select(b => (b.ScopeKind, b.EnvironmentId)).Distinct().Count() == Bindings.Count &&
         Bindings.Where(b => b.BindingId is not null).Select(b => b.BindingId).Distinct().Count() == Bindings.Count(b => b.BindingId is not null);
 
-    public byte[] CanonicalBytes()
+    private bool MatchesDisposableTarget(DisposableTestBinding profile)
     {
-        if (!IsValid()) throw new InvalidDataException("Invalid resource-policy manifest.");
+        try
+        {
+            var target = new NpgsqlConnectionStringBuilder { Host = "127.0.0.1", Port = 5432,
+                Database = DatabaseIdentity.DatabaseName, Username = DatabaseIdentity.ProvisioningRole, Pooling = false };
+            IdentityAccessDbContextFactory.ValidateDisposableTestTarget(target.ConnectionString, profile);
+            return true;
+        }
+        catch (Exception e) when (e is ArgumentException or InvalidOperationException) { return false; }
+    }
+
+    public byte[] CanonicalBytes() => CanonicalBytesCore(null);
+    public byte[] CanonicalDisposableTestBytes(DisposableTestBinding profile) => CanonicalBytesCore(profile);
+    private byte[] CanonicalBytesCore(DisposableTestBinding? profile)
+    {
+        if (!IsValidCore(profile)) throw new InvalidDataException("Invalid resource-policy manifest.");
         using var stream = new MemoryStream();
         using (var w = new Utf8JsonWriter(stream))
         {
@@ -73,5 +94,6 @@ public sealed record ResourcePolicyManifest(int SchemaVersion, Guid ManifestId, 
         }
         return stream.ToArray();
     }
+    public string HashDisposableTest(DisposableTestBinding profile) => Convert.ToHexStringLower(SHA256.HashData(CanonicalDisposableTestBytes(profile)));
     public string Hash() => Convert.ToHexStringLower(SHA256.HashData(CanonicalBytes()));
 }

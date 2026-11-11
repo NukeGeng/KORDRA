@@ -1,3 +1,4 @@
+using Kordra.Testing;
 using System.Data.Common;
 using System.Security.Cryptography;
 using System.Text;
@@ -26,21 +27,23 @@ public sealed class RegistryCredentialCommandTests : IAsyncLifetime
     private readonly Custody _custody = new(); private readonly Clock _clock = new(); private readonly FairAsyncReaderWriterAdmissionGate _gate = new();
     private PooledDbContextFactory<KordraIdentityDbContext> _identity = null!;
     private PooledDbContextFactory<CredentialDbContext> _sec = null!;
+    private ProductPostgreSqlFixtureSelection _selection = null!;
     private AuditAppendStore _audit = null!; private string _locator = "";
     private readonly HashSet<Guid> _manifests = [];
     public async Task InitializeAsync()
     {
         _locator = Environment.GetEnvironmentVariable("KORDRA_IAM_TEST_CONNECTION_STRING") ?? throw new InvalidOperationException("Private kordra_test locator required.");
-        _sec = new(CredentialDbContextFactory.CreateTestOptions(_locator));
-        _identity = new(new DbContextOptionsBuilder<KordraIdentityDbContext>().UseNpgsql(_locator, x => x.MigrationsHistoryTable(KordraIdentityDbContext.MigrationHistoryTableName, "app")).Options);
+        _selection = new(_locator);
+        _sec = new(_selection.Credential());
+        _identity = new(_selection.Identity());
         await using (var db = await _identity.CreateDbContextAsync()) await db.Database.MigrateAsync();
-        var af = new PooledDbContextFactory<AuditDbContext>(AuditDbContextFactory.CreateTestOptions(_locator));
+        var af = new PooledDbContextFactory<AuditDbContext>(_selection.Audit());
         await using (var db = await af.CreateDbContextAsync()) await db.Database.MigrateAsync();
         await using (var db = await _sec.CreateDbContextAsync()) await db.Database.MigrateAsync();
         _audit = new(af);
     }
     private OfflineRegistryCredentialCoordinator Coordinator(IOfflinePolicyAuditTransactionFactory? audit = null) =>
-        new(_installation, _identity, new Tenant(_tenant), new Project(_tenant, _project), _audit, _gate, _clock, audit);
+        _selection.RegistryCredentialCoordinator(_installation, _identity, new Tenant(_tenant), new Project(_tenant, _project), _audit, _gate, _clock, audit);
     private RegistryCredentialManifest Create() => new(1, Guid.NewGuid(), _installation, _tenant, _project, _registry, "team/frontend", "artifact.registry.read.v1", "artifact.register", "create", null, 0,
         Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), _clock.Now.AddMinutes(-1), _clock.Now.AddHours(1));
     private Task<CredentialOperationResult> Apply(RegistryCredentialManifest m, IOfflinePolicyAuditTransactionFactory? factory = null)
@@ -97,13 +100,13 @@ public sealed class RegistryCredentialCommandTests : IAsyncLifetime
     public async Task Setup_failure_is_available_but_lost_commit_ACK_closes_and_exact_receipt_reconciles(bool lostAck)
     {
         var m = Create();
-        var r = await Apply(m, new FaultFactory(lostAck)); Assert.Equal(lostAck ? "unknown" : "unavailable", r.Status);
+        var r = await Apply(m, new FaultFactory(_selection.PolicyAudit(), lostAck)); Assert.Equal(lostAck ? "unknown" : "unavailable", r.Status);
         await using var db = await _sec.CreateDbContextAsync();
         Assert.Equal(lostAck ? 1 : 0, await db.RegistryRevisions.CountAsync(x => x.InstallationId == _installation));
         if (lostAck)
         {
             await Assert.ThrowsAsync<InvalidOperationException>(async () => { await using var held = await _gate.AcquireReadAsync(); });
-            var restarted = new OfflineRegistryCredentialCoordinator(_installation, _identity, new Tenant(_tenant), new Project(_tenant, _project), _audit, new(), _clock);
+            var restarted = _selection.RegistryCredentialCoordinator(_installation, _identity, new Tenant(_tenant), new Project(_tenant, _project), _audit, new(), _clock);
             Assert.Equal("success", (await restarted.ExecuteAsync(_custody, m.CanonicalBytes(), m.Hash())).Status);
         }
         else { await using var held = await _gate.AcquireReadAsync(); }
@@ -112,7 +115,7 @@ public sealed class RegistryCredentialCommandTests : IAsyncLifetime
     public async Task Current_expiry_is_rechecked_after_actual_audit_staging_before_commit()
     {
         var m = Create() with { ExpiresAtUtc = _clock.Now.AddSeconds(1) };
-        Assert.Equal("denied", (await Apply(m, new AdvanceFactory(() => _clock.Now = _clock.Now.AddSeconds(1)))).Status);
+        Assert.Equal("denied", (await Apply(m, new AdvanceFactory(_selection.PolicyAudit(), () => _clock.Now = _clock.Now.AddSeconds(1)))).Status);
         await using var db = await _sec.CreateDbContextAsync(); Assert.False(await db.RegistryRevisions.AnyAsync(x => x.InstallationId == _installation));
         Assert.False(await db.RegistryCommands.AnyAsync(x => x.InstallationId == _installation));
     }
@@ -120,8 +123,8 @@ public sealed class RegistryCredentialCommandTests : IAsyncLifetime
     public async Task Project_revision_change_during_audit_rolls_back_metadata_receipt_and_floor()
     {
         var project = new Project(_tenant, _project);
-        var coordinator = new OfflineRegistryCredentialCoordinator(_installation, _identity, new Tenant(_tenant),
-            project, _audit, _gate, _clock, new AdvanceFactory(() => project.Revision++));
+        var coordinator = _selection.RegistryCredentialCoordinator(_installation, _identity, new Tenant(_tenant),
+            project, _audit, _gate, _clock, new AdvanceFactory(_selection.PolicyAudit(), () => project.Revision++));
         var m = Create(); _manifests.Add(m.ManifestId);
         Assert.Equal("denied", (await coordinator.ExecuteAsync(_custody, m.CanonicalBytes(), m.Hash())).Status);
         await using var sec = await _sec.CreateDbContextAsync();
@@ -175,7 +178,7 @@ public sealed class RegistryCredentialCommandTests : IAsyncLifetime
         await db.RegistryHeads.Where(x => x.InstallationId == _installation).ExecuteDeleteAsync(); await db.RegistryRevisions.Where(x => x.InstallationId == _installation).ExecuteDeleteAsync();
         await db.RegistryReferences.Where(x => x.InstallationId == _installation).ExecuteDeleteAsync(); await db.ReferenceAllocations.Where(x => x.InstallationId == _installation).ExecuteDeleteAsync(); await db.RegistryProfiles.Where(x => x.InstallationId == _installation).ExecuteDeleteAsync();
         await db.RegistryCommands.Where(x => x.InstallationId == _installation).ExecuteDeleteAsync();
-        await using var a = new AuditDbContext(AuditDbContextFactory.CreateTestOptions(_locator));
+        await using var a = new AuditDbContext(_selection.Audit());
         await a.Entries.Where(x => _manifests.Contains(x.InvocationId)).ExecuteDeleteAsync();
         await using var i = await _identity.CreateDbContextAsync(); await i.AuthorityClockFloors.Where(x => x.InstallationId == _installation).ExecuteDeleteAsync();
     }
@@ -188,10 +191,10 @@ public sealed class RegistryCredentialCommandTests : IAsyncLifetime
         public Task<ProjectIdentity?> ReadCurrentProjectUnderAdmissionAsync(Guid project, CancellationToken ct = default) =>
             Task.FromResult<ProjectIdentity?>(project == id ? new(tenant, id, Revision) : null);
     }
-    private sealed class FaultFactory(bool commit) : IOfflinePolicyAuditTransactionFactory
+    private sealed class FaultFactory(IOfflinePolicyAuditTransactionFactory native, bool commit) : IOfflinePolicyAuditTransactionFactory
     {
         public async ValueTask<IOfflinePolicyAuditTransaction> EnlistAsync(DbConnection c, DbTransaction t, IOfflineAuditLease l, CancellationToken ct = default)
-        { if (!commit) throw new OperationCanceledException(); return new LostAck(await new OfflinePolicyAuditTransactionFactory().EnlistAsync(c, t, l, ct)); }
+        { if (!commit) throw new OperationCanceledException(); return new LostAck(await native.EnlistAsync(c, t, l, ct)); }
         private sealed class LostAck(IOfflinePolicyAuditTransaction inner) : IOfflinePolicyAuditTransaction
         {
             public Task<AuditTransactionStageOutcome> StageAsync(AuditIntent i, CancellationToken ct = default) => inner.StageAsync(i, ct);
@@ -199,9 +202,9 @@ public sealed class RegistryCredentialCommandTests : IAsyncLifetime
             public ValueTask DisposeAsync() => inner.DisposeAsync();
         }
     }
-    private sealed class AdvanceFactory(Action change) : IOfflinePolicyAuditTransactionFactory
+    private sealed class AdvanceFactory(IOfflinePolicyAuditTransactionFactory native, Action change) : IOfflinePolicyAuditTransactionFactory
     {
-        public async ValueTask<IOfflinePolicyAuditTransaction> EnlistAsync(DbConnection c, DbTransaction t, IOfflineAuditLease l, CancellationToken ct = default) => new Advanced(await new OfflinePolicyAuditTransactionFactory().EnlistAsync(c, t, l, ct), change);
+        public async ValueTask<IOfflinePolicyAuditTransaction> EnlistAsync(DbConnection c, DbTransaction t, IOfflineAuditLease l, CancellationToken ct = default) => new Advanced(await native.EnlistAsync(c, t, l, ct), change);
         private sealed class Advanced(IOfflinePolicyAuditTransaction inner, Action change) : IOfflinePolicyAuditTransaction
         {
             public async Task<AuditTransactionStageOutcome> StageAsync(AuditIntent i, CancellationToken ct = default) { var r = await inner.StageAsync(i, ct); change(); return r; }

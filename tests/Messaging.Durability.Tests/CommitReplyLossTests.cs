@@ -14,7 +14,7 @@ public sealed class CommitReplyLossTests
     {
         var locator = Environment.GetEnvironmentVariable("KORDRA_IAM_TEST_CONNECTION_STRING")
             ?? throw new InvalidOperationException("Private fixture locator required.");
-        var fixture = new FixtureDatabaseScope(locator, Guid.NewGuid()); var created = false;
+        var fixture = FixtureDatabaseScope.ForRunner(locator, Guid.NewGuid()); var created = false;
         await using var owner = fixture.CreateConnection(); await owner.OpenAsync();
         try
         {

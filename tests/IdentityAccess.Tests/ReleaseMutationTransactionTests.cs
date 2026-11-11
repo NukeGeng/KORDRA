@@ -1,3 +1,4 @@
+using Kordra.Testing;
 using System.Data.Common;
 using System.Reflection;
 using Kordra.Api;
@@ -26,6 +27,7 @@ namespace Kordra.Modules.IdentityAccess.Tests;
 [Collection("IdentityAccess PostgreSQL and local HTTPS")]
 public sealed class ReleaseMutationTransactionTests : IAsyncLifetime
 {
+    private ProductPostgreSqlFixtureSelection _selection = null!;
     private readonly Facts _facts = new();
     private readonly FairAsyncReaderWriterAdmissionGate _gate = new();
     private PooledDbContextFactory<KordraIdentityDbContext> _iam = null!;
@@ -34,20 +36,32 @@ public sealed class ReleaseMutationTransactionTests : IAsyncLifetime
     public async Task InitializeAsync()
     {
         var locator = Environment.GetEnvironmentVariable("KORDRA_IAM_TEST_CONNECTION_STRING") ?? throw new InvalidOperationException("Private isolated test locator required.");
-        _iam = new(new DbContextOptionsBuilder<KordraIdentityDbContext>().UseNpgsql(locator,
-            p => p.MigrationsHistoryTable(KordraIdentityDbContext.MigrationHistoryTableName, "app")).Options);
-        _rel = new(ReleaseDbContextFactory.CreateTestOptions(locator)); _aud = new(AuditDbContextFactory.CreateTestOptions(locator));
+        _selection = new(locator);
+        _iam = new(_selection.Identity());
+        _rel = new(_selection.Release()); _aud = new(_selection.Audit());
         await using (var db = await _iam.CreateDbContextAsync()) await db.Database.MigrateAsync();
         await using (var db = await _rel.CreateDbContextAsync()) await db.Database.MigrateAsync();
         await using (var db = await _aud.CreateDbContextAsync()) await db.Database.MigrateAsync();
-        await using (var db = new ApprovalDbContext(ApprovalDbContextFactory.CreateTestOptions(locator))) await db.Database.MigrateAsync();
+        await using (var db = new ApprovalDbContext(_selection.Approval())) await db.Database.MigrateAsync();
     }
     // Synthetic immutable histories intentionally persist only in isolated kordra_test; no guard is disabled.
     public Task DisposeAsync() => Task.CompletedTask;
-    private ReleaseMutationTransaction Runner(IArtifactAuditTransactionFactory factory, IAuditMutationEvidenceReader? evidence = null) => new(_facts.Installation, _iam,
+    private OfflineReleaseRecoveryCoordinator CreateReleaseRecovery(Guid installation,
+        IDbContextFactory<KordraIdentityDbContext> identity, IArtifactProcessQuiescence processes)
+        => _selection.Profile is { } profile
+            ? OfflineReleaseRecoveryCoordinator.CreateDisposableTestCoordinator(installation, identity, processes, profile.OwnerBinding)
+            : new(installation, identity, processes);
+
+    private ReleaseMutationTransaction Runner(IArtifactAuditTransactionFactory factory, IAuditMutationEvidenceReader? evidence = null) => _selection.Profile is { } profile
+        ? ReleaseMutationTransaction.CreateDisposableTestTransaction(_facts.Installation, _iam,
+        new(_facts, _facts, _facts, _facts, _facts), new(_facts, _facts, _facts, _facts), factory, evidence ?? new AuditMutationEvidenceReader(_aud), _gate, _facts, profile.OwnerBinding)
+        : new(_facts.Installation, _iam,
         new(_facts, _facts, _facts, _facts, _facts), new(_facts, _facts, _facts, _facts), factory, evidence ?? new AuditMutationEvidenceReader(_aud), _gate, _facts);
-    private ReleaseUseAdmission Uses(IArtifactAuditTransactionFactory? factory = null) => new(_facts.Installation, _iam,
-        new(_facts, _facts, _facts, _facts, _facts), factory ?? new ArtifactAuditTransactionFactory(), _gate, _facts);
+    private ReleaseUseAdmission Uses(IArtifactAuditTransactionFactory? factory = null) => _selection.Profile is { } profile
+        ? ReleaseUseAdmission.CreateDisposableTestComposition(_facts.Installation, _iam,
+        new(_facts, _facts, _facts, _facts, _facts), factory ?? _selection.ArtifactAudit(), _gate, _facts, profile.OwnerBinding)
+        : new(_facts.Installation, _iam,
+        new(_facts, _facts, _facts, _facts, _facts), factory ?? _selection.ArtifactAudit(), _gate, _facts);
     private Task<ReleaseMutationResult> Run(IArtifactAuditTransactionFactory factory) => RunCommand(factory,
         ReleaseMutationCommand.Create(_facts.Project, "Synthetic transaction", _facts.Selection), "synthetic-release-key-1234");
     private async Task<ReleaseMutationResult> RunCommand(IArtifactAuditTransactionFactory factory, ReleaseMutationCommand command,
@@ -66,7 +80,7 @@ public sealed class ReleaseMutationTransactionTests : IAsyncLifetime
     [Fact]
     public async Task ReadinessAcceptsMatchingCommittedOwnerAndAuditHistory()
     {
-        Assert.Equal("durable", (await Run(new Faults("none", _facts))).Status);
+        Assert.Equal("durable", (await Run(new Faults(_selection, "none", _facts))).Status);
         Assert.True(await new ReleaseSchemaReadiness(_facts.Installation, _rel).CheckAsync());
     }
     [Fact]
@@ -75,14 +89,14 @@ public sealed class ReleaseMutationTransactionTests : IAsyncLifetime
         var plan = RecoveryPlan(); var intent = new AuditIntent(1, ReleaseCommandHash.AuditIntentId(plan.ScopedKeyHash), Guid.NewGuid(),
             AuditIntentStage.Mutation, _facts.Subject.PrincipalId, _facts.Tenant, Guid.NewGuid(), "release.create", "project", _facts.Project,
             null, 1, ReleaseCommandHash.AuditReason(plan.InstallationId, plan.ScopedKeyHash, plan.BusinessHash), _facts.Now, Guid.NewGuid());
-        Assert.Equal(AuditAppendStatus.Durable, (await new AuditAppendStore(_aud).AppendAsync(intent)).Status);
+        Assert.Equal(AuditAppendStatus.Durable, (await _selection.AuditStore(_aud).AppendAsync(intent)).Status);
         Assert.False(await new ReleaseSchemaReadiness(_facts.Installation, _rel).CheckAsync());
         Assert.True(await new ReleaseSchemaReadiness(Guid.NewGuid(), _rel).CheckAsync());
     }
     [Fact]
     public async Task MissingReadinessPreventsUseAuditAndMutation()
     {
-        var coordinator = new ReleaseMutationExecutionCoordinator(Uses(), Runner(new Faults("none", _facts)), Disclosure(new Faults("none", _facts)), _gate, new NotReady());
+        var coordinator = new ReleaseMutationExecutionCoordinator(Uses(), Runner(new Faults(_selection, "none", _facts)), Disclosure(new Faults(_selection, "none", _facts)), _gate, new NotReady());
         var command = ReleaseMutationCommand.Create(_facts.Project, "Synthetic", _facts.Selection);
         Assert.Equal("unavailable", await coordinator.ExecuteAsync(_facts.Session, command, "synthetic-key-1234", Guid.NewGuid(), new Capture()));
         await using var aud = await _aud.CreateDbContextAsync(); Assert.False(await aud.Entries.AnyAsync(x => x.TenantRef == _facts.Tenant));
@@ -92,9 +106,9 @@ public sealed class ReleaseMutationTransactionTests : IAsyncLifetime
     [Fact]
     public async Task ProjectReadUsesFreshUseAndDisclosureAuditForDetailAndPages()
     {
-        var created = await Run(new Faults("none", _facts)); Assert.Equal("durable", created.Status);
+        var created = await Run(new Faults(_selection, "none", _facts)); Assert.Equal("durable", created.Status);
         _facts.Grant = _facts.Grant with { Permission = "release.read" };
-        var reader = ReadCoordinator(new ArtifactAuditTransactionFactory()); var capture = new Capture();
+        var reader = ReadCoordinator(_selection.ArtifactAudit()); var capture = new Capture();
         var query = new ReleaseReadQuery(ReleaseReadKind.Detail, Guid.NewGuid(), created.RevisionId);
         Assert.Equal("completed", await reader.ExecuteAsync(_facts.Session, _facts.Project, query, capture));
         Assert.Equal(200, capture.Selection!.StatusCode); Assert.Equal($"\"rel-v1:{created.RevisionId:D}:1\"", capture.Selection.Etag);
@@ -115,7 +129,7 @@ public sealed class ReleaseMutationTransactionTests : IAsyncLifetime
     public async Task AuthorizedForeignAndMissingDetailHaveTheSameBoundedError()
     {
         _facts.Grant = _facts.Grant with { Permission = "release.read" };
-        var reader = ReadCoordinator(new ArtifactAuditTransactionFactory()); var response = new Capture();
+        var reader = ReadCoordinator(_selection.ArtifactAudit()); var response = new Capture();
         Assert.Equal("completed", await reader.ExecuteAsync(_facts.Session, _facts.Project, new(ReleaseReadKind.Detail, Guid.NewGuid(), Guid.NewGuid()), response));
         Assert.Equal(404, response.Selection!.StatusCode);
         using var body = System.Text.Json.JsonDocument.Parse(response.Bytes!); Assert.Equal("not_found", body.RootElement.GetProperty("code").GetString());
@@ -129,28 +143,31 @@ public sealed class ReleaseMutationTransactionTests : IAsyncLifetime
     public async Task ReadWithholdsBodyIfDisclosureFactsChange(string fault)
     {
         if (fault == "owner") _facts.AllowPilot(TimeSpan.FromMinutes(5));
-        var created = await Run(new Faults("none", _facts)); _facts.Grant = _facts.Grant with { Permission = "release.read" };
-        var response = new Capture(); var reader = ReadCoordinator(new SecondAuditFault(fault, _facts));
+        var created = await Run(new Faults(_selection, "none", _facts)); _facts.Grant = _facts.Grant with { Permission = "release.read" };
+        var response = new Capture(); var reader = ReadCoordinator(new SecondAuditFault(_selection, fault, _facts));
         var result = await reader.ExecuteAsync(_facts.Session, _facts.Project, new(ReleaseReadKind.Detail, Guid.NewGuid(), created.RevisionId), response);
         Assert.Equal(fault == "ack" ? "unknown" : fault is "authority" or "expiry" ? "denied" : "unavailable", result);
         Assert.Null(response.Bytes);
         if (fault == "ack") await Assert.ThrowsAsync<InvalidOperationException>(async () => { await using var held = await _gate.AcquireReadAsync(); });
         else { await using var held = await _gate.AcquireReadAsync(); }
     }
-    private ReleaseReadCoordinator ReadCoordinator(IArtifactAuditTransactionFactory factory) => new(_facts.Installation, _iam, _rel,
+    private ReleaseReadCoordinator ReadCoordinator(IArtifactAuditTransactionFactory factory) => _selection.Profile is { } profile
+        ? ReleaseReadCoordinator.CreateDisposableTestComposition(_facts.Installation, _iam, _rel,
+        new(_facts, _facts, _facts, _facts, _facts), new(_facts, _facts, _facts, _facts), factory, _gate, _facts, new Ready(), profile.OwnerBinding)
+        : new(_facts.Installation, _iam, _rel,
         new(_facts, _facts, _facts, _facts, _facts), new(_facts, _facts, _facts, _facts), factory, _gate, _facts, new Ready());
     private sealed class Ready : IReleaseSchemaReadiness { public Task<bool> CheckAsync(CancellationToken ct = default) => Task.FromResult(true); }
-    private sealed class SecondAuditFault(string fault, Facts facts) : IArtifactAuditTransactionFactory
+    private sealed class SecondAuditFault(ProductPostgreSqlFixtureSelection selection, string fault, Facts facts) : IArtifactAuditTransactionFactory
     {
         private int _count;
         public ValueTask<IArtifactAuditTransaction> EnlistAsync(DbConnection c, DbTransaction t, CancellationToken ct) =>
-            Interlocked.Increment(ref _count) == 1 ? new ArtifactAuditTransactionFactory().EnlistAsync(c, t, ct) : new Faults(fault, facts).EnlistAsync(c, t, ct);
+            Interlocked.Increment(ref _count) == 1 ? selection.ArtifactAudit().EnlistAsync(c, t, ct) : new Faults(selection, fault, facts).EnlistAsync(c, t, ct);
     }
 
     [Fact]
     public async Task IntegratedUseMutationDisclosureAndReplayShareTheBoundInvocation()
     {
-        var coordinator = new ReleaseMutationExecutionCoordinator(Uses(), Runner(new Faults("none", _facts)), Disclosure(new Faults("none", _facts)), _gate, new Ready());
+        var coordinator = new ReleaseMutationExecutionCoordinator(Uses(), Runner(new Faults(_selection, "none", _facts)), Disclosure(new Faults(_selection, "none", _facts)), _gate, new Ready());
         var command = ReleaseMutationCommand.Create(_facts.Project, "Synthetic transaction", _facts.Selection);
         var first = new Capture();
         Assert.Equal("completed", await coordinator.ExecuteAsync(_facts.Session, command, "synthetic-release-key-1234", Guid.NewGuid(), first));
@@ -166,8 +183,8 @@ public sealed class ReleaseMutationTransactionTests : IAsyncLifetime
     [Fact]
     public async Task UnresolvedUseTaskAtDeadlineFencesAndNeverMutates()
     {
-        var delayed = new DelayedAudit();
-        var coordinator = new ReleaseMutationExecutionCoordinator(Uses(delayed), Runner(new Faults("none", _facts)), Disclosure(new Faults("none", _facts)), _gate, new Ready());
+        var delayed = new DelayedAudit(_selection);
+        var coordinator = new ReleaseMutationExecutionCoordinator(Uses(delayed), Runner(new Faults(_selection, "none", _facts)), Disclosure(new Faults(_selection, "none", _facts)), _gate, new Ready());
         var response = new Capture(); var command = ReleaseMutationCommand.Create(_facts.Project, "Synthetic", _facts.Selection);
         var result = await coordinator.ExecuteAsync(_facts.Session, command, "synthetic-use-key-1234", Guid.NewGuid(), response);
         Assert.Equal("unknown", result); Assert.True(response.Aborted);
@@ -175,19 +192,19 @@ public sealed class ReleaseMutationTransactionTests : IAsyncLifetime
         delayed.Release();
         await using var rel = await _rel.CreateDbContextAsync(); Assert.False(await rel.Commands.AnyAsync(x => x.InstallationId == _facts.Installation));
     }
-    private sealed class DelayedAudit : IArtifactAuditTransactionFactory
+    private sealed class DelayedAudit(ProductPostgreSqlFixtureSelection selection) : IArtifactAuditTransactionFactory
     {
         private readonly TaskCompletionSource _release = new(TaskCreationOptions.RunContinuationsAsynchronously);
         public void Release() => _release.TrySetResult();
         public async ValueTask<IArtifactAuditTransaction> EnlistAsync(DbConnection connection, DbTransaction tx, CancellationToken ct)
-        { await _release.Task; return await new ArtifactAuditTransactionFactory().EnlistAsync(connection, tx, ct); }
+        { await _release.Task; return await selection.ArtifactAudit().EnlistAsync(connection, tx, ct); }
     }
 
     [Fact]
     public async Task FreshDisclosureAuditsExactBodyAndAllowsOnlyOneHandoff()
     {
-        var mutation = await Run(new Faults("none", _facts)); Assert.Equal("durable", mutation.Status);
-        var response = new Capture(); var disclosure = Disclosure(new Faults("none", _facts));
+        var mutation = await Run(new Faults(_selection, "none", _facts)); Assert.Equal("durable", mutation.Status);
+        var response = new Capture(); var disclosure = Disclosure(new Faults(_selection, "none", _facts));
         Assert.Equal("completed", await disclosure.DiscloseAsync(mutation, response));
         Assert.Equal(201, response.Selection!.StatusCode); Assert.Equal($"\"rel-v1:{mutation.RevisionId:D}:1\"", response.Selection.Etag);
         Assert.Contains("\"executionAuthorized\":false", Encoding.UTF8.GetString(response.Bytes!));
@@ -205,8 +222,8 @@ public sealed class ReleaseMutationTransactionTests : IAsyncLifetime
     public async Task DisclosureFailureWithholdsBodyAndPreservesCommittedMutation(string fault)
     {
         if (fault == "owner") _facts.AllowPilot(TimeSpan.FromMinutes(5));
-        var mutation = await Run(new Faults("none", _facts)); Assert.Equal("durable", mutation.Status);
-        var response = new Capture(); var result = await Disclosure(new Faults(fault, _facts)).DiscloseAsync(mutation, response);
+        var mutation = await Run(new Faults(_selection, "none", _facts)); Assert.Equal("durable", mutation.Status);
+        var response = new Capture(); var result = await Disclosure(new Faults(_selection, fault, _facts)).DiscloseAsync(mutation, response);
         Assert.Equal(fault == "ack" ? "unknown" : fault is "authority" or "expiry" ? "denied" : "unavailable", result);
         Assert.Null(response.Bytes);
         await using var rel = await _rel.CreateDbContextAsync(); Assert.True(await rel.Commands.AnyAsync(x => x.InstallationId == _facts.Installation));
@@ -216,14 +233,14 @@ public sealed class ReleaseMutationTransactionTests : IAsyncLifetime
     [Fact]
     public async Task FreezeDisclosureRechecksPinnedOwnersAfterMutation()
     {
-        var initial = await Run(new Faults("none", _facts)); Assert.Equal("durable", initial.Status); _facts.AllowPilot(TimeSpan.FromMinutes(5));
+        var initial = await Run(new Faults(_selection, "none", _facts)); Assert.Equal("durable", initial.Status); _facts.AllowPilot(TimeSpan.FromMinutes(5));
         var preview = await new ReleaseSelectionReader(_facts, _facts, _facts, _facts).ReadUnderAdmissionAsync(
             _facts.Installation, _facts.Tenant, _facts.Project, _facts.Selection, _facts.Now);
         var id = initial.RevisionId!.Value;
         var command = ReleaseMutationCommand.Freeze(_facts.Project, id, 1, $"\"rel-v1:{id:D}:1\"", ReleasePreviewHash.Compute(id, 1, preview.Intent!.SpecHash));
-        var frozen = await RunCommand(new Faults("none", _facts), command, "synthetic-freeze-key-1234"); Assert.Equal("durable", frozen.Status);
+        var frozen = await RunCommand(new Faults(_selection, "none", _facts), command, "synthetic-freeze-key-1234"); Assert.Equal("durable", frozen.Status);
         _facts.TargetRevision++; var response = new Capture();
-        Assert.Equal("denied", await Disclosure(new Faults("none", _facts)).DiscloseAsync(frozen, response));
+        Assert.Equal("denied", await Disclosure(new Faults(_selection, "none", _facts)).DiscloseAsync(frozen, response));
         Assert.Null(response.Bytes);
         await using var rel = await _rel.CreateDbContextAsync(); Assert.Equal("Frozen", (await rel.Revisions.SingleAsync(x => x.Id == id)).State);
     }
@@ -231,13 +248,16 @@ public sealed class ReleaseMutationTransactionTests : IAsyncLifetime
     [Fact]
     public async Task FailedHandoffFencesWithoutReversingMutation()
     {
-        var mutation = await Run(new Faults("none", _facts)); var response = new Capture { Fail = true };
-        Assert.Equal("unknown", await Disclosure(new Faults("none", _facts)).DiscloseAsync(mutation, response));
+        var mutation = await Run(new Faults(_selection, "none", _facts)); var response = new Capture { Fail = true };
+        Assert.Equal("unknown", await Disclosure(new Faults(_selection, "none", _facts)).DiscloseAsync(mutation, response));
         Assert.True(response.Aborted);
         await Assert.ThrowsAsync<InvalidOperationException>(async () => { await using var held = await _gate.AcquireReadAsync(); });
         await using var rel = await _rel.CreateDbContextAsync(); Assert.True(await rel.Commands.AnyAsync(x => x.InstallationId == _facts.Installation));
     }
-    private ReleaseMutationDisclosure Disclosure(IArtifactAuditTransactionFactory factory) => new(_facts.Installation, _iam, _rel,
+    private ReleaseMutationDisclosure Disclosure(IArtifactAuditTransactionFactory factory) => _selection.Profile is { } profile
+        ? ReleaseMutationDisclosure.CreateDisposableTestComposition(_facts.Installation, _iam, _rel,
+        new(_facts, _facts, _facts, _facts, _facts), new(_facts, _facts, _facts, _facts), factory, _gate, _facts, profile.OwnerBinding)
+        : new(_facts.Installation, _iam, _rel,
         new(_facts, _facts, _facts, _facts, _facts), new(_facts, _facts, _facts, _facts), factory, _gate, _facts);
     private sealed class Capture : IReleaseResponseCommitter
     {
@@ -255,7 +275,7 @@ public sealed class ReleaseMutationTransactionTests : IAsyncLifetime
     [InlineData("ack")]
     public async Task UseAuditMustCompleteBeforeTicketIsIssued(string fault)
     {
-        var hook = new Faults(fault, _facts); var command = ReleaseMutationCommand.Create(_facts.Project, "Synthetic", _facts.Selection);
+        var hook = new Faults(_selection, fault, _facts); var command = ReleaseMutationCommand.Create(_facts.Project, "Synthetic", _facts.Selection);
         var result = await Uses(hook).BeginAsync(_facts.Session, command, "synthetic-use-key-1234", Guid.NewGuid());
         Assert.Equal(fault == "ack" ? "unknown" : fault is "authority" or "expiry" ? "denied" : "unavailable", result.Status);
         Assert.Null(result.Ticket);
@@ -275,8 +295,8 @@ public sealed class ReleaseMutationTransactionTests : IAsyncLifetime
         if (fault == "assignment") _facts.Grant = _facts.Grant with { AssignmentRevision = 2 };
         else if (fault == "clock-rollback") _facts.Now = _facts.Now.AddSeconds(-1);
         else _facts.Now = _facts.Now.AddSeconds(10);
-        Assert.Equal("denied", (await Runner(new Faults("none", _facts)).ExecuteAsync(use.Ticket)).Status);
-        Assert.Equal("invalid", (await Runner(new Faults("none", _facts)).ExecuteAsync(use.Ticket)).Status);
+        Assert.Equal("denied", (await Runner(new Faults(_selection, "none", _facts)).ExecuteAsync(use.Ticket)).Status);
+        Assert.Equal("invalid", (await Runner(new Faults(_selection, "none", _facts)).ExecuteAsync(use.Ticket)).Status);
         await using var rel = await _rel.CreateDbContextAsync(); Assert.False(await rel.Commands.AnyAsync(x => x.InstallationId == _facts.Installation));
     }
     [Fact]
@@ -284,10 +304,13 @@ public sealed class ReleaseMutationTransactionTests : IAsyncLifetime
     {
         var command = ReleaseMutationCommand.Create(_facts.Project, "Synthetic", _facts.Selection);
         var use = await Uses().BeginAsync(_facts.Session, command, "synthetic-use-key-1234", Guid.NewGuid()); Assert.NotNull(use.Ticket);
-        var other = new ReleaseMutationTransaction(Guid.NewGuid(), _iam, new(_facts, _facts, _facts, _facts, _facts),
-            new(_facts, _facts, _facts, _facts), new ArtifactAuditTransactionFactory(), new AuditMutationEvidenceReader(_aud), _gate, _facts);
+        var other = _selection.Profile is { } otherProfile
+            ? ReleaseMutationTransaction.CreateDisposableTestTransaction(Guid.NewGuid(), _iam, new(_facts, _facts, _facts, _facts, _facts),
+                new(_facts, _facts, _facts, _facts), _selection.ArtifactAudit(), new AuditMutationEvidenceReader(_aud), _gate, _facts, otherProfile.OwnerBinding)
+            : new ReleaseMutationTransaction(Guid.NewGuid(), _iam, new(_facts, _facts, _facts, _facts, _facts),
+                new(_facts, _facts, _facts, _facts), _selection.ArtifactAudit(), new AuditMutationEvidenceReader(_aud), _gate, _facts);
         Assert.Equal("invalid", (await other.ExecuteAsync(use.Ticket)).Status);
-        Assert.Equal("durable", (await Runner(new Faults("none", _facts)).ExecuteAsync(use.Ticket)).Status);
+        Assert.Equal("durable", (await Runner(new Faults(_selection, "none", _facts)).ExecuteAsync(use.Ticket)).Status);
     }
 
     [Theory]
@@ -297,7 +320,7 @@ public sealed class ReleaseMutationTransactionTests : IAsyncLifetime
     [InlineData("expiry")]
     public async Task PrecommitFailureDoesNotPersistOrFence(string fault)
     {
-        var hook = new Faults(fault, _facts); var outcome = await Run(hook);
+        var hook = new Faults(_selection, fault, _facts); var outcome = await Run(hook);
         Assert.Equal(fault is "authority" or "expiry" ? "denied" : "unavailable", outcome.Status);
         Assert.False(hook.Attempted); await AssertRows(false); await using var held = await _gate.AcquireReadAsync();
     }
@@ -306,13 +329,13 @@ public sealed class ReleaseMutationTransactionTests : IAsyncLifetime
     [InlineData(true)]
     public async Task OneCommitPersistsReleaseAuditAndFloorAndLostAcknowledgementFences(bool loseAck)
     {
-        var hook = new Faults(loseAck ? "ack" : "none", _facts); var outcome = await Run(hook);
+        var hook = new Faults(_selection, loseAck ? "ack" : "none", _facts); var outcome = await Run(hook);
         Assert.True(hook.Attempted); Assert.Equal(loseAck ? "unknown" : "durable", outcome.Status);
         Assert.Equal(!loseAck, outcome.RevisionId.HasValue); await AssertRows(true);
         if (loseAck)
         {
             await Assert.ThrowsAsync<InvalidOperationException>(async () => { await using var held = await _gate.AcquireReadAsync(); });
-            var coordinator = new OfflineReleaseRecoveryCoordinator(_facts.Installation, _iam, new Quiescence());
+            var coordinator = CreateReleaseRecovery(_facts.Installation, _iam, new Quiescence());
             var inspection = await coordinator.InspectAsync(new Custody(), RecoveryPlan().CanonicalBytes());
             Assert.Equal("confirmed", inspection.Status); Assert.NotNull(inspection.BoundPlan);
             var bound = inspection.BoundPlan; var recovered = await coordinator.ApplyAsync(new Custody(), bound.CanonicalBytes(), bound.Hash());
@@ -324,7 +347,7 @@ public sealed class ReleaseMutationTransactionTests : IAsyncLifetime
     [Fact]
     public async Task DroppedPostgresCommitResponseFencesAndStoppedRecoveryFindsDurableMutation()
     {
-        var fault = new DroppedCommitResponse();
+        var fault = new DroppedCommitResponse(_selection);
         var result = await Run(fault);
         Assert.True(fault.CommitAttempted);
         Assert.True(fault.Transport!.SentCommit);
@@ -333,7 +356,7 @@ public sealed class ReleaseMutationTransactionTests : IAsyncLifetime
         Assert.Null(result.RevisionId);
         await AssertRows(true);
         await Assert.ThrowsAsync<InvalidOperationException>(async () => { await using var held = await _gate.AcquireReadAsync(); });
-        var recovery = new OfflineReleaseRecoveryCoordinator(_facts.Installation, _iam, new Quiescence());
+        var recovery = CreateReleaseRecovery(_facts.Installation, _iam, new Quiescence());
         var inspected = await recovery.InspectAsync(new Custody(), RecoveryPlan().CanonicalBytes());
         Assert.Equal("confirmed", inspected.Status);
         Assert.NotNull(inspected.BoundPlan);
@@ -346,7 +369,7 @@ public sealed class ReleaseMutationTransactionTests : IAsyncLifetime
     public async Task DroppedCommitResponseRecoversUnderActualStoppedCustody()
     {
         if (!OperatingSystem.IsMacOS()) return;
-        var fault = new DroppedCommitResponse();
+        var fault = new DroppedCommitResponse(_selection);
         Assert.Equal("unknown", (await Run(fault)).Status);
         Assert.True(fault.Transport!.DiscardedCommitResponse);
         await AssertRows(true);
@@ -374,7 +397,7 @@ public sealed class ReleaseMutationTransactionTests : IAsyncLifetime
             try
             {
                 var plan = RecoveryPlan() with { OldProcessId = child.Id };
-                var recovery = new OfflineReleaseRecoveryCoordinator(_facts.Installation, _iam, new ArtifactProcessQuiescence());
+                var recovery = CreateReleaseRecovery(_facts.Installation, _iam, new ArtifactProcessQuiescence());
                 Assert.Equal("denied", (await recovery.InspectAsync(custody, plan.CanonicalBytes())).Status);
                 child.StandardInput.Close();
                 await child.WaitForExitAsync().WaitAsync(TimeSpan.FromSeconds(5));
@@ -396,8 +419,8 @@ public sealed class ReleaseMutationTransactionTests : IAsyncLifetime
     [Fact]
     public async Task ExactReplayRequiresMatchingAuditAndDoesNotCommitAgain()
     {
-        var first = await Run(new Faults("none", _facts)); Assert.Equal("durable", first.Status);
-        var hook = new Faults("enlist", _facts); var replay = await Run(hook);
+        var first = await Run(new Faults(_selection, "none", _facts)); Assert.Equal("durable", first.Status);
+        var hook = new Faults(_selection, "enlist", _facts); var replay = await Run(hook);
         Assert.Equal("replay", replay.Status); Assert.Equal(first.RevisionId, replay.RevisionId); Assert.False(hook.Attempted);
         await using var rel = await _rel.CreateDbContextAsync();
         Assert.Equal(1, await rel.Commands.CountAsync(x => x.InstallationId == _facts.Installation));
@@ -427,7 +450,7 @@ public sealed class ReleaseMutationTransactionTests : IAsyncLifetime
             {
                 var custody = Assert.IsAssignableFrom<IOfflineProvisioningLease>(held);
                 var livePlan = RecoveryPlan() with { OldProcessId = Environment.ProcessId };
-                var liveResult = await new OfflineReleaseRecoveryCoordinator(_facts.Installation, _iam, new ArtifactProcessQuiescence())
+                var liveResult = await CreateReleaseRecovery(_facts.Installation, _iam, new ArtifactProcessQuiescence())
                     .InspectAsync(custody, livePlan.CanonicalBytes());
                 Assert.Equal("denied", liveResult.Status);
                 using var child = System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo("/bin/cat")
@@ -438,7 +461,7 @@ public sealed class ReleaseMutationTransactionTests : IAsyncLifetime
                 try
                 {
                     var childPlan = RecoveryPlan() with { OldProcessId = child.Id };
-                    var realRecovery = new OfflineReleaseRecoveryCoordinator(_facts.Installation, _iam, new ArtifactProcessQuiescence());
+                    var realRecovery = CreateReleaseRecovery(_facts.Installation, _iam, new ArtifactProcessQuiescence());
                     Assert.Equal("denied", (await realRecovery.InspectAsync(custody, childPlan.CanonicalBytes())).Status);
                     child.StandardInput.Close();
                     await child.WaitForExitAsync().WaitAsync(TimeSpan.FromSeconds(5));
@@ -452,7 +475,7 @@ public sealed class ReleaseMutationTransactionTests : IAsyncLifetime
                     // Only the synthetic child started by this test may be terminated.
                     if (!child.HasExited) { child.Kill(); await child.WaitForExitAsync(); }
                 }
-                var result = await new OfflineReleaseRecoveryCoordinator(_facts.Installation, _iam, new Quiescence()).InspectAsync(custody, RecoveryPlan().CanonicalBytes());
+                var result = await CreateReleaseRecovery(_facts.Installation, _iam, new Quiescence()).InspectAsync(custody, RecoveryPlan().CanonicalBytes());
                 Assert.Equal("no_commit", result.Status);
                 var conflict = Assert.Throws<TargetInvocationException>(() => acquire.Invoke(null, [root]));
                 Assert.IsType<InvalidOperationException>(conflict.InnerException);
@@ -467,8 +490,8 @@ public sealed class ReleaseMutationTransactionTests : IAsyncLifetime
     [Fact]
     public async Task StoppedRecoveryConfirmsExactCommitWithoutWritingOrGrantingAuthority()
     {
-        var committed = await Run(new Faults("none", _facts)); Assert.Equal("durable", committed.Status);
-        var recovery = new OfflineReleaseRecoveryCoordinator(_facts.Installation, _iam, new Quiescence());
+        var committed = await Run(new Faults(_selection, "none", _facts)); Assert.Equal("durable", committed.Status);
+        var recovery = CreateReleaseRecovery(_facts.Installation, _iam, new Quiescence());
         var plan = RecoveryPlan(); var custody = new Custody();
         var inspected = await recovery.InspectAsync(custody, plan.CanonicalBytes());
         Assert.Equal("confirmed", inspected.Status); Assert.NotNull(inspected.BoundPlan);
@@ -483,26 +506,26 @@ public sealed class ReleaseMutationTransactionTests : IAsyncLifetime
     [Fact]
     public async Task StoppedRecoveryDoesNotConfirmADifferentResourceWithTheSamePrivateHashes()
     {
-        var first = await Run(new Faults("none", _facts)); Assert.Equal("durable", first.Status);
+        var first = await Run(new Faults(_selection, "none", _facts)); Assert.Equal("durable", first.Status);
         var id = first.RevisionId!.Value;
         var replace = ReleaseMutationCommand.Replace(_facts.Project, id, 1, $"\"rel-v1:{id:D}:1\"", "Changed", _facts.Selection);
-        Assert.Equal("durable", (await RunCommand(new Faults("none", _facts), replace, "synthetic-replace-key-1234")).Status);
+        Assert.Equal("durable", (await RunCommand(new Faults(_selection, "none", _facts), replace, "synthetic-replace-key-1234")).Status);
         var plan = new ReleaseRecoveryPlan(1, Guid.NewGuid(), _facts.Installation, _facts.Session.BootGeneration, 12345,
             _facts.Tenant, _facts.Subject.PrincipalId, replace.Action, replace.Route.Replace(id.ToString("D"), Guid.NewGuid().ToString("D")),
             replace.ScopedKeyHash(_facts.Installation, _facts.Tenant, _facts.Subject.PrincipalId, "synthetic-replace-key-1234"), replace.BusinessHash, null, null);
-        var inspection = await new OfflineReleaseRecoveryCoordinator(_facts.Installation, _iam, new Quiescence()).InspectAsync(new Custody(), plan.CanonicalBytes());
+        var inspection = await CreateReleaseRecovery(_facts.Installation, _iam, new Quiescence()).InspectAsync(new Custody(), plan.CanonicalBytes());
         Assert.Equal("unknown", inspection.Status); Assert.Null(inspection.BoundPlan);
     }
 
     [Fact]
     public async Task StoppedRecoveryRejectsOwnerChangesAfterInspection()
     {
-        var committed = await Run(new Faults("none", _facts)); Assert.Equal("durable", committed.Status);
-        var recovery = new OfflineReleaseRecoveryCoordinator(_facts.Installation, _iam, new Quiescence()); var custody = new Custody();
+        var committed = await Run(new Faults(_selection, "none", _facts)); Assert.Equal("durable", committed.Status);
+        var recovery = CreateReleaseRecovery(_facts.Installation, _iam, new Quiescence()); var custody = new Custody();
         var inspected = await recovery.InspectAsync(custody, RecoveryPlan().CanonicalBytes()); Assert.NotNull(inspected.BoundPlan);
         var id = committed.RevisionId!.Value;
         var update = ReleaseMutationCommand.Replace(_facts.Project, id, 1, $"\"rel-v1:{id:D}:1\"", "Changed after inspect", _facts.Selection);
-        Assert.Equal("durable", (await RunCommand(new Faults("none", _facts), update, "new-synthetic-key-1234")).Status);
+        Assert.Equal("durable", (await RunCommand(new Faults(_selection, "none", _facts), update, "new-synthetic-key-1234")).Status);
         var plan = inspected.BoundPlan;
         Assert.Equal("conflict", (await recovery.ApplyAsync(custody, plan.CanonicalBytes(), plan.Hash())).Status);
     }
@@ -510,19 +533,19 @@ public sealed class ReleaseMutationTransactionTests : IAsyncLifetime
     [Fact]
     public async Task StoppedRecoveryReportsNoCommitOnlyWithBothOwnerAndAuditAbsent()
     {
-        var recovery = new OfflineReleaseRecoveryCoordinator(_facts.Installation, _iam, new Quiescence()); var plan = RecoveryPlan(); var custody = new Custody();
+        var recovery = CreateReleaseRecovery(_facts.Installation, _iam, new Quiescence()); var plan = RecoveryPlan(); var custody = new Custody();
         var inspected = await recovery.InspectAsync(custody, plan.CanonicalBytes()); Assert.Equal("no_commit", inspected.Status);
         Assert.NotNull(inspected.BoundPlan);
         Assert.Equal("no_commit", (await recovery.ApplyAsync(custody, inspected.BoundPlan.CanonicalBytes(), inspected.BoundPlan.Hash())).Status);
         custody.Held = false; Assert.Equal("unknown", (await recovery.InspectAsync(custody, plan.CanonicalBytes())).Status);
-        Assert.Equal("denied", (await new OfflineReleaseRecoveryCoordinator(_facts.Installation, _iam, new Quiescence(false)).InspectAsync(new Custody(), plan.CanonicalBytes())).Status);
+        Assert.Equal("denied", (await CreateReleaseRecovery(_facts.Installation, _iam, new Quiescence(false)).InspectAsync(new Custody(), plan.CanonicalBytes())).Status);
     }
     [Fact]
     public async Task NoCommitEvidenceCannotBeAppliedAfterTheMutationAppears()
     {
-        var recovery = new OfflineReleaseRecoveryCoordinator(_facts.Installation, _iam, new Quiescence()); var custody = new Custody();
+        var recovery = CreateReleaseRecovery(_facts.Installation, _iam, new Quiescence()); var custody = new Custody();
         var inspected = await recovery.InspectAsync(custody, RecoveryPlan().CanonicalBytes()); Assert.Equal("no_commit", inspected.Status);
-        Assert.Equal("durable", (await Run(new Faults("none", _facts))).Status);
+        Assert.Equal("durable", (await Run(new Faults(_selection, "none", _facts))).Status);
         var bound = inspected.BoundPlan!;
         Assert.Equal("conflict", (await recovery.ApplyAsync(custody, bound.CanonicalBytes(), bound.Hash())).Status);
     }
@@ -533,8 +556,8 @@ public sealed class ReleaseMutationTransactionTests : IAsyncLifetime
         var plan = RecoveryPlan(); var intent = new AuditIntent(1, ReleaseCommandHash.AuditIntentId(plan.ScopedKeyHash), Guid.NewGuid(),
             AuditIntentStage.Mutation, _facts.Subject.PrincipalId, _facts.Tenant, Guid.NewGuid(), "release.create", "project", _facts.Project,
             null, 1, ReleaseCommandHash.AuditReason(plan.InstallationId, plan.ScopedKeyHash, plan.BusinessHash), _facts.Now, Guid.NewGuid());
-        Assert.Equal(AuditAppendStatus.Durable, (await new AuditAppendStore(_aud).AppendAsync(intent)).Status);
-        Assert.Equal("unknown", (await Run(new Faults("none", _facts))).Status);
+        Assert.Equal(AuditAppendStatus.Durable, (await _selection.AuditStore(_aud).AppendAsync(intent)).Status);
+        Assert.Equal("unknown", (await Run(new Faults(_selection, "none", _facts))).Status);
         await using var rel = await _rel.CreateDbContextAsync(); Assert.False(await rel.Commands.AnyAsync(x => x.InstallationId == _facts.Installation));
         await Assert.ThrowsAsync<InvalidOperationException>(async () => { await using var held = await _gate.AcquireReadAsync(); });
     }
@@ -545,8 +568,8 @@ public sealed class ReleaseMutationTransactionTests : IAsyncLifetime
         var plan = RecoveryPlan(); var intent = new AuditIntent(1, ReleaseCommandHash.AuditIntentId(plan.ScopedKeyHash), Guid.NewGuid(),
             AuditIntentStage.Mutation, _facts.Subject.PrincipalId, _facts.Tenant, Guid.NewGuid(), "release.create", "project", _facts.Project,
             null, 1, ReleaseCommandHash.AuditReason(plan.InstallationId, plan.ScopedKeyHash, plan.BusinessHash), _facts.Now, Guid.NewGuid());
-        Assert.Equal(AuditAppendStatus.Durable, (await new AuditAppendStore(_aud).AppendAsync(intent)).Status);
-        var result = await new OfflineReleaseRecoveryCoordinator(_facts.Installation, _iam, new Quiescence()).InspectAsync(new Custody(), plan.CanonicalBytes());
+        Assert.Equal(AuditAppendStatus.Durable, (await _selection.AuditStore(_aud).AppendAsync(intent)).Status);
+        var result = await CreateReleaseRecovery(_facts.Installation, _iam, new Quiescence()).InspectAsync(new Custody(), plan.CanonicalBytes());
         Assert.Equal("unknown", result.Status); Assert.Null(result.BoundPlan);
     }
     private ReleaseRecoveryPlan RecoveryPlan()
@@ -568,7 +591,7 @@ public sealed class ReleaseMutationTransactionTests : IAsyncLifetime
     [InlineData("policy-expiry")]
     public async Task FreezePinsReviewedOwnerFactsAndRechecksThemAtCommit(string fault)
     {
-        var initial = await Run(new Faults("none", _facts)); Assert.Equal("durable", initial.Status);
+        var initial = await Run(new Faults(_selection, "none", _facts)); Assert.Equal("durable", initial.Status);
         _facts.AllowPilot(TimeSpan.FromSeconds(2));
         var preview = await new ReleaseSelectionReader(_facts, _facts, _facts, _facts).ReadUnderAdmissionAsync(
             _facts.Installation, _facts.Tenant, _facts.Project, _facts.Selection, _facts.Now);
@@ -576,7 +599,7 @@ public sealed class ReleaseMutationTransactionTests : IAsyncLifetime
         var id = initial.RevisionId!.Value;
         var command = ReleaseMutationCommand.Freeze(_facts.Project, id, 1, $"\"rel-v1:{id:D}:1\"",
             ReleasePreviewHash.Compute(id, 1, preview.Intent!.SpecHash));
-        var result = await RunCommand(new Faults(fault, _facts), command, "synthetic-freeze-key-1234");
+        var result = await RunCommand(new Faults(_selection, fault, _facts), command, "synthetic-freeze-key-1234");
         Assert.Equal(fault == "none" ? "durable" : "conflict", result.Status);
         await using var rel = await _rel.CreateDbContextAsync();
         var row = await rel.Revisions.SingleAsync(x => x.Id == id);
@@ -588,7 +611,7 @@ public sealed class ReleaseMutationTransactionTests : IAsyncLifetime
     [Fact]
     public async Task RealAuditReaderChecksTheExactOwnerEvidence()
     {
-        var result = await Run(new Faults("none", _facts)); Assert.Equal("durable", result.Status);
+        var result = await Run(new Faults(_selection, "none", _facts)); Assert.Equal("durable", result.Status);
         await using var rel = await _rel.CreateDbContextAsync();
         var receipt = await rel.Commands.SingleAsync(x => x.InstallationId == _facts.Installation);
         var expected = new AuditMutationExpectation(receipt.AuditIntentId, Convert.ToHexStringLower(receipt.AuditIntentHash),
@@ -609,8 +632,8 @@ public sealed class ReleaseMutationTransactionTests : IAsyncLifetime
     [InlineData(AuditEvidenceStatus.Unavailable)]
     public async Task ReplayNeverSucceedsWhenAuditEvidenceDoesNotMatch(AuditEvidenceStatus status)
     {
-        Assert.Equal("durable", (await Run(new Faults("none", _facts))).Status);
-        var result = await RunCommand(new Faults("none", _facts), ReleaseMutationCommand.Create(_facts.Project,
+        Assert.Equal("durable", (await Run(new Faults(_selection, "none", _facts))).Status);
+        var result = await RunCommand(new Faults(_selection, "none", _facts), ReleaseMutationCommand.Create(_facts.Project,
             "Synthetic transaction", _facts.Selection), "synthetic-release-key-1234", new Evidence(status));
         Assert.Equal(status == AuditEvidenceStatus.Unavailable ? "unavailable" : "unknown", result.Status);
         if (status == AuditEvidenceStatus.Unavailable) { await using var held = await _gate.AcquireReadAsync(); }
@@ -624,10 +647,10 @@ public sealed class ReleaseMutationTransactionTests : IAsyncLifetime
     [Fact]
     public async Task StaleVersionIsAConflictAndDoesNotStageAnotherMutation()
     {
-        var first = await Run(new Faults("none", _facts)); Assert.Equal("durable", first.Status);
+        var first = await Run(new Faults(_selection, "none", _facts)); Assert.Equal("durable", first.Status);
         var id = first.RevisionId!.Value;
         var command = ReleaseMutationCommand.Replace(_facts.Project, id, 2, $"\"rel-v1:{id:D}:2\"", "Changed", _facts.Selection);
-        var outcome = await RunCommand(new Faults("none", _facts), command, "another-synthetic-key-1234");
+        var outcome = await RunCommand(new Faults(_selection, "none", _facts), command, "another-synthetic-key-1234");
         Assert.Equal("precondition", outcome.Status);
         await using var rel = await _rel.CreateDbContextAsync();
         Assert.Equal(1, await rel.Revisions.Where(x => x.Id == id).Select(x => x.Version).SingleAsync());
@@ -644,13 +667,13 @@ public sealed class ReleaseMutationTransactionTests : IAsyncLifetime
         Assert.True(await aud.Entries.AnyAsync(x => x.TenantRef == _facts.Tenant && x.Stage == "U"));
         Assert.True(await iam.AuthorityClockFloors.AnyAsync(x => x.InstallationId == _facts.Installation));
     }
-    private sealed class Faults(string fault, Facts facts) : IArtifactAuditTransactionFactory
+    private sealed class Faults(ProductPostgreSqlFixtureSelection selection, string fault, Facts facts) : IArtifactAuditTransactionFactory
     {
         public bool Attempted;
         public async ValueTask<IArtifactAuditTransaction> EnlistAsync(DbConnection connection, DbTransaction tx, CancellationToken ct)
         {
             if (fault == "enlist") throw new OperationCanceledException();
-            return new Wrapper(await new ArtifactAuditTransactionFactory().EnlistAsync(connection, tx, ct), this, facts, fault);
+            return new Wrapper(await selection.ArtifactAudit().EnlistAsync(connection, tx, ct), this, facts, fault);
         }
         private sealed class Wrapper(IArtifactAuditTransaction inner, Faults owner, Facts facts, string fault) : IArtifactAuditTransaction
         {
@@ -678,12 +701,12 @@ public sealed class ReleaseMutationTransactionTests : IAsyncLifetime
     // The PostgreSQL test connection is already constrained to kordra_test/loopback.
     // Inject at Npgsql's stream boundary so the actual COMMIT reply is read from the
     // socket but discarded before the driver can acknowledge it to the transaction.
-    private sealed class DroppedCommitResponse : IArtifactAuditTransactionFactory
+    private sealed class DroppedCommitResponse(ProductPostgreSqlFixtureSelection selection) : IArtifactAuditTransactionFactory
     {
         public CommitReplyStream? Transport;
         public bool CommitAttempted;
         public async ValueTask<IArtifactAuditTransaction> EnlistAsync(DbConnection connection, DbTransaction tx, CancellationToken ct)
-            => new Wrapped(await new ArtifactAuditTransactionFactory().EnlistAsync(connection, tx, ct), connection, this);
+            => new Wrapped(await selection.ArtifactAudit().EnlistAsync(connection, tx, ct), connection, this);
 
         private sealed class Wrapped(IArtifactAuditTransaction inner, DbConnection connection, DroppedCommitResponse owner) : IArtifactAuditTransaction
         {

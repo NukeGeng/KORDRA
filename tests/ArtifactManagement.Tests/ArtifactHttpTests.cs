@@ -1,3 +1,4 @@
+using Kordra.Testing;
 using System.Net;
 using System.Security.Cryptography;
 using System.Text;
@@ -44,12 +45,16 @@ public sealed class ArtifactHttpTests : IAsyncLifetime
     public async Task InitializeAsync()
     {
         var locator = TestDatabaseConfiguration.TryGetConnectionString() ?? throw new InvalidOperationException("Private isolated test locator required.");
-        var art = new PooledDbContextFactory<ArtifactDbContext>(ArtifactDbContextFactory.CreateTestOptions(locator));
+        var selection = new ProductPostgreSqlFixtureSelection(locator);
+        var art = new PooledDbContextFactory<ArtifactDbContext>(selection.Artifact());
         await using (var db = await art.CreateDbContextAsync()) await db.Database.MigrateAsync();
         _host = await LocalAuthenticationTestHost.StartAsync(resourceAuthority: true, resourceServices: services =>
         {
             services.AddSingleton<IDbContextFactory<ArtifactDbContext>>(art);
-            services.AddArtifactRuntimeOwnerServices(_configuration);
+            if (selection.Profile is { } profile)
+                services.AddDisposableTestArtifactOwnerServices(_configuration, profile.OwnerBinding);
+            else
+                services.AddArtifactRuntimeOwnerServices(_configuration);
             if (_access is not null) { services.AddSingleton(_access); services.AddSingleton<CredentialBroker>(); }
         });
         _user = _host.NewUserName(); var enrolled = await _host.EnrollAsync(_user);

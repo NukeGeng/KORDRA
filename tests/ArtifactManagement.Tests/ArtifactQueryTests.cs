@@ -1,3 +1,4 @@
+using Kordra.Testing;
 using Kordra.ArtifactManagement.Domain;
 using Kordra.Modules.ArtifactManagement;
 using Kordra.Modules.ArtifactManagement.Infrastructure;
@@ -14,12 +15,14 @@ public sealed class ArtifactQueryTests : IAsyncLifetime
     private readonly Guid _installation = Guid.NewGuid(), _tenant = Guid.NewGuid(), _project = Guid.NewGuid(),
         _registry = Guid.NewGuid(), _principal = Guid.NewGuid();
     private ArtifactDbContext _db = null!;
+    private ProductPostgreSqlFixtureSelection _selection = null!;
     private IDbContextTransaction? _tx;
     private ArtifactQueryStore Queries => new(_db);
     public async Task InitializeAsync()
     {
-        _db = new(ArtifactDbContextFactory.CreateTestOptions(Environment.GetEnvironmentVariable("KORDRA_IAM_TEST_CONNECTION_STRING")
-            ?? throw new InvalidOperationException("Private isolated kordra_test locator required.")));
+        _selection = new(Environment.GetEnvironmentVariable("KORDRA_IAM_TEST_CONNECTION_STRING")
+            ?? throw new InvalidOperationException("Private isolated kordra_test locator required."));
+        _db = new(_selection.Artifact());
         await _db.Database.MigrateAsync(); _tx = await _db.Database.BeginTransactionAsync();
     }
     public async Task DisposeAsync() { if (_tx is not null) await _tx.DisposeAsync(); if (_db is not null) await _db.DisposeAsync(); }
@@ -31,7 +34,7 @@ public sealed class ArtifactQueryTests : IAsyncLifetime
                 declaration ? ArtifactSourceClaim.Create("team/frontend", new string('a', 40), "build-1") : null), key, Now);
     private async Task<Guid> Register(ArtifactRegistrationReceipt pending)
     {
-        var store = new ArtifactRegistrationStore(_db);
+        var store = _selection.ArtifactStore(_db);
         Assert.Equal("staged_pending", (await store.PreparePendingAsync(pending)).Status); await _db.SaveChangesAsync();
         var identity = pending.Request.Identity;
         var facts = new ArtifactVerificationFacts(identity, ArtifactVerificationFacts.OciManifest, 100, identity.RootDigest,
@@ -86,7 +89,7 @@ public sealed class ArtifactQueryTests : IAsyncLifetime
     [Fact]
     public async Task Key_lookup_requires_same_installation_principal_project_and_business_hash()
     {
-        var original = Pending(); var store = new ArtifactRegistrationStore(_db);
+        var original = Pending(); var store = _selection.ArtifactStore(_db);
         await store.PreparePendingAsync(original); await _db.SaveChangesAsync();
         var replay = await Queries.FindOwnKeyAsync(Pending()); Assert.NotNull(replay);
         Assert.Equal("in_progress", replay.Status); Assert.Equal(original.Id, replay.RegistrationId);

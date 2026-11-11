@@ -18,4 +18,6 @@
   <ItemGroup Condition="'$(T12CodegenBootstrap)' == 'true'">
     <Compile Remove="Internal/Generated/**/*.cs" />
   </ItemGroup>
+  <ItemGroup><Compile Include="../Shared/DisposablePostgreSqlProfile.cs" Link="Fixtures/DisposablePostgreSqlProfile.cs" /></ItemGroup>
+  <ItemGroup><Compile Include="../Shared/RegressionPostgreSqlSelection.cs" Link="Fixtures/RegressionPostgreSqlSelection.cs" /></ItemGroup>
 </Project>

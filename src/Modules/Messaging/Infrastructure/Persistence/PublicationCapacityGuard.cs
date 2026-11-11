@@ -1,3 +1,4 @@
+using DisposableTestBinding = (System.Guid RunId, string SourceSha256, string OperationManifestSha256, System.DateTimeOffset ExpiresAtUtc);
 using System.Data;
 using System.Data.Common;
 using System.Text.RegularExpressions;
@@ -31,6 +32,13 @@ public sealed class PublicationCapacityGuard
     public static PublicationCapacityGuard CreateIsolatedTestGuard(NpgsqlConnection connection, DbTransaction transaction, Guid caseId)
     {
         var schema = IsolatedMessagingFixture.SchemaFor(connection, caseId);
+        return new(connection, transaction, schema, schema);
+    }
+
+    public static PublicationCapacityGuard CreateDisposableTestGuard(NpgsqlConnection connection, DbTransaction transaction,
+        Guid caseId, DisposableTestBinding profile)
+    {
+        var schema = IsolatedMessagingFixture.SchemaForDisposableTest(connection, caseId, profile);
         return new(connection, transaction, schema, schema);
     }
 

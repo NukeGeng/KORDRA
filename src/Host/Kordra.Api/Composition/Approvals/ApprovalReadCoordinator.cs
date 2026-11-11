@@ -1,3 +1,4 @@
+using DisposableTestBinding = (System.Guid RunId, string SourceSha256, string OperationManifestSha256, System.DateTimeOffset ExpiresAtUtc);
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
@@ -22,6 +23,19 @@ public sealed class ApprovalReadCoordinator(Guid installationId, IDbContextFacto
     ApprovalAuthorityCapture authority, ApprovalEligibilityReader eligibility,
     IArtifactAuditTransactionFactory audits, FairAsyncReaderWriterAdmissionGate gate, IAuthorityClock clock, IApprovalSchemaReadiness readiness, IApprovalEnvironmentIdentityReader? environments = null)
 {
+    private readonly DisposableTestBinding? disposableTest;
+    private ApprovalReadCoordinator(Guid installationId, IDbContextFactory<KordraIdentityDbContext> identity,
+    IDbContextFactory<ReleaseDbContext> releases, IDbContextFactory<Kordra.Modules.ApprovalGovernance.Infrastructure.ApprovalDbContext> approvals,
+    ApprovalAuthorityCapture authority, ApprovalEligibilityReader eligibility,
+    IArtifactAuditTransactionFactory audits, FairAsyncReaderWriterAdmissionGate gate, IAuthorityClock clock, IApprovalSchemaReadiness readiness, IApprovalEnvironmentIdentityReader? environments, DisposableTestBinding profile)
+        : this(installationId, identity, releases, approvals, authority, eligibility, audits, gate, clock, readiness, environments) => disposableTest = profile;
+    /// <summary>Explicit ADR-0025 test composition; default construction remains unchanged.</summary>
+    public static ApprovalReadCoordinator CreateDisposableTestComposition(Guid installationId, IDbContextFactory<KordraIdentityDbContext> identity,
+    IDbContextFactory<ReleaseDbContext> releases, IDbContextFactory<Kordra.Modules.ApprovalGovernance.Infrastructure.ApprovalDbContext> approvals,
+    ApprovalAuthorityCapture authority, ApprovalEligibilityReader eligibility,
+    IArtifactAuditTransactionFactory audits, FairAsyncReaderWriterAdmissionGate gate, IAuthorityClock clock, IApprovalSchemaReadiness readiness, IApprovalEnvironmentIdentityReader? environments, DisposableTestBinding profile)
+        => new(installationId, identity, releases, approvals, authority, eligibility, audits, gate, clock, readiness, environments, profile);
+
     private sealed class State { public bool RetainCapacity; }
     private sealed record Audited(string Status, DateTimeOffset Until);
     public async Task<string> ExecuteAsync(SessionSelection subject, Guid projectId, Guid environmentId, ApprovalReadQuery query,
@@ -119,7 +133,9 @@ public sealed class ApprovalReadCoordinator(Guid installationId, IDbContextFacto
             var now = clock.GetTrustedUtcNow();
             if (now.Offset != TimeSpan.Zero || now >= until) return new("denied", until);
             await using var iam = await identity.CreateDbContextAsync(ct);
-            IdentityAccessDbContextFactory.ValidateRuntimeOrTestTransactionTarget(iam.Database.GetDbConnection().ConnectionString);
+            if (disposableTest is { } target)
+                IdentityAccessDbContextFactory.ValidateDisposableTestTarget(iam.Database.GetDbConnection().ConnectionString, target);
+            else IdentityAccessDbContextFactory.ValidateRuntimeOrTestTransactionTarget(iam.Database.GetDbConnection().ConnectionString);
             await using var tx = await iam.Database.BeginTransactionAsync(ct);
             audit = await audits.EnlistAsync(iam.Database.GetDbConnection(), tx.GetDbTransaction(), ct);
             await using var ownedAudit = audit;

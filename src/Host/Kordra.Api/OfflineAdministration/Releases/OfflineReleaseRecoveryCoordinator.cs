@@ -1,3 +1,4 @@
+using DisposableTestBinding = (System.Guid RunId, string SourceSha256, string OperationManifestSha256, System.DateTimeOffset ExpiresAtUtc);
 using System.Data.Common;
 using System.Security.Cryptography;
 using System.Text;
@@ -21,6 +22,16 @@ public sealed record ReleaseRecoveryResult(string Status, Guid? CommandId = null
 public sealed class OfflineReleaseRecoveryCoordinator(Guid installationId, IDbContextFactory<KordraIdentityDbContext> identity,
     IArtifactProcessQuiescence processes)
 {
+    private readonly DisposableTestBinding? disposableTest;
+
+    private OfflineReleaseRecoveryCoordinator(Guid installationId, IDbContextFactory<KordraIdentityDbContext> identity,
+        IArtifactProcessQuiescence processes, DisposableTestBinding profile) : this(installationId, identity, processes)
+        => disposableTest = profile;
+
+    public static OfflineReleaseRecoveryCoordinator CreateDisposableTestCoordinator(Guid installationId,
+        IDbContextFactory<KordraIdentityDbContext> identity, IArtifactProcessQuiescence processes, DisposableTestBinding profile)
+        => new(installationId, identity, processes, profile);
+
     public async Task<ReleaseRecoveryInspection> InspectAsync(IOfflineProvisioningLease custody, ReadOnlyMemory<byte> json,
         CancellationToken ct = default)
     {
@@ -51,11 +62,15 @@ public sealed class OfflineReleaseRecoveryCoordinator(Guid installationId, IDbCo
             if (!processes.IsQuiescent(plan.OldProcessId)) return new("denied");
             using var budget = CancellationTokenSource.CreateLinkedTokenSource(ct); budget.CancelAfter(TimeSpan.FromSeconds(10));
             await using var iam = await identity.CreateDbContextAsync(budget.Token);
+            if (disposableTest is { } profile)
+                IdentityAccessDbContextFactory.ValidateDisposableTestTarget(iam.Database.GetDbConnection().ConnectionString, profile);
             await iam.Database.OpenConnectionAsync(budget.Token);
             var connection = iam.Database.GetDbConnection();
             var lease = new Lease(custody);
-            await using var rel = new ReleaseDbContext(ReleaseDbContextFactory.CreateOfflineReceiptReadOptions(connection, lease));
-            var auditFactory = new AuditFactory(connection, lease);
+            await using var rel = new ReleaseDbContext(disposableTest is { } selected
+                ? ReleaseDbContextFactory.CreateDisposableOfflineReceiptReadOptions(connection, lease, selected)
+                : ReleaseDbContextFactory.CreateOfflineReceiptReadOptions(connection, lease));
+            var auditFactory = new AuditFactory(connection, lease, disposableTest);
             var project = Guid.ParseExact(plan.Resource.Split('/')[4], "D");
             var receipt = await new ReleaseRecoveryReceiptReader(rel, lease).FindUnderCustodyAsync(plan.InstallationId, plan.TenantId,
                 plan.PrincipalId, plan.Action, Convert.FromHexString(plan.ScopedKeyHash), budget.Token);
@@ -134,8 +149,10 @@ public sealed class OfflineReleaseRecoveryCoordinator(Guid installationId, IDbCo
     }
     private sealed class Lease(IOfflineProvisioningLease inner) : IReleaseOfflineCustody, IOfflineAuditLease
     { public void RequireHeld() => inner.RequireHeld(); }
-    private sealed class AuditFactory(DbConnection connection, IOfflineAuditLease custody) : IDbContextFactory<AuditDbContext>
+    private sealed class AuditFactory(DbConnection connection, IOfflineAuditLease custody, DisposableTestBinding? profile) : IDbContextFactory<AuditDbContext>
     {
-        public AuditDbContext CreateDbContext() => new(AuditDbContextFactory.CreateOfflineReceiptReadOptions(connection, custody));
+        public AuditDbContext CreateDbContext() => new(profile is { } selected
+        ? AuditDbContextFactory.CreateDisposableOfflineReceiptReadOptions(connection, custody, selected)
+        : AuditDbContextFactory.CreateOfflineReceiptReadOptions(connection, custody));
     }
 }

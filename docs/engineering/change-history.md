@@ -535,3 +535,21 @@ T12.2b synthetic PostgreSQL fixture is now owner-approved and passed with cleanu
 ## PR25 initial custody race fix — 2026-11-01
 
 Serialized initial custody against instance cancellation under the accepted lock order. Added deterministic two-root PostgreSQL regressions (including a stale tracked instance) and preserved pre-fix evidence. Same approved disposable schema; no new operational authority, permissions, runtime activation or migration.
+
+## FEAT-WFL-001 / FEAT-MSG-001 — T12.2c root composition — 2026-11-01
+
+Added inactive Host WFL/AUD/MSG caller-root composition, serialized lifecycle, one coordinator per real PostgreSQL transaction generation, exact owner operation/transition step publication, typed request codec/golden vectors and independent scoped WFL receipt observation. Native transport destinations and metadata export are normalized through the pinned public APIs. Existing pinned transitive locks and exact Host architecture assertions are synchronized; no version upgrade or runtime activation.
+
+Three operation-approved C PostgreSQL fixtures pass with cleanup, including six staging-failure boundaries, shared ten-envelope/160KiB budgets, reproduced duplicate-coordinator refusal and later-root eligibility, publication/receipt conflict and old receipt refusal, lost-COMMIT exact reconciliation, AUD replay without a new commit and actual native receiver atomicity. Private evidence retains failed predecessors, exact approved queue SQL and current-source serial build. WF03's tested composition subset is distinct from successor restart/takeover, full owner commands, timers, distributed authority and independent-host work still pending under T12.2d/e–12.4. Full canonical gates and PR/CI/review remain exact-revision evidence. See [owner scope and mapping](../features/workflow-orchestration/features/durable-workflow.md).
+
+## FEAT-WFL-001 — initial waiting-timer owner increment — 2026-11-01
+
+Added pure due-wake/counter rules, BCL owner facts, caller-root waiting-timer staging and scoped100-row metadata discovery using the unchanged nine-table model/SQL. Current instance locking bypasses stale tracking; canonical step/order/hash/custody/CAS checks and immutable due/monotone counter guards preserve intent. Targeted26 and ordinary WFL99 tests passed. The separate exact-approved PostgreSQL timer fixture passed first execution, including rollback invisibility, duplicate/conflict/scope/order/custody/stale-CAS/cancellation and102-row discovery; namespace cleanup passed. No new technical debt; no production grant, route/consumer, migration or native worker activation. Pairing native wakes and remaining D/E/process/authority/independent-host qualification stay incomplete. See [owner scope](../features/workflow-orchestration/features/durable-workflow.md).
+
+## FEAT-WFL-001 — PR27 timestamp precision correction
+
+PR27-WFL-TIMESTAMP-001 reproduced valid seven-digit canonical timestamps being rejected after PostgreSQL microsecond reload. Timer owner date comparisons now use native parameterized equality/projection, preserving exact canonical JSON/hash rather than rounding them or adding tolerance. Existing approved real DB fixture passed fractional/pre-epoch/duplicate and adjacent-microsecond-denial regressions with cleanup; source-only reconciliation retains failed evidence and unchanged SQL/resources/128-instance cap. No accepted ADR, schema or authority change. Current-head CI/independent PR follow-up remain publication gates; unfinished D2 source is retained separately.
+
+## ADR-0025 test target integration — in progress
+
+The integration branch carries the accepted explicit disposable PostgreSQL test profile and owner test seams. Runtime/default target selection remains unchanged. The initial full gate found 12 fixture/hash failures; the targeted IdentityAccess rerun passed 11 cases and the timer offline test passed with the profile enabled. Full validation on the repaired tree and PR review remain pending.

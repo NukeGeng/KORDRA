@@ -1,3 +1,4 @@
+using DisposableTestBinding = (System.Guid RunId, string SourceSha256, string OperationManifestSha256, System.DateTimeOffset ExpiresAtUtc);
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
@@ -21,6 +22,16 @@ public sealed class OfflineArtifactRecoveryCoordinator(Guid installation, IDbCon
     FairAsyncReaderWriterAdmissionGate gate, IAuthorityClock clock, IArtifactProcessQuiescence processes,
     IArtifactAuditTransactionFactory? auditTransactions = null)
 {
+    private readonly DisposableTestBinding? disposableTest;
+    private OfflineArtifactRecoveryCoordinator(Guid installation, IDbContextFactory<KordraIdentityDbContext> identity,
+    FairAsyncReaderWriterAdmissionGate gate, IAuthorityClock clock, IArtifactProcessQuiescence processes,
+    IArtifactAuditTransactionFactory? auditTransactions, DisposableTestBinding profile)
+        : this(installation, identity, gate, clock, processes, auditTransactions) => disposableTest = profile;
+    public static OfflineArtifactRecoveryCoordinator CreateDisposableTestCoordinator(Guid installation, IDbContextFactory<KordraIdentityDbContext> identity,
+    FairAsyncReaderWriterAdmissionGate gate, IAuthorityClock clock, IArtifactProcessQuiescence processes,
+    IArtifactAuditTransactionFactory? auditTransactions, DisposableTestBinding profile)
+        => new(installation, identity, gate, clock, processes, auditTransactions, profile);
+
     public async Task<ArtifactRecoveryPlan?> InspectAsync(IOfflineProvisioningLease custody, ReadOnlyMemory<byte> json, CancellationToken ct = default)
     {
         custody.RequireHeld(); var plan = ArtifactRecoveryPlan.Parse(json);
@@ -28,10 +39,16 @@ public sealed class OfflineArtifactRecoveryCoordinator(Guid installation, IDbCon
         using var budget = CancellationTokenSource.CreateLinkedTokenSource(ct); budget.CancelAfter(TimeSpan.FromSeconds(10)); ct = budget.Token;
         await using var held = await gate.AcquireReadAsync(ct);
         await using var iam = await identity.CreateDbContextAsync(ct);
-        ArtifactDbContextFactory.ValidateEnlistedTarget(iam.Database.GetDbConnection(), offline: true);
+        if (disposableTest is { } target)
+            ArtifactDbContextFactory.ValidateDisposableTestTarget(iam.Database.GetDbConnection().ConnectionString, target);
+        else ArtifactDbContextFactory.ValidateEnlistedTarget(iam.Database.GetDbConnection(), offline: true);
         await iam.Database.OpenConnectionAsync(ct);
-        await using var art = new ArtifactDbContext(ArtifactDbContextFactory.CreateEnlistedOptions(iam.Database.GetDbConnection(), offline: true));
-        await using var aud = new AuditDbContext(AuditDbContextFactory.CreateOfflineReceiptReadOptions(iam.Database.GetDbConnection(), new AuditLease(custody)));
+        await using var art = new ArtifactDbContext(disposableTest is { } ownerProfile
+            ? ArtifactDbContextFactory.CreateDisposableEnlistedTestOptions(iam.Database.GetDbConnection(), ownerProfile)
+            : ArtifactDbContextFactory.CreateEnlistedOptions(iam.Database.GetDbConnection(), offline: true));
+        await using var aud = new AuditDbContext(disposableTest is { } lookupProfile
+            ? AuditDbContextFactory.CreateDisposableOfflineReceiptReadOptions(iam.Database.GetDbConnection(), new AuditLease(custody), lookupProfile)
+            : AuditDbContextFactory.CreateOfflineReceiptReadOptions(iam.Database.GetDbConnection(), new AuditLease(custody)));
         var row = await Selected(art, plan, ct); if (row is null) return null;
         var history = await History(aud, plan, ct);
         if (history.Any(e => e.IntentId == plan.PlanId)) return null;
@@ -58,11 +75,17 @@ public sealed class OfflineArtifactRecoveryCoordinator(Guid installation, IDbCon
         try
         {
             await using var iam = await identity.CreateDbContextAsync(ct);
-            ArtifactDbContextFactory.ValidateEnlistedTarget(iam.Database.GetDbConnection(), offline: true);
+            if (disposableTest is { } target)
+            ArtifactDbContextFactory.ValidateDisposableTestTarget(iam.Database.GetDbConnection().ConnectionString, target);
+        else ArtifactDbContextFactory.ValidateEnlistedTarget(iam.Database.GetDbConnection(), offline: true);
             await using var tx = await iam.Database.BeginTransactionAsync(ct);
-            await using var art = new ArtifactDbContext(ArtifactDbContextFactory.CreateEnlistedOptions(iam.Database.GetDbConnection(), offline: true));
+            await using var art = new ArtifactDbContext(disposableTest is { } ownerProfile
+            ? ArtifactDbContextFactory.CreateDisposableEnlistedTestOptions(iam.Database.GetDbConnection(), ownerProfile)
+            : ArtifactDbContextFactory.CreateEnlistedOptions(iam.Database.GetDbConnection(), offline: true));
             await art.Database.UseTransactionAsync(tx.GetDbTransaction(), ct);
-            await using var lookup = new AuditDbContext(AuditDbContextFactory.CreateOfflineReceiptReadOptions(iam.Database.GetDbConnection(), new AuditLease(custody)));
+            await using var lookup = new AuditDbContext(disposableTest is { } lookupProfile
+            ? AuditDbContextFactory.CreateDisposableOfflineReceiptReadOptions(iam.Database.GetDbConnection(), new AuditLease(custody), lookupProfile)
+            : AuditDbContextFactory.CreateOfflineReceiptReadOptions(iam.Database.GetDbConnection(), new AuditLease(custody)));
             await lookup.Database.UseTransactionAsync(tx.GetDbTransaction(), ct);
             var row = await Selected(art, plan, ct); if (row is null) return Fence();
             var history = await History(lookup, plan, ct);
@@ -98,9 +121,13 @@ public sealed class OfflineArtifactRecoveryCoordinator(Guid installation, IDbCon
             if (now.Offset != TimeSpan.Zero || now == default || now == DateTimeOffset.MaxValue) return new("unavailable");
             now = new(now.UtcTicks - now.UtcTicks % 10, TimeSpan.Zero);
             if (now < row.CreatedAtUtc) return new("denied");
-            var prepared = await new ArtifactRegistrationStore(art).PrepareAbandonedAsync(installation, plan.RegistrationId, plan.BootId, plan.InvocationId, now, ct);
+            var store = disposableTest is { } storeProfile
+                ? ArtifactRegistrationStore.CreateDisposableTestStore(art, storeProfile) : new(art);
+            var prepared = await store.PrepareAbandonedAsync(installation, plan.RegistrationId, plan.BootId, plan.InvocationId, now, ct);
             if (prepared.Status != "staged_abandoned") return new("conflict");
-            audit = await (auditTransactions ?? new OfflineArtifactAuditTransactionFactory(new AuditLease(custody)))
+            audit = await (auditTransactions ?? (disposableTest is { } auditProfile
+                ? OfflineArtifactAuditTransactionFactory.CreateDisposableTestFactory(new AuditLease(custody), auditProfile)
+                : new OfflineArtifactAuditTransactionFactory(new AuditLease(custody))))
                 .EnlistAsync(iam.Database.GetDbConnection(), tx.GetDbTransaction(), ct);
             await using var ownedAudit = audit;
             if ((await audit.StageAsync(Intent(plan, row, now), ct)).Status != AuditTransactionStageStatus.Staged) return new("unavailable");
@@ -174,9 +201,17 @@ public sealed class OfflineArtifactRecoveryCoordinator(Guid installation, IDbCon
 
 public sealed class OfflineArtifactAuditTransactionFactory(IOfflineAuditLease custody) : IArtifactAuditTransactionFactory
 {
+    private readonly DisposableTestBinding? disposableTest;
+    private OfflineArtifactAuditTransactionFactory(IOfflineAuditLease custody, DisposableTestBinding profile) : this(custody)
+        => disposableTest = profile;
+    public static OfflineArtifactAuditTransactionFactory CreateDisposableTestFactory(IOfflineAuditLease custody, DisposableTestBinding profile)
+        => new(custody, profile);
+
     public async ValueTask<IArtifactAuditTransaction> EnlistAsync(System.Data.Common.DbConnection connection,
         System.Data.Common.DbTransaction transaction, CancellationToken ct) =>
-        new Enlisted(await AuditTransactionContext.CreateOfflineAsync(connection, transaction, custody, ct));
+        new Enlisted(disposableTest is { } profile
+            ? await AuditTransactionContext.CreateDisposableOfflineTestAsync(connection, transaction, custody, profile, ct)
+            : await AuditTransactionContext.CreateOfflineAsync(connection, transaction, custody, ct));
     private sealed class Enlisted(AuditTransactionContext inner) : IArtifactAuditTransaction
     {
         public bool CommitAttempted => inner.CommitAttempted;

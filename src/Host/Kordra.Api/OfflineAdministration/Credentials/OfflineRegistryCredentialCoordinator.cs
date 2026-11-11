@@ -1,3 +1,4 @@
+using DisposableTestBinding = (System.Guid RunId, string SourceSha256, string OperationManifestSha256, System.DateTimeOffset ExpiresAtUtc);
 using System.Security.Cryptography;
 using System.Text.Json;
 using Kordra.BuildingBlocks.Security;
@@ -21,6 +22,16 @@ public sealed class OfflineRegistryCredentialCoordinator(Guid installationId, ID
     IPolicyTenantAuthority tenants, IProjectIdentityReader projects, IAuditAppendPort auditLookup,
     FairAsyncReaderWriterAdmissionGate gate, IAuthorityClock clock, IOfflinePolicyAuditTransactionFactory? auditTransactions = null)
 {
+    private readonly DisposableTestBinding? disposableTest;
+    private OfflineRegistryCredentialCoordinator(Guid installationId, IDbContextFactory<KordraIdentityDbContext> contexts,
+    IPolicyTenantAuthority tenants, IProjectIdentityReader projects, IAuditAppendPort auditLookup,
+    FairAsyncReaderWriterAdmissionGate gate, IAuthorityClock clock, IOfflinePolicyAuditTransactionFactory? auditTransactions, DisposableTestBinding profile)
+        : this(installationId, contexts, tenants, projects, auditLookup, gate, clock, auditTransactions) => disposableTest = profile;
+    public static OfflineRegistryCredentialCoordinator CreateDisposableTestCoordinator(Guid installationId, IDbContextFactory<KordraIdentityDbContext> contexts,
+    IPolicyTenantAuthority tenants, IProjectIdentityReader projects, IAuditAppendPort auditLookup,
+    FairAsyncReaderWriterAdmissionGate gate, IAuthorityClock clock, IOfflinePolicyAuditTransactionFactory? auditTransactions, DisposableTestBinding profile)
+        => new(installationId, contexts, tenants, projects, auditLookup, gate, clock, auditTransactions, profile);
+
     public async Task<CredentialImpact?> InspectAsync(IOfflineProvisioningLease custody, ReadOnlyMemory<byte> json, CancellationToken ct = default)
     {
         custody.RequireHeld(); var m = RegistryCredentialManifest.Parse(json); if (m is null || m.InstallationId != installationId) return null;
@@ -28,7 +39,9 @@ public sealed class OfflineRegistryCredentialCoordinator(Guid installationId, ID
         if (!await tenants.IsActiveTenantUnderAdmissionAsync(m.TenantId, ct) || (await projects.ReadCurrentProjectUnderAdmissionAsync(m.ProjectId, ct))?.TenantId != m.TenantId) return null;
         await using var db = await contexts.CreateDbContextAsync(ct); if (!Allowed(db)) return null;
         await db.Database.OpenConnectionAsync(ct);
-        await using var sec = new CredentialDbContext(CredentialDbContextFactory.CreateOfflineEnlistedOptions(db.Database.GetDbConnection()));
+        await using var sec = new CredentialDbContext(disposableTest is { } ownerProfile
+            ? CredentialDbContextFactory.CreateDisposableEnlistedTestOptions(db.Database.GetDbConnection(), ownerProfile)
+            : CredentialDbContextFactory.CreateOfflineEnlistedOptions(db.Database.GetDbConnection()));
         var previous = await new RegistryCredentialBindingStore(sec).ReadCurrentUnderAdmissionAsync(m.Selection, ct); custody.RequireHeld();
         return new(m.Hash(), previous?.BindingId, previous?.Revision ?? 0);
     }
@@ -44,7 +57,9 @@ public sealed class OfflineRegistryCredentialCoordinator(Guid installationId, ID
         {
             custody.RequireHeld(); await using var iam = await contexts.CreateDbContextAsync(ct); if (!Allowed(iam)) return new("denied");
             await iam.Database.OpenConnectionAsync(ct);
-            await using var sec = new CredentialDbContext(CredentialDbContextFactory.CreateOfflineEnlistedOptions(iam.Database.GetDbConnection()));
+            await using var sec = new CredentialDbContext(disposableTest is { } ownerProfile
+            ? CredentialDbContextFactory.CreateDisposableEnlistedTestOptions(iam.Database.GetDbConnection(), ownerProfile)
+            : CredentialDbContextFactory.CreateOfflineEnlistedOptions(iam.Database.GetDbConnection()));
             var previous = await sec.RegistryCommands.AsNoTracking().SingleOrDefaultAsync(x => x.InstallationId == installationId && x.ManifestId == m.ManifestId, ct);
             if (previous is not null)
             {
@@ -82,7 +97,8 @@ public sealed class OfflineRegistryCredentialCoordinator(Guid installationId, ID
                 AuditHash = AuditIntentCanonicalizer.ComputeHash(intent)
             });
             await sec.SaveChangesAsync(ct); await AuthorityClockFloorStore.StageAsync(iam, installationId, Now(), ct);
-            await using var audit = await (auditTransactions ?? new OfflinePolicyAuditTransactionFactory()).EnlistAsync(iam.Database.GetDbConnection(), tx.GetDbTransaction(), new Lease(custody), ct);
+            await using var audit = await (auditTransactions ?? (disposableTest is { } auditProfile
+                ? OfflinePolicyAuditTransactionFactory.CreateDisposableTestFactory(auditProfile) : new OfflinePolicyAuditTransactionFactory())).EnlistAsync(iam.Database.GetDbConnection(), tx.GetDbTransaction(), new Lease(custody), ct);
             if ((await audit.StageAsync(intent, ct)).Status != AuditTransactionStageStatus.Staged) return new("unavailable");
             custody.RequireHeld();
             if (!m.IsActiveAt(Now()) || !await tenants.IsActiveTenantUnderAdmissionAsync(m.TenantId, ct) || await projects.ReadCurrentProjectUnderAdmissionAsync(m.ProjectId, ct) != project) return new("denied");
@@ -103,8 +119,13 @@ public sealed class OfflineRegistryCredentialCoordinator(Guid installationId, ID
             "sec.registry-credential-binding", "project", manifest.ProjectId, null, result.Revision, "registry-credential-binding-" + digest, occurred, manifest.ManifestId);
     }
     private DateTimeOffset Now() { try { return clock.GetTrustedUtcNow(); } catch { gate.Close(); throw; } }
-    private static bool Allowed(KordraIdentityDbContext db)
+    private bool Allowed(KordraIdentityDbContext db)
     {
+        if (disposableTest is { } profile)
+        {
+            IdentityAccessDbContextFactory.ValidateDisposableTestTarget(db.Database.GetConnectionString()!, profile);
+            return true;
+        }
         var c = new NpgsqlConnectionStringBuilder(db.Database.GetConnectionString());
         return c.Host == "127.0.0.1" && c.Port == 5432 && (c.Database == "kordra_test" && c.Username == "kordra_test" || c.Database == "kordra" && c.Username == "kordra_admin");
     }

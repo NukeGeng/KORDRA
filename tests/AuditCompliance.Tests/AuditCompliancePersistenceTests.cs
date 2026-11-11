@@ -1,3 +1,4 @@
+using Kordra.Testing;
 using System.Data.Common;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using Kordra.Api;
@@ -30,9 +31,9 @@ public sealed class AuditCompliancePersistenceTests
         Assert.Equal(AuditAppendStatus.Durable,
             (await CreateStore(connectionString).AppendAsync(AuditIntentCanonicalizerTests.CreateIntent())).Status);
         var cleanup = new DelayedDisposalInterceptor();
-        var options = new DbContextOptionsBuilder<AuditDbContext>(AuditDbContextFactory.CreateTestOptions(connectionString))
+        var options = new DbContextOptionsBuilder<AuditDbContext>(TestDatabaseConfiguration.OptionsForRunner(connectionString))
             .AddInterceptors(cleanup).Options;
-        var store = new AuditAppendStore(new AuditTestContextFactory(options));
+        var store = CreateStore(options);
         var intent = AuditIntentCanonicalizerTests.CreateIntent();
         if (denial)
         {
@@ -244,7 +245,7 @@ public sealed class AuditCompliancePersistenceTests
             property.Name.Contains("Completed", StringComparison.OrdinalIgnoreCase) ||
             property.Name.Contains("Outcome", StringComparison.OrdinalIgnoreCase));
 
-        await using var dbContext = new AuditDbContext(AuditDbContextFactory.CreateTestOptions(connectionString));
+        await using var dbContext = new AuditDbContext(TestDatabaseConfiguration.OptionsForRunner(connectionString));
         var persisted = await dbContext.Entries.AsNoTracking().SingleAsync(value => value.IntentId == intent.IntentId);
         Assert.Contains("\"actionOutcome\":\"completed\"", persisted.CanonicalIntent, StringComparison.Ordinal);
     }
@@ -266,7 +267,7 @@ public sealed class AuditCompliancePersistenceTests
         await MigrateAsync(connectionString);
 
         var outcome = await store.AppendAsync(intent);
-        await using var dbContext = new AuditDbContext(AuditDbContextFactory.CreateTestOptions(connectionString));
+        await using var dbContext = new AuditDbContext(TestDatabaseConfiguration.OptionsForRunner(connectionString));
         var persisted = await dbContext.Entries.AsNoTracking().SingleAsync(value => value.IntentId == intent.IntentId);
 
         Assert.Equal(AuditAppendStatus.Durable, outcome.Status);
@@ -300,7 +301,7 @@ public sealed class AuditCompliancePersistenceTests
             await using var command = new NpgsqlCommand(query, connection, transaction);
             await using var reader = await command.ExecuteReaderAsync();
             Assert.True(await reader.ReadAsync());
-            Assert.Equal("kordra_test", reader.GetString(0));
+            Assert.Equal(TestDatabaseConfiguration.ExpectedRunnerDatabase, reader.GetString(0));
             Assert.Equal("kordra_test", reader.GetString(1));
             Assert.True(reader.GetBoolean(2));
             Assert.True(reader.GetBoolean(3));
@@ -433,19 +434,28 @@ public sealed class AuditCompliancePersistenceTests
 
     internal static async Task MigrateAsync(string connectionString)
     {
-        await using var dbContext = new AuditDbContext(AuditDbContextFactory.CreateTestOptions(connectionString));
+        await using var dbContext = new AuditDbContext(TestDatabaseConfiguration.OptionsForRunner(connectionString));
         await dbContext.Database.MigrateAsync();
     }
 
     internal static AuditAppendStore CreateStore(string connectionString)
     {
-        var options = AuditDbContextFactory.CreateTestOptions(connectionString);
-        return new AuditAppendStore(new AuditTestContextFactory(options));
+        var options = TestDatabaseConfiguration.OptionsForRunner(connectionString);
+        return CreateStore(options);
+    }
+
+    private static AuditAppendStore CreateStore(DbContextOptions<AuditDbContext> options)
+    {
+        var factory = new AuditTestContextFactory(options);
+        return RegressionPostgreSqlSelection.LoadRunnerProfile() is { } profile
+            ? AuditAppendStore.CreateDisposableTestStore(factory, profile.OwnerBinding)
+            : new AuditAppendStore(factory);
     }
 
     private static string CreateSingleConnectionPoolString() =>
         new NpgsqlConnectionStringBuilder(TestDatabaseConfiguration.RequireConnectionString())
         {
+            Pooling = true,
             MaxPoolSize = 1,
             Timeout = 15
         }.ConnectionString;

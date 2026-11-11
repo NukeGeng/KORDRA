@@ -1,3 +1,4 @@
+using Kordra.Testing;
 using System.Data.Common;
 using System.Security.Cryptography;
 using System.Text;
@@ -23,6 +24,7 @@ public sealed class RegistryCredentialTests : IAsyncLifetime
     private readonly Clock _clock = new();
     private readonly FairAsyncReaderWriterAdmissionGate _gate = new();
     private CredentialDbContext _db = null!;
+    private ProductPostgreSqlFixtureSelection _selection = null!;
     private IDbContextTransaction? _tx;
     private RegistryCredentialBindingStore Store => new(_db);
 
@@ -30,7 +32,8 @@ public sealed class RegistryCredentialTests : IAsyncLifetime
     {
         var locator = Environment.GetEnvironmentVariable("KORDRA_IAM_TEST_CONNECTION_STRING")
             ?? throw new InvalidOperationException("Private isolated kordra_test locator required.");
-        _db = new(CredentialDbContextFactory.CreateTestOptions(locator));
+        _selection = new(locator);
+        _db = new(_selection.Credential());
         await _db.Database.MigrateAsync();
         _tx = await _db.Database.BeginTransactionAsync();
     }
@@ -256,7 +259,7 @@ public sealed class RegistryCredentialTests : IAsyncLifetime
         var hash = Convert.ToHexStringLower(SHA256.HashData(File.ReadAllBytes(executable)));
         var config = new KeychainAccessConfiguration(_installation, executable, hash,
             new Dictionary<Guid, string> { [_locator] = Path.Combine(Path.GetTempPath(), "not-an-opened-keychain-" + _installation) });
-        return new(new EnlistedViews(_db.Database.GetDbConnection(), _tx!.GetDbTransaction()), _gate, _clock, config, lookup);
+        return new(new EnlistedViews(_db.Database.GetDbConnection(), _tx!.GetDbTransaction(), _selection.Profile), _gate, _clock, config, lookup);
     }
 
     private sealed class Lease : IOfflineProvisioningLease { public void RequireHeld() { } }
@@ -283,11 +286,13 @@ public sealed class RegistryCredentialTests : IAsyncLifetime
     }
     // Synthetic read views share only this test's rollback transaction, avoiding committed fixture
     // references or a production metadata-cleanup bypass. No real Keychain is opened by this fake.
-    private sealed class EnlistedViews(DbConnection connection, DbTransaction transaction) : IDbContextFactory<CredentialDbContext>
+    private sealed class EnlistedViews(DbConnection connection, DbTransaction transaction, DisposablePostgreSqlProfile? profile) : IDbContextFactory<CredentialDbContext>
     {
         public CredentialDbContext CreateDbContext()
         {
-            var db = new CredentialDbContext(CredentialDbContextFactory.CreateOfflineEnlistedOptions(connection));
+            var db = new CredentialDbContext(profile is { } selected
+                ? CredentialDbContextFactory.CreateDisposableEnlistedTestOptions(connection, selected.OwnerBinding)
+                : CredentialDbContextFactory.CreateOfflineEnlistedOptions(connection));
             db.Database.UseTransaction(transaction); return db;
         }
         public Task<CredentialDbContext> CreateDbContextAsync(CancellationToken ct = default) => Task.FromResult(CreateDbContext());

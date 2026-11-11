@@ -1,3 +1,4 @@
+using DisposableTestBinding = (System.Guid RunId, string SourceSha256, string OperationManifestSha256, System.DateTimeOffset ExpiresAtUtc);
 using System.Data.Common;
 using System.Diagnostics;
 using System.Security.Cryptography;
@@ -62,6 +63,56 @@ public sealed class AuditTransactionContext : IAsyncDisposable
         var context = AuditDbContextFactory.CreateIsolatedTestContext(connection, caseId);
         try
         {
+            await context.Database.UseTransactionAsync(transaction, cancellationToken);
+            return new AuditTransactionContext(transaction, context, cancellationToken, TimeProvider.System);
+        }
+        catch { await context.DisposeAsync(); throw; }
+    }
+
+    /// <summary>ADR-0025 explicit test root; same AUD implementation/budget, no runtime target override.</summary>
+    public static Task<AuditTransactionContext> CreateDisposableTestAsync(DbConnection connection, DbTransaction transaction,
+        DisposableTestBinding profile, CancellationToken cancellationToken = default, TimeProvider? timeProvider = null) =>
+        CreateDisposableCoreAsync(connection, transaction,
+            AuditDbContextFactory.CreateDisposableEnlistedTestOptions(connection, profile), cancellationToken, timeProvider);
+
+    internal static Task<AuditTransactionContext> CreateDisposableAppendTestAsync(DbConnection connection, DbTransaction transaction,
+        DisposableTestBinding profile, CancellationToken cancellationToken) =>
+        CreateDisposableCoreAsync(connection, transaction,
+            AuditDbContextFactory.CreateDisposableAppendTestEnlistedOptions(connection, profile), cancellationToken, null);
+
+    private static async Task<AuditTransactionContext> CreateDisposableCoreAsync(DbConnection connection, DbTransaction transaction,
+        DbContextOptions<AuditDbContext> options, CancellationToken cancellationToken, TimeProvider? timeProvider)
+    {
+        ArgumentNullException.ThrowIfNull(transaction);
+        if (connection.State != System.Data.ConnectionState.Open || !ReferenceEquals(transaction.Connection, connection))
+            throw new InvalidOperationException("Disposable AUD requires its open caller-owned transaction.");
+        var context = new AuditDbContext(options);
+        try
+        {
+            await context.Database.UseTransactionAsync(transaction, cancellationToken);
+            return new AuditTransactionContext(transaction, context, cancellationToken, timeProvider ?? TimeProvider.System);
+        }
+        catch { await context.DisposeAsync(); throw; }
+    }
+
+    public static async Task<AuditTransactionContext> CreateDisposableOfflineTestAsync(DbConnection connection, DbTransaction transaction,
+        IOfflineAuditLease lease, DisposableTestBinding profile, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(lease); lease.RequireHeld();
+        var context = await CreateDisposableTestAsync(connection, transaction, profile, cancellationToken);
+        context._offlineLease = lease;
+        return context;
+    }
+
+    public static async Task<AuditTransactionContext> CreateDisposableIsolatedTestAsync(DbConnection connection, DbTransaction transaction,
+        Guid caseId, DisposableTestBinding profile, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(transaction);
+        var context = AuditDbContextFactory.CreateDisposableIsolatedTestContext(connection, caseId, profile);
+        try
+        {
+            if (connection.State != System.Data.ConnectionState.Open || !ReferenceEquals(transaction.Connection, connection))
+                throw new InvalidOperationException("Disposable isolated AUD requires its open caller-owned transaction.");
             await context.Database.UseTransactionAsync(transaction, cancellationToken);
             return new AuditTransactionContext(transaction, context, cancellationToken, TimeProvider.System);
         }

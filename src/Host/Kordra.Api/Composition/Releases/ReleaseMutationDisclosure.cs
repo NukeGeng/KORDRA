@@ -1,3 +1,4 @@
+using DisposableTestBinding = (System.Guid RunId, string SourceSha256, string OperationManifestSha256, System.DateTimeOffset ExpiresAtUtc);
 using System.Globalization;
 using System.Security.Cryptography;
 using System.Text;
@@ -29,6 +30,17 @@ public sealed class ReleaseMutationDisclosure(Guid installationId, IDbContextFac
     IDbContextFactory<ReleaseDbContext> releases, ReleaseProjectAuthorityReader authority, ReleaseSelectionReader selections,
     IArtifactAuditTransactionFactory audits, FairAsyncReaderWriterAdmissionGate gate, IAuthorityClock clock)
 {
+    private readonly DisposableTestBinding? disposableTest;
+    private ReleaseMutationDisclosure(Guid installationId, IDbContextFactory<KordraIdentityDbContext> identity,
+    IDbContextFactory<ReleaseDbContext> releases, ReleaseProjectAuthorityReader authority, ReleaseSelectionReader selections,
+    IArtifactAuditTransactionFactory audits, FairAsyncReaderWriterAdmissionGate gate, IAuthorityClock clock, DisposableTestBinding profile)
+        : this(installationId, identity, releases, authority, selections, audits, gate, clock) => disposableTest = profile;
+    /// <summary>Explicit ADR-0025 test composition; default construction remains unchanged.</summary>
+    public static ReleaseMutationDisclosure CreateDisposableTestComposition(Guid installationId, IDbContextFactory<KordraIdentityDbContext> identity,
+    IDbContextFactory<ReleaseDbContext> releases, ReleaseProjectAuthorityReader authority, ReleaseSelectionReader selections,
+    IArtifactAuditTransactionFactory audits, FairAsyncReaderWriterAdmissionGate gate, IAuthorityClock clock, DisposableTestBinding profile)
+        => new(installationId, identity, releases, authority, selections, audits, gate, clock, profile);
+
 
     public async Task<string> DiscloseAsync(ReleaseMutationResult mutation, IReleaseResponseCommitter response, CancellationToken ct = default)
     {
@@ -53,7 +65,9 @@ public sealed class ReleaseMutationDisclosure(Guid installationId, IDbContextFac
             if (reply.SelectionUntilUtc is { } selectionUntil) until = Min(until, selectionUntil);
             if (now >= until) return "denied";
             await using var iam = await identity.CreateDbContextAsync(token);
-            IdentityAccessDbContextFactory.ValidateRuntimeOrTestTransactionTarget(iam.Database.GetDbConnection().ConnectionString);
+            if (disposableTest is { } target)
+                IdentityAccessDbContextFactory.ValidateDisposableTestTarget(iam.Database.GetDbConnection().ConnectionString, target);
+            else IdentityAccessDbContextFactory.ValidateRuntimeOrTestTransactionTarget(iam.Database.GetDbConnection().ConnectionString);
             await using var tx = await iam.Database.BeginTransactionAsync(token);
             audit = await audits.EnlistAsync(iam.Database.GetDbConnection(), tx.GetDbTransaction(), token);
             await using var ownedAudit = audit;

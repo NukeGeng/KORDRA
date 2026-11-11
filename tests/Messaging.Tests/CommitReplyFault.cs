@@ -1,6 +1,7 @@
 using System.Buffers.Binary;
 using System.Reflection;
 using System.Text;
+using Kordra.Testing;
 using Npgsql;
 
 namespace Kordra.Messaging.Tests;
@@ -20,10 +21,7 @@ internal sealed class CommitReplyFault : Stream
 
     public static CommitReplyFault Install(NpgsqlConnection connection)
     {
-        var settings = new NpgsqlConnectionStringBuilder(connection.ConnectionString);
-        if (settings.Host != "127.0.0.1" || settings.Port != 5432 || settings.Database != "kordra_test" ||
-            settings.Username != "kordra_test" || settings.Pooling || settings.Multiplexing)
-            throw new InvalidOperationException("Fault injection requires the exact unpooled owned test connection.");
+        ValidateTarget(connection.ConnectionString, RegressionPostgreSqlSelection.LoadRunnerProfile());
         if (typeof(NpgsqlConnection).Assembly.GetName().Version != new Version(10, 0, 3, 0))
             throw new InvalidOperationException("Fault instrumentation must be revalidated for this Npgsql version.");
         const BindingFlags flags = BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic;
@@ -38,6 +36,20 @@ internal sealed class CommitReplyFault : Stream
         var fault = new CommitReplyFault((Stream)property.GetValue(readBuffer)!);
         property.SetValue(readBuffer, fault);
         return fault;
+    }
+
+    internal static void ValidateTarget(string locator, DisposablePostgreSqlProfile? profile)
+    {
+        if (profile is not null)
+        {
+            profile.ValidateLocator(locator, DateTimeOffset.UtcNow);
+            return;
+        }
+
+        var settings = new NpgsqlConnectionStringBuilder(locator);
+        if (settings.Host != "127.0.0.1" || settings.Port != 5432 || settings.Database != "kordra_test" ||
+            settings.Username != "kordra_test" || settings.Pooling || settings.Multiplexing)
+            throw new InvalidOperationException("Fault injection requires the exact unpooled owned test connection.");
     }
 
     public override async ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken cancellationToken = default)
