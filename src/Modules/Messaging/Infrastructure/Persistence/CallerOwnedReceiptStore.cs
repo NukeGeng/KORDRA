@@ -1,3 +1,4 @@
+using DisposableTestBinding = (System.Guid RunId, string SourceSha256, string OperationManifestSha256, System.DateTimeOffset ExpiresAtUtc);
 using System.Data;
 using System.Data.Common;
 using Kordra.Modules.Messaging.Infrastructure.Serialization;
@@ -23,20 +24,39 @@ public sealed class CallerOwnedReceiptStore
     private readonly DbConnection _connection;
     private readonly DbTransaction _transaction;
     private readonly string _schema;
+    private readonly DisposableTestBinding? _disposableTest;
 
     public CallerOwnedReceiptStore(DbConnection connection, DbTransaction transaction) : this(connection, transaction, "msg") { }
 
-    private CallerOwnedReceiptStore(DbConnection connection, DbTransaction transaction, string schema)
+    private CallerOwnedReceiptStore(DbConnection connection, DbTransaction transaction, string schema,
+        DisposableTestBinding? disposableTest = null)
     {
         _connection = connection ?? throw new ArgumentNullException(nameof(connection));
         _transaction = transaction ?? throw new ArgumentNullException(nameof(transaction));
         _schema = schema;
+        _disposableTest = disposableTest;
         RequireBinding();
     }
 
     /// <summary>UUID-only local test seam; never opens a connection or provisions a schema.</summary>
     public static CallerOwnedReceiptStore CreateIsolatedTestStore(NpgsqlConnection connection, DbTransaction transaction, Guid caseId)
         => new(connection, transaction, IsolatedMessagingFixture.SchemaFor(connection, caseId));
+
+    public static CallerOwnedReceiptStore CreateDisposableTestStore(NpgsqlConnection connection, DbTransaction transaction,
+        Guid caseId, DisposableTestBinding profile)
+        => new(connection, transaction, IsolatedMessagingFixture.SchemaForDisposableTest(connection, caseId, profile), profile);
+
+    internal PublicationCapacityGuard CreatePublicationCapacityGuard()
+    {
+        RequireBinding();
+        if (_schema == "msg") return new(_connection, _transaction);
+        if (_connection is not NpgsqlConnection fixture || !_schema.StartsWith("t12_", StringComparison.Ordinal) ||
+            !Guid.TryParseExact(_schema[4..], "N", out var caseId))
+            throw new InvalidOperationException("No approved publication capacity profile for this schema.");
+        return _disposableTest is { } profile
+            ? PublicationCapacityGuard.CreateDisposableTestGuard(fixture, _transaction, caseId, profile)
+            : PublicationCapacityGuard.CreateIsolatedTestGuard(fixture, _transaction, caseId);
+    }
 
     internal void RequireCaller(DbConnection connection, DbTransaction transaction, string schema)
     {

@@ -1,3 +1,5 @@
+using System.Text.Json;
+using Kordra.Testing;
 using Xunit;
 using Wolverine;
 using Wolverine.Postgresql;
@@ -51,5 +53,32 @@ public sealed class FixtureDatabaseScopeTests
     {
         var error = Assert.Throws<InvalidOperationException>(() => new FixtureDatabaseScope(locator, Guid.NewGuid()));
         Assert.DoesNotContain(locator, error.Message); Assert.Null(error.InnerException);
+    }
+    [Fact]
+    public void DisposableOwnerAndRestrictedRuntimeRemainDistinctAndRequireExactRoleCase()
+    {
+        var run = Guid.NewGuid(); var caseId = Guid.NewGuid(); var now = DateTimeOffset.UtcNow;
+        var source = new string('a', 64); var manifest = new string('b', 64);
+        var database = "kordra_test_" + run.ToString("N");
+        var bytes = JsonSerializer.SerializeToUtf8Bytes(new {
+            schemaVersion = 1, kind = "disposable-postgresql-regression", runId = run.ToString("D"), host = "127.0.0.1", port = 5432,
+            database, role = "kordra_test", schema = "app", sourceSha256 = source, operationManifestSha256 = manifest,
+            expiresAtUtc = now.AddMinutes(10).ToString("yyyy-MM-dd'T'HH:mm:ss.fffffff'Z'") });
+        var profile = DisposablePostgreSqlProfile.Read(bytes, run, source, manifest, now);
+        var owner = $"Host=127.0.0.1;Database={database};Username=kordra_test;Pooling=false";
+        var runtime = owner.Replace("Username=kordra_test", "Username=kordra_t12_" + caseId.ToString("N"));
+        using var ownerConnection = FixtureDatabaseScope.ForProfile(owner, caseId, false, profile).CreateConnection();
+        using var runtimeConnection = FixtureDatabaseScope.ForProfile(runtime, caseId, true, profile).CreateConnection();
+        Assert.Equal(database, ownerConnection.Database); Assert.Equal(database, runtimeConnection.Database);
+        Assert.Equal(System.Data.ConnectionState.Closed, ownerConnection.State); Assert.Equal(System.Data.ConnectionState.Closed, runtimeConnection.State);
+        Assert.Throws<ArgumentNullException>(() => FixtureDatabaseScope.ForProfile(owner, caseId, false, null!));
+        Assert.Throws<InvalidOperationException>(() => new FixtureDatabaseScope(owner, caseId));
+        Assert.Throws<InvalidOperationException>(() => FixtureDatabaseScope.RestrictedRuntime(runtime, caseId));
+        Assert.Throws<InvalidOperationException>(() => FixtureDatabaseScope.ForProfile(runtime, caseId, false, profile));
+        Assert.Throws<InvalidOperationException>(() => FixtureDatabaseScope.ForProfile(owner, caseId, true, profile));
+        Assert.Throws<InvalidOperationException>(() => FixtureDatabaseScope.ForProfile(runtime, Guid.NewGuid(), true, profile));
+        Assert.Throws<InvalidOperationException>(() => FixtureDatabaseScope.ForProfile(runtime.Replace(database, "kordra_test"), caseId, true, profile));
+        Assert.Throws<InvalidOperationException>(() => FixtureDatabaseScope.ForProfile(runtime + ";Options=-c search_path=app", caseId, true, profile));
+        Assert.Throws<InvalidOperationException>(() => profile.ValidateRestrictedFixtureLocator(runtime, caseId, now.AddHours(1)));
     }
 }

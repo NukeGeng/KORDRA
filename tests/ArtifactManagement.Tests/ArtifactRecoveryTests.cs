@@ -1,3 +1,4 @@
+using Kordra.Testing;
 using System.Text;
 using System.Diagnostics;
 using System.Reflection;
@@ -18,6 +19,7 @@ namespace Kordra.Artifacts.Tests;
 
 public sealed class ArtifactRecoveryTests : IAsyncLifetime
 {
+    private ProductPostgreSqlFixtureSelection _selection = null!;
     private readonly Guid _installation = Guid.NewGuid();
     private readonly FairAsyncReaderWriterAdmissionGate _gate = new();
     private readonly Clock _clock = new(); private readonly Quiescence _processes = new(); private readonly Lease _lease = new();
@@ -26,14 +28,14 @@ public sealed class ArtifactRecoveryTests : IAsyncLifetime
     private IDbContextFactory<AuditDbContext> _aud = null!;
     private ArtifactRegistrationReceipt _receipt = null!;
     private ArtifactRecoveryPlan _plan = null!;
-    private OfflineArtifactRecoveryCoordinator Coordinator => new(_installation, _iam, _gate, _clock, _processes);
+    private OfflineArtifactRecoveryCoordinator Coordinator => _selection.ArtifactRecovery(_installation, _iam, _gate, _clock, _processes);
     public async Task InitializeAsync()
     {
         var locator = Environment.GetEnvironmentVariable("KORDRA_IAM_TEST_CONNECTION_STRING") ?? throw new InvalidOperationException("Private isolated test locator required.");
-        _iam = new PooledDbContextFactory<KordraIdentityDbContext>(new DbContextOptionsBuilder<KordraIdentityDbContext>().UseNpgsql(locator,
-            p => p.MigrationsHistoryTable(KordraIdentityDbContext.MigrationHistoryTableName, "app")).Options);
-        _art = new PooledDbContextFactory<ArtifactDbContext>(ArtifactDbContextFactory.CreateTestOptions(locator));
-        _aud = new PooledDbContextFactory<AuditDbContext>(AuditDbContextFactory.CreateTestOptions(locator));
+        _selection = new(locator);
+        _iam = new PooledDbContextFactory<KordraIdentityDbContext>(_selection.Identity());
+        _art = new PooledDbContextFactory<ArtifactDbContext>(_selection.Artifact());
+        _aud = new PooledDbContextFactory<AuditDbContext>(_selection.Audit());
         await using (var db = await _iam.CreateDbContextAsync()) await db.Database.MigrateAsync();
         await using (var db = await _art.CreateDbContextAsync()) await db.Database.MigrateAsync();
         await using (var db = await _aud.CreateDbContextAsync()) await db.Database.MigrateAsync();
@@ -41,7 +43,7 @@ public sealed class ArtifactRecoveryTests : IAsyncLifetime
             OCIImageDigest.Parse("sha256:" + new string('a', 64)), ArtifactPlatform.Create("linux", "amd64", null));
         _receipt = ArtifactRegistrationReceipt.Pending(Guid.NewGuid(), _installation, Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(),
             new(identity, null), "synthetic-recovery-key-0001", _clock.Now.AddSeconds(-1));
-        var staged = await new ArtifactOwnerTransaction(_installation, _iam, new ArtifactAuditTransactionFactory(), _gate, _clock).RunAsync(
+        var staged = await _selection.ArtifactTransaction(_installation, _iam, _selection.ArtifactAudit(), _gate, _clock).RunAsync(
             _ => Use(), async (store, ct) => await store.PreparePendingAsync(_receipt, ct), _ => Task.FromResult(true), default);
         Assert.Equal("durable", staged.Status);
         _plan = new(1, Guid.NewGuid(), _installation, _receipt.Id, _receipt.BootId, _receipt.InvocationId, int.MaxValue, null, null);
@@ -85,7 +87,7 @@ public sealed class ArtifactRecoveryTests : IAsyncLifetime
     {
         var plan = await Inspect();
         var unknown = Use() with { SafeReason = "unrecognized-" + new string('b',64) };
-        var append = new AuditAppendStore(_aud); Assert.Equal(AuditAppendStatus.Durable, (await append.AppendAsync(unknown)).Status);
+        var append = _selection.AuditStore(_aud); Assert.Equal(AuditAppendStatus.Durable, (await append.AppendAsync(unknown)).Status);
         Assert.Null(await Coordinator.InspectAsync(_lease, _plan.CanonicalBytes()));
         Assert.Equal("unknown", (await Coordinator.ExecuteAsync(_lease, plan.CanonicalBytes(), plan.Hash())).Status);
         await Assert.ThrowsAsync<InvalidOperationException>(async () => { await using var closed = await _gate.AcquireReadAsync(); });
@@ -176,8 +178,8 @@ public sealed class ArtifactRecoveryTests : IAsyncLifetime
     public async Task Recovery_distinguishes_no_commit_from_real_lost_ACK(bool afterCommit)
     {
         var plan = await Inspect();
-        var factory = new FaultAuditFactory(afterCommit);
-        var coordinator = new OfflineArtifactRecoveryCoordinator(_installation, _iam, _gate, _clock, _processes, factory);
+        var factory = new FaultAuditFactory(_selection, afterCommit);
+        var coordinator = _selection.ArtifactRecovery(_installation, _iam, _gate, _clock, _processes, factory);
         var result = await coordinator.ExecuteAsync(_lease, plan.CanonicalBytes(), plan.Hash());
         Assert.Equal(afterCommit ? "unknown" : "unavailable", result.Status);
         await using var art = await _art.CreateDbContextAsync();
@@ -185,7 +187,7 @@ public sealed class ArtifactRecoveryTests : IAsyncLifetime
         if (afterCommit)
         {
             await Assert.ThrowsAsync<InvalidOperationException>(async () => { await using var closed = await _gate.AcquireReadAsync(); });
-            var stoppedRestart = new OfflineArtifactRecoveryCoordinator(_installation, _iam, new(), _clock, _processes);
+            var stoppedRestart = _selection.ArtifactRecovery(_installation, _iam, new(), _clock, _processes);
             Assert.Equal("success", (await stoppedRestart.ExecuteAsync(_lease, plan.CanonicalBytes(), plan.Hash())).Status);
         }
         else { await using var open = await _gate.AcquireReadAsync(); }
@@ -197,7 +199,7 @@ public sealed class ArtifactRecoveryTests : IAsyncLifetime
     public async Task Registered_result_is_preserved_only_with_the_matching_atomic_mutation_receipt(bool hasMutationAudit)
     {
         var consumption = Use() with { SafeReason = "artifact-c-" + new string('b', 64) };
-        Assert.Equal(AuditAppendStatus.Durable, (await new AuditAppendStore(_aud).AppendAsync(consumption)).Status);
+        Assert.Equal(AuditAppendStatus.Durable, (await _selection.AuditStore(_aud).AppendAsync(consumption)).Status);
         var plan = await Inspect();
         var identity = _receipt.Request.Identity;
         var facts = new ArtifactVerificationFacts(identity, ArtifactVerificationFacts.OciManifest, 100,
@@ -205,7 +207,7 @@ public sealed class ArtifactRecoveryTests : IAsyncLifetime
             OCIImageDigest.Parse("sha256:" + new string('c', 64)), 50, identity.Platform, "none", _clock.Now);
         if (hasMutationAudit)
         {
-            var commit = await new ArtifactOwnerTransaction(_installation, _iam, new ArtifactAuditTransactionFactory(), _gate, _clock).RunAsync(
+            var commit = await _selection.ArtifactTransaction(_installation, _iam, _selection.ArtifactAudit(), _gate, _clock).RunAsync(
                 prepared => Use() with { Stage = AuditIntentStage.Mutation, ResourceRef = prepared!.ArtifactId, SafeReason = "artifact-m-" + new string('c', 64) },
                 async (store, ct) => await store.PrepareRegisteredAsync(_receipt, facts, _clock.Now, ct), _ => Task.FromResult(true), default);
             Assert.Equal("durable", commit.Status);
@@ -214,7 +216,7 @@ public sealed class ArtifactRecoveryTests : IAsyncLifetime
         {
             // Explicit inconsistent synthetic history: ART was committed without its required M audit.
             await using var db = await _art.CreateDbContextAsync(); await using var tx = await db.Database.BeginTransactionAsync();
-            Assert.Equal("staged_registered", (await new ArtifactRegistrationStore(db).PrepareRegisteredAsync(_receipt, facts, _clock.Now)).Status);
+            Assert.Equal("staged_registered", (await _selection.ArtifactStore(db).PrepareRegisteredAsync(_receipt, facts, _clock.Now)).Status);
             await db.SaveChangesAsync(); await tx.CommitAsync();
         }
         var result = await Coordinator.ExecuteAsync(_lease, plan.CanonicalBytes(), plan.Hash());
@@ -232,12 +234,14 @@ public sealed class ArtifactRecoveryTests : IAsyncLifetime
             await Assert.ThrowsAsync<InvalidOperationException>(async () => { await using var closed = await _gate.AcquireReadAsync(); });
     }
 
-    private sealed class FaultAuditFactory(bool afterCommit) : IArtifactAuditTransactionFactory
+    private sealed class FaultAuditFactory(ProductPostgreSqlFixtureSelection selection, bool afterCommit) : IArtifactAuditTransactionFactory
     {
         public async ValueTask<IArtifactAuditTransaction> EnlistAsync(System.Data.Common.DbConnection c, System.Data.Common.DbTransaction t, CancellationToken ct)
         {
             if (!afterCommit) throw new IOException("Synthetic pre-commit setup failure.");
-            return new LostAck(await AuditTransactionContext.CreateOfflineAsync(c, t, new AuditLease(), ct));
+            return new LostAck(selection.Profile is { } profile
+                ? await AuditTransactionContext.CreateDisposableOfflineTestAsync(c, t, new AuditLease(), profile.OwnerBinding, ct)
+                : await AuditTransactionContext.CreateOfflineAsync(c, t, new AuditLease(), ct));
         }
         private sealed class AuditLease : IOfflineAuditLease { public void RequireHeld() { } }
         private sealed class LostAck(AuditTransactionContext inner) : IArtifactAuditTransaction

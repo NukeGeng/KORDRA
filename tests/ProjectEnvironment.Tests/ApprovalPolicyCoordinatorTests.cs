@@ -21,12 +21,18 @@ public sealed class ApprovalPolicyCoordinatorTests : CatalogTestFixture
     private readonly Guid _installation = Guid.NewGuid();
     private readonly TestClock _clock = new();
     private OfflineApprovalPolicyCoordinator Coordinator(FairAsyncReaderWriterAdmissionGate? gate = null,
-        IOfflinePolicyAuditTransactionFactory? audit = null, IAuditAppendPort? lookup = null) => new(_installation, Identity,
-            lookup ?? new AuditAppendStore(new PooledDbContextFactory<AuditDbContext>(AuditDbContextFactory.CreateTestOptions(Locator))),
-            gate ?? Gate, _clock, audit);
+        IOfflinePolicyAuditTransactionFactory? audit = null, IAuditAppendPort? lookup = null) {
+        var auditLookup = lookup ?? Selection.AuditStore(new PooledDbContextFactory<AuditDbContext>(Selection.Audit()));
+        return Selection.Profile is { } profile
+            ? OfflineApprovalPolicyCoordinator.CreateDisposableTestCoordinator(_installation, Identity, auditLookup, gate ?? Gate, _clock, audit, profile.OwnerBinding)
+            : new(_installation, Identity, auditLookup, gate ?? Gate, _clock, audit);
+    }
+    private ApprovalPolicyManifest ParseManifest(byte[] input) => Selection.Profile is { } profile
+        ? ApprovalPolicyManifest.ParseDisposableTest(input, profile.OwnerBinding)
+        : ApprovalPolicyManifest.Parse(input);
     private async Task MigrateApproval()
     {
-        await using var db = new ApprovalDbContext(ApprovalDbContextFactory.CreateTestOptions(Locator));
+        await using var db = new ApprovalDbContext(Selection.Approval());
         await db.Database.MigrateAsync();
     }
     private byte[] Manifest(Guid project, Guid environment, Guid policy, Guid manifestId, long policyRevision = 0, long environmentRevision = 1)
@@ -36,8 +42,8 @@ public sealed class ApprovalPolicyCoordinatorTests : CatalogTestFixture
             schemaVersion = 1,
             manifestId = manifestId.ToString("D"),
             installationId = _installation.ToString("D"),
-            expectedDatabase = "kordra_test",
-            expectedRole = "kordra_admin",
+            expectedDatabase = Selection.Database,
+            expectedRole = Selection.Profile is null ? "kordra_admin" : "kordra_test",
             tenantId = Tenant.ToString("D"),
             projectId = project.ToString("D"),
             policyId = policy.ToString("D"),
@@ -64,7 +70,7 @@ public sealed class ApprovalPolicyCoordinatorTests : CatalogTestFixture
     {
         await MigrateApproval(); var project = await Project(); var env = await CreateEnvironment(project.Id, "Test");
         var policy = Guid.NewGuid(); var manifestId = Guid.NewGuid(); var input = Manifest(project.Id, env.Id, policy, manifestId);
-        var parsed = ApprovalPolicyManifest.Parse(input); using var lease = new OfflineLease();
+        var parsed = ParseManifest(input); using var lease = new OfflineLease();
         var coordinator = Coordinator();
         var preview = await coordinator.InspectAsync(lease, input);
         Assert.NotNull(preview); Assert.Equal(parsed.CommandHash, preview.ManifestHash); Assert.Single(preview.Bindings);
@@ -82,13 +88,13 @@ public sealed class ApprovalPolicyCoordinatorTests : CatalogTestFixture
         Assert.Equal("success", replay.Status); Assert.True(replay.Replayed); Assert.Equal(first.CommandId, replay.CommandId);
         var changed = Encoding.UTF8.GetString(input).Replace("\"status\":\"active\"", "\"status\":\"inactive\"", StringComparison.Ordinal);
         var changedBytes = Encoding.UTF8.GetBytes(changed);
-        Assert.Equal("conflict", (await coordinator.ApplyAsync(lease, changedBytes, ApprovalPolicyManifest.Parse(changedBytes).CommandHash)).Status);
-        await using var db = new ApprovalDbContext(ApprovalDbContextFactory.CreateTestOptions(Locator));
+        Assert.Equal("conflict", (await coordinator.ApplyAsync(lease, changedBytes, ParseManifest(changedBytes).CommandHash)).Status);
+        await using var db = new ApprovalDbContext(Selection.Approval());
         Assert.Equal(1, await db.Commands.CountAsync(x => x.InstallationId == _installation && x.ManifestId == manifestId));
         Assert.Equal(1, await db.BindingHistory.CountAsync(x => x.InstallationId == _installation && x.PolicyId == policy));
         await using var iam = await Identity.CreateDbContextAsync();
         Assert.True(await iam.AuthorityClockFloors.AnyAsync(x => x.InstallationId == _installation));
-        var audit = new AuditAppendStore(new PooledDbContextFactory<AuditDbContext>(AuditDbContextFactory.CreateTestOptions(Locator)));
+        var audit = Selection.AuditStore(new PooledDbContextFactory<AuditDbContext>(Selection.Audit()));
         Assert.Equal(AuditLookupStatus.Found, (await audit.LookupAsync(manifestId)).Status);
     }
 
@@ -117,7 +123,7 @@ public sealed class ApprovalPolicyCoordinatorTests : CatalogTestFixture
             var conflict = Assert.Throws<TargetInvocationException>(() => acquire.Invoke(null, [root]));
             Assert.IsType<InvalidOperationException>(conflict.InnerException);
             Assert.NotNull(await Coordinator().InspectAsync(lease, input));
-            Assert.Equal("success", (await Coordinator().ApplyAsync(lease, input, ApprovalPolicyManifest.Parse(input).CommandHash)).Status);
+            Assert.Equal("success", (await Coordinator().ApplyAsync(lease, input, ParseManifest(input).CommandHash)).Status);
             Assert.False(File.Exists(Path.Combine(directory, "local-pilot.json")));
             Assert.Single(Directory.GetFiles(directory)); // only the process lock; no TLS key or locator created
         }
@@ -130,11 +136,11 @@ public sealed class ApprovalPolicyCoordinatorTests : CatalogTestFixture
         await MigrateApproval(); var project = await Project(); var env = await CreateEnvironment(project.Id, "Test");
         var policy = Guid.NewGuid(); var manifestId = Guid.NewGuid(); var input = Manifest(project.Id, env.Id, policy, manifestId, environmentRevision: env.Revision + 1);
         using var lease = new OfflineLease();
-        var result = await Coordinator().ApplyAsync(lease, input, ApprovalPolicyManifest.Parse(input).CommandHash);
+        var result = await Coordinator().ApplyAsync(lease, input, ParseManifest(input).CommandHash);
         Assert.Equal("conflict", result.Status);
-        await using var db = new ApprovalDbContext(ApprovalDbContextFactory.CreateTestOptions(Locator));
+        await using var db = new ApprovalDbContext(Selection.Approval());
         Assert.False(await db.Heads.AnyAsync(x => x.InstallationId == _installation && x.PolicyId == policy));
-        var audit = new AuditAppendStore(new PooledDbContextFactory<AuditDbContext>(AuditDbContextFactory.CreateTestOptions(Locator)));
+        var audit = Selection.AuditStore(new PooledDbContextFactory<AuditDbContext>(Selection.Audit()));
         Assert.Equal(AuditLookupStatus.NotFound, (await audit.LookupAsync(manifestId)).Status);
     }
 
@@ -157,8 +163,8 @@ public sealed class ApprovalPolicyCoordinatorTests : CatalogTestFixture
             });
         changes[1]!["expectedEnvironmentRevision"] = environments[1].Revision + 1;
         var stale = Encoding.UTF8.GetBytes(root.ToJsonString()); using var lease = new OfflineLease();
-        Assert.Equal("conflict", (await Coordinator().ApplyAsync(lease, stale, ApprovalPolicyManifest.Parse(stale).CommandHash)).Status);
-        await using (var db = new ApprovalDbContext(ApprovalDbContextFactory.CreateTestOptions(Locator)))
+        Assert.Equal("conflict", (await Coordinator().ApplyAsync(lease, stale, ParseManifest(stale).CommandHash)).Status);
+        await using (var db = new ApprovalDbContext(Selection.Approval()))
         {
             Assert.False(await db.Heads.AnyAsync(x => x.InstallationId == _installation && x.PolicyId == policy));
             Assert.False(await db.Bindings.AnyAsync(x => x.InstallationId == _installation && x.ProjectId == project.Id));
@@ -166,8 +172,8 @@ public sealed class ApprovalPolicyCoordinatorTests : CatalogTestFixture
         changes[1]!["expectedEnvironmentRevision"] = environments[1].Revision;
         root["manifestId"] = Guid.NewGuid().ToString("D");
         var valid = Encoding.UTF8.GetBytes(root.ToJsonString());
-        Assert.Equal("success", (await Coordinator().ApplyAsync(lease, valid, ApprovalPolicyManifest.Parse(valid).CommandHash)).Status);
-        await using var check = new ApprovalDbContext(ApprovalDbContextFactory.CreateTestOptions(Locator));
+        Assert.Equal("success", (await Coordinator().ApplyAsync(lease, valid, ParseManifest(valid).CommandHash)).Status);
+        await using var check = new ApprovalDbContext(Selection.Approval());
         Assert.Equal(2, await check.Bindings.CountAsync(x => x.InstallationId == _installation && x.PolicyId == policy));
     }
 
@@ -176,14 +182,14 @@ public sealed class ApprovalPolicyCoordinatorTests : CatalogTestFixture
     {
         await MigrateApproval(); var project = await Project(); var env = await CreateEnvironment(project.Id, "Test");
         var policy = Guid.NewGuid(); var input = Manifest(project.Id, env.Id, policy, Guid.NewGuid());
-        var hash = ApprovalPolicyManifest.Parse(input).CommandHash; using var lease = new OfflineLease();
+        var hash = ParseManifest(input).CommandHash; using var lease = new OfflineLease();
         var gate = new FairAsyncReaderWriterAdmissionGate();
-        var outcome = await Coordinator(gate, new LostAcknowledgementFactory()).ApplyAsync(lease, input, hash);
+        var outcome = await Coordinator(gate, new LostAcknowledgementFactory(Selection.PolicyAudit())).ApplyAsync(lease, input, hash);
         Assert.Equal("unknown", outcome.Status);
         await Assert.ThrowsAsync<InvalidOperationException>(async () => { await using var unused = await gate.AcquireReadAsync(); });
         var afterRestart = await Coordinator(new FairAsyncReaderWriterAdmissionGate()).ApplyAsync(lease, input, hash);
         Assert.Equal("success", afterRestart.Status); Assert.True(afterRestart.Replayed);
-        await using var db = new ApprovalDbContext(ApprovalDbContextFactory.CreateTestOptions(Locator));
+        await using var db = new ApprovalDbContext(Selection.Approval());
         Assert.Equal(1, await db.Commands.CountAsync(x => x.InstallationId == _installation && x.PolicyId == policy));
     }
 
@@ -193,10 +199,10 @@ public sealed class ApprovalPolicyCoordinatorTests : CatalogTestFixture
         await MigrateApproval(); var project = await Project(); var env = await CreateEnvironment(project.Id, "Test");
         var policy = Guid.NewGuid(); var input = Manifest(project.Id, env.Id, policy, Guid.NewGuid());
         var gate = new FairAsyncReaderWriterAdmissionGate(); using var lease = new OfflineLease();
-        var outcome = await Coordinator(gate, new FailedEnlistmentFactory()).ApplyAsync(lease, input, ApprovalPolicyManifest.Parse(input).CommandHash);
+        var outcome = await Coordinator(gate, new FailedEnlistmentFactory()).ApplyAsync(lease, input, ParseManifest(input).CommandHash);
         Assert.Equal("unavailable", outcome.Status);
         await using (var alive = await gate.AcquireReadAsync()) { }
-        await using var db = new ApprovalDbContext(ApprovalDbContextFactory.CreateTestOptions(Locator));
+        await using var db = new ApprovalDbContext(Selection.Approval());
         Assert.False(await db.Heads.AnyAsync(x => x.InstallationId == _installation && x.PolicyId == policy));
     }
 
@@ -205,7 +211,7 @@ public sealed class ApprovalPolicyCoordinatorTests : CatalogTestFixture
     {
         await MigrateApproval(); var project = await Project(); var env = await CreateEnvironment(project.Id, "Test");
         var input = Manifest(project.Id, env.Id, Guid.NewGuid(), Guid.NewGuid());
-        var hash = ApprovalPolicyManifest.Parse(input).CommandHash; using var lease = new OfflineLease();
+        var hash = ParseManifest(input).CommandHash; using var lease = new OfflineLease();
         Assert.Equal("success", (await Coordinator().ApplyAsync(lease, input, hash)).Status);
         var gate = new FairAsyncReaderWriterAdmissionGate();
         Assert.Equal("unknown", (await Coordinator(gate, lookup: new MissingAudit()).ApplyAsync(lease, input, hash)).Status);
@@ -219,10 +225,10 @@ public sealed class ApprovalPolicyCoordinatorTests : CatalogTestFixture
         var policy = Guid.NewGuid(); var left = Manifest(project.Id, env.Id, policy, Guid.NewGuid());
         var right = Manifest(project.Id, env.Id, policy, Guid.NewGuid()); using var lease = new OfflineLease();
         var coordinator = Coordinator();
-        var outcomes = await Task.WhenAll(coordinator.ApplyAsync(lease, left, ApprovalPolicyManifest.Parse(left).CommandHash),
-            coordinator.ApplyAsync(lease, right, ApprovalPolicyManifest.Parse(right).CommandHash));
+        var outcomes = await Task.WhenAll(coordinator.ApplyAsync(lease, left, ParseManifest(left).CommandHash),
+            coordinator.ApplyAsync(lease, right, ParseManifest(right).CommandHash));
         Assert.Equal(new[] { "conflict", "success" }, outcomes.Select(x => x.Status).OrderBy(x => x).ToArray());
-        await using var db = new ApprovalDbContext(ApprovalDbContextFactory.CreateTestOptions(Locator));
+        await using var db = new ApprovalDbContext(Selection.Approval());
         Assert.Equal(1, await db.Revisions.CountAsync(x => x.InstallationId == _installation && x.PolicyId == policy));
     }
 
@@ -232,18 +238,18 @@ public sealed class ApprovalPolicyCoordinatorTests : CatalogTestFixture
         await MigrateApproval(); var project = await Project(); var env = await CreateEnvironment(project.Id, "Test");
         var policy = Guid.NewGuid(); var input = Manifest(project.Id, env.Id, policy, Guid.NewGuid());
         var gate = new FairAsyncReaderWriterAdmissionGate(); using var lease = new OfflineLease();
-        var outcome = await Coordinator(gate, new AuditOnlyDurableFactory()).ApplyAsync(lease, input, ApprovalPolicyManifest.Parse(input).CommandHash);
+        var outcome = await Coordinator(gate, new AuditOnlyDurableFactory(Selection.PolicyAudit())).ApplyAsync(lease, input, ParseManifest(input).CommandHash);
         Assert.Equal("unknown", outcome.Status);
         await Assert.ThrowsAsync<InvalidOperationException>(async () => { await using var unused = await gate.AcquireReadAsync(); });
-        await using var db = new ApprovalDbContext(ApprovalDbContextFactory.CreateTestOptions(Locator));
+        await using var db = new ApprovalDbContext(Selection.Approval());
         Assert.False(await db.Commands.AnyAsync(x => x.InstallationId == _installation && x.PolicyId == policy));
     }
 
-    private sealed class AuditOnlyDurableFactory : IOfflinePolicyAuditTransactionFactory
+    private sealed class AuditOnlyDurableFactory(IOfflinePolicyAuditTransactionFactory inner) : IOfflinePolicyAuditTransactionFactory
     {
         public async ValueTask<IOfflinePolicyAuditTransaction> EnlistAsync(DbConnection connection, DbTransaction transaction,
             IOfflineAuditLease lease, CancellationToken ct = default) =>
-            new Transaction(await new OfflinePolicyAuditTransactionFactory().EnlistAsync(connection, transaction, lease, ct), transaction);
+            new Transaction(await inner.EnlistAsync(connection, transaction, lease, ct), transaction);
         private sealed class Transaction(IOfflinePolicyAuditTransaction actual, DbTransaction transaction) : IOfflinePolicyAuditTransaction
         {
             private AuditIntent? _intent;
@@ -265,10 +271,10 @@ public sealed class ApprovalPolicyCoordinatorTests : CatalogTestFixture
         await MigrateApproval(); var project = await Project(); var env = await CreateEnvironment(project.Id, "Test");
         var policy = Guid.NewGuid(); var input = Manifest(project.Id, env.Id, policy, Guid.NewGuid());
         var gate = new FairAsyncReaderWriterAdmissionGate(); using var lease = new OfflineLease();
-        var outcome = await Coordinator(gate, new AlreadyDurableAuditFactory()).ApplyAsync(lease, input, ApprovalPolicyManifest.Parse(input).CommandHash);
+        var outcome = await Coordinator(gate, new AlreadyDurableAuditFactory()).ApplyAsync(lease, input, ParseManifest(input).CommandHash);
         Assert.Equal("unknown", outcome.Status);
         await Assert.ThrowsAsync<InvalidOperationException>(async () => { await using var unused = await gate.AcquireReadAsync(); });
-        await using var db = new ApprovalDbContext(ApprovalDbContextFactory.CreateTestOptions(Locator));
+        await using var db = new ApprovalDbContext(Selection.Approval());
         Assert.False(await db.Heads.AnyAsync(x => x.InstallationId == _installation && x.PolicyId == policy));
     }
 
@@ -298,13 +304,13 @@ public sealed class ApprovalPolicyCoordinatorTests : CatalogTestFixture
     {
         await MigrateApproval(); var project = await Project(); var env = await CreateEnvironment(project.Id, "Test");
         var policy = Guid.NewGuid(); var input = Manifest(project.Id, env.Id, policy, Guid.NewGuid());
-        var hash = ApprovalPolicyManifest.Parse(input).CommandHash; using var lease = new OfflineLease();
+        var hash = ParseManifest(input).CommandHash; using var lease = new OfflineLease();
         var coordinator = Coordinator();
         var results = await Task.WhenAll(coordinator.ApplyAsync(lease, input, hash), coordinator.ApplyAsync(lease, input, hash));
         Assert.All(results, x => Assert.Equal("success", x.Status));
         Assert.Single(results, x => x.Replayed);
         Assert.Equal(results[0].CommandId, results[1].CommandId);
-        await using var db = new ApprovalDbContext(ApprovalDbContextFactory.CreateTestOptions(Locator));
+        await using var db = new ApprovalDbContext(Selection.Approval());
         Assert.Equal(1, await db.Commands.CountAsync(x => x.InstallationId == _installation && x.PolicyId == policy));
     }
 
@@ -313,9 +319,9 @@ public sealed class ApprovalPolicyCoordinatorTests : CatalogTestFixture
     {
         await MigrateApproval(); var project = await Project(); var env = await CreateEnvironment(project.Id, "Test");
         var policy = Guid.NewGuid(); var manifestId = Guid.NewGuid(); var input = Manifest(project.Id, env.Id, policy, manifestId);
-        var hash = ApprovalPolicyManifest.Parse(input).CommandHash; using var lease = new OfflineLease();
+        var hash = ParseManifest(input).CommandHash; using var lease = new OfflineLease();
         Assert.Equal("success", (await Coordinator().ApplyAsync(lease, input, hash)).Status);
-        await using (var db = new ApprovalDbContext(ApprovalDbContextFactory.CreateTestOptions(Locator)))
+        await using (var db = new ApprovalDbContext(Selection.Approval()))
         {
             var fakeBinding = Guid.NewGuid(); var fakeEnvironment = Guid.NewGuid();
             db.Bindings.Add(new()
@@ -355,11 +361,11 @@ public sealed class ApprovalPolicyCoordinatorTests : CatalogTestFixture
         public ValueTask<IOfflinePolicyAuditTransaction> EnlistAsync(DbConnection connection, DbTransaction transaction,
             IOfflineAuditLease lease, CancellationToken ct = default) => throw new InvalidOperationException("Synthetic pre-commit fault");
     }
-    private sealed class LostAcknowledgementFactory : IOfflinePolicyAuditTransactionFactory
+    private sealed class LostAcknowledgementFactory(IOfflinePolicyAuditTransactionFactory inner) : IOfflinePolicyAuditTransactionFactory
     {
         public async ValueTask<IOfflinePolicyAuditTransaction> EnlistAsync(DbConnection connection, DbTransaction transaction,
             IOfflineAuditLease lease, CancellationToken ct = default) =>
-            new Transaction(await new OfflinePolicyAuditTransactionFactory().EnlistAsync(connection, transaction, lease, ct));
+            new Transaction(await inner.EnlistAsync(connection, transaction, lease, ct));
         private sealed class Transaction(IOfflinePolicyAuditTransaction actual) : IOfflinePolicyAuditTransaction
         {
             public Task<AuditTransactionStageOutcome> StageAsync(AuditIntent intent, CancellationToken ct = default) => actual.StageAsync(intent, ct);

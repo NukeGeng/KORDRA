@@ -1,3 +1,4 @@
+using Kordra.Testing;
 using System.Data.Common;
 using System.Security.Cryptography;
 using System.Text;
@@ -25,21 +26,23 @@ public sealed class CredentialMetadataTests : IAsyncLifetime
     private readonly Custody _custody = new(); private readonly Clock _clock = new(); private readonly FairAsyncReaderWriterAdmissionGate _gate = new();
     private PooledDbContextFactory<KordraIdentityDbContext> _identity = null!;
     private PooledDbContextFactory<CredentialDbContext> _sec = null!;
+    private ProductPostgreSqlFixtureSelection _selection = null!;
     private AuditAppendStore _audit = null!; private string _locator = "";
     private readonly HashSet<Guid> _manifests = [];
     public async Task InitializeAsync()
     {
         _locator = Environment.GetEnvironmentVariable("KORDRA_IAM_TEST_CONNECTION_STRING") ?? throw new InvalidOperationException("Private kordra_test locator required.");
-        _sec = new(CredentialDbContextFactory.CreateTestOptions(_locator));
-        _identity = new(new DbContextOptionsBuilder<KordraIdentityDbContext>().UseNpgsql(_locator, x => x.MigrationsHistoryTable(KordraIdentityDbContext.MigrationHistoryTableName, "app")).Options);
+        _selection = new(_locator);
+        _sec = new(_selection.Credential());
+        _identity = new(_selection.Identity());
         await using (var db = await _identity.CreateDbContextAsync()) await db.Database.MigrateAsync();
-        var af = new PooledDbContextFactory<AuditDbContext>(AuditDbContextFactory.CreateTestOptions(_locator));
+        var af = new PooledDbContextFactory<AuditDbContext>(_selection.Audit());
         await using (var db = await af.CreateDbContextAsync()) await db.Database.MigrateAsync();
         await using (var db = await _sec.CreateDbContextAsync()) await db.Database.MigrateAsync();
         _audit = new(af);
     }
     private OfflineCredentialCoordinator Coordinator(IOfflinePolicyAuditTransactionFactory? audit = null) =>
-        new(_installation, _identity, new Tenant(_tenant), new Target(_tenant, _target), _audit, _gate, _clock, audit);
+        _selection.CredentialCoordinator(_installation, _identity, new Tenant(_tenant), new Target(_tenant, _target), _audit, _gate, _clock, audit);
     private CredentialManifest Create() => new(1, Guid.NewGuid(), _installation, _tenant, _target, "inventory.readonly.v1", "target.read", "create", null, 0,
         Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), _clock.Now.AddMinutes(-1), _clock.Now.AddHours(1));
     private Task<CredentialOperationResult> Apply(CredentialManifest m, IOfflinePolicyAuditTransactionFactory? factory = null)
@@ -96,13 +99,13 @@ public sealed class CredentialMetadataTests : IAsyncLifetime
     public async Task Setup_failure_is_available_but_lost_commit_ACK_closes_and_exact_receipt_reconciles(bool lostAck)
     {
         var m = Create();
-        var r = await Apply(m, new FaultFactory(lostAck)); Assert.Equal(lostAck ? "unknown" : "unavailable", r.Status);
+        var r = await Apply(m, new FaultFactory(_selection.PolicyAudit(), lostAck)); Assert.Equal(lostAck ? "unknown" : "unavailable", r.Status);
         await using var db = await _sec.CreateDbContextAsync();
         Assert.Equal(lostAck ? 1 : 0, await db.Revisions.CountAsync(x => x.InstallationId == _installation));
         if (lostAck)
         {
             await Assert.ThrowsAsync<InvalidOperationException>(async () => { await using var held = await _gate.AcquireReadAsync(); });
-            var restarted = new OfflineCredentialCoordinator(_installation, _identity, new Tenant(_tenant), new Target(_tenant, _target), _audit, new(), _clock);
+            var restarted = _selection.CredentialCoordinator(_installation, _identity, new Tenant(_tenant), new Target(_tenant, _target), _audit, new(), _clock);
             Assert.Equal("success", (await restarted.ExecuteAsync(_custody, m.CanonicalBytes(), m.Hash())).Status);
         }
         else { await using var held = await _gate.AcquireReadAsync(); }
@@ -111,7 +114,7 @@ public sealed class CredentialMetadataTests : IAsyncLifetime
     public async Task Current_expiry_is_rechecked_after_actual_audit_staging_before_commit()
     {
         var m = Create() with { ExpiresAtUtc = _clock.Now.AddSeconds(1) };
-        Assert.Equal("denied", (await Apply(m, new AdvanceFactory(() => _clock.Now = _clock.Now.AddSeconds(1)))).Status);
+        Assert.Equal("denied", (await Apply(m, new AdvanceFactory(_selection.PolicyAudit(), () => _clock.Now = _clock.Now.AddSeconds(1)))).Status);
         await using var db = await _sec.CreateDbContextAsync(); Assert.False(await db.Revisions.AnyAsync(x => x.InstallationId == _installation));
         Assert.False(await db.Commands.AnyAsync(x => x.InstallationId == _installation));
     }
@@ -158,7 +161,7 @@ public sealed class CredentialMetadataTests : IAsyncLifetime
         await db.Heads.Where(x => x.InstallationId == _installation).ExecuteDeleteAsync(); await db.Revisions.Where(x => x.InstallationId == _installation).ExecuteDeleteAsync();
         await db.References.Where(x => x.InstallationId == _installation).ExecuteDeleteAsync(); await db.ReferenceAllocations.Where(x => x.InstallationId == _installation).ExecuteDeleteAsync(); await db.Profiles.Where(x => x.InstallationId == _installation).ExecuteDeleteAsync();
         await db.Commands.Where(x => x.InstallationId == _installation).ExecuteDeleteAsync();
-        await using var a = new AuditDbContext(AuditDbContextFactory.CreateTestOptions(_locator));
+        await using var a = new AuditDbContext(_selection.Audit());
         await a.Entries.Where(x => _manifests.Contains(x.InvocationId)).ExecuteDeleteAsync();
         await using var i = await _identity.CreateDbContextAsync(); await i.AuthorityClockFloors.Where(x => x.InstallationId == _installation).ExecuteDeleteAsync();
     }
@@ -166,10 +169,10 @@ public sealed class CredentialMetadataTests : IAsyncLifetime
     private sealed class Clock : IAuthorityClock { public DateTimeOffset Now = DateTimeOffset.FromUnixTimeMilliseconds(DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()); public DateTimeOffset GetTrustedUtcNow() => Now; }
     private sealed class Tenant(Guid id) : IPolicyTenantAuthority { public Task<bool> IsActiveTenantUnderAdmissionAsync(Guid tenant, CancellationToken ct = default) => Task.FromResult(tenant == id); }
     private sealed class Target(Guid tenant, Guid id) : ITargetAuthorityReader { public Task<TargetAuthority?> ReadTargetUnderAdmissionAsync(Guid target, CancellationToken ct = default) => Task.FromResult<TargetAuthority?>(target == id ? new(id, tenant, Guid.Parse("c53b430f-3e72-483a-b8f0-22e467ffcf89"), 1, 1, 1, null, null, null) : null); }
-    private sealed class FaultFactory(bool commit) : IOfflinePolicyAuditTransactionFactory
+    private sealed class FaultFactory(IOfflinePolicyAuditTransactionFactory native, bool commit) : IOfflinePolicyAuditTransactionFactory
     {
         public async ValueTask<IOfflinePolicyAuditTransaction> EnlistAsync(DbConnection c, DbTransaction t, IOfflineAuditLease l, CancellationToken ct = default)
-        { if (!commit) throw new OperationCanceledException(); return new LostAck(await new OfflinePolicyAuditTransactionFactory().EnlistAsync(c, t, l, ct)); }
+        { if (!commit) throw new OperationCanceledException(); return new LostAck(await native.EnlistAsync(c, t, l, ct)); }
         private sealed class LostAck(IOfflinePolicyAuditTransaction inner) : IOfflinePolicyAuditTransaction
         {
             public Task<AuditTransactionStageOutcome> StageAsync(AuditIntent i, CancellationToken ct = default) => inner.StageAsync(i, ct);
@@ -177,9 +180,9 @@ public sealed class CredentialMetadataTests : IAsyncLifetime
             public ValueTask DisposeAsync() => inner.DisposeAsync();
         }
     }
-    private sealed class AdvanceFactory(Action change) : IOfflinePolicyAuditTransactionFactory
+    private sealed class AdvanceFactory(IOfflinePolicyAuditTransactionFactory native, Action change) : IOfflinePolicyAuditTransactionFactory
     {
-        public async ValueTask<IOfflinePolicyAuditTransaction> EnlistAsync(DbConnection c, DbTransaction t, IOfflineAuditLease l, CancellationToken ct = default) => new Advanced(await new OfflinePolicyAuditTransactionFactory().EnlistAsync(c, t, l, ct), change);
+        public async ValueTask<IOfflinePolicyAuditTransaction> EnlistAsync(DbConnection c, DbTransaction t, IOfflineAuditLease l, CancellationToken ct = default) => new Advanced(await native.EnlistAsync(c, t, l, ct), change);
         private sealed class Advanced(IOfflinePolicyAuditTransaction inner, Action change) : IOfflinePolicyAuditTransaction
         {
             public async Task<AuditTransactionStageOutcome> StageAsync(AuditIntent i, CancellationToken ct = default) { var r = await inner.StageAsync(i, ct); change(); return r; }

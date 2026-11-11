@@ -1,3 +1,9 @@
+using Kordra.Modules.TenantManagement.Infrastructure;
+using Kordra.Modules.TenantManagement;
+using Kordra.Testing;
+using Kordra.Modules.TenantManagement.Contracts;
+using Kordra.Modules.ProjectEnvironment.Contracts;
+using Kordra.Modules.IdentityAccess.Contracts;
 using System.Net;
 using System.Net.Sockets;
 using System.Security.Cryptography;
@@ -30,6 +36,7 @@ public sealed class LocalAuthenticationTestHost : IAsyncDisposable
     public const string ValidPassword = "Synthetic-Operator-Passphrase-123!";
     private const string DeniedPassword = "Synthetic-Common-Password-Only-For-Tests";
     private readonly string _connectionString;
+    internal ProductPostgreSqlFixtureSelection Selection { get; }
     private readonly Guid _installationId = Guid.NewGuid();
     private readonly X509Certificate2 _certificate;
     private readonly LocalPasswordPolicy _passwordPolicy;
@@ -54,9 +61,10 @@ public sealed class LocalAuthenticationTestHost : IAsyncDisposable
         IIdentityAuditTransactionFactory auditFactory,
         ManualTimeProvider timeProvider,
         bool initializeBoot,
-        Func<HttpContext, RequestDelegate, Task>? afterAuthentication)
+        Func<HttpContext, RequestDelegate, Task>? afterAuthentication, ProductPostgreSqlFixtureSelection selection)
     {
         _connectionString = connectionString;
+        Selection = selection;
         _certificate = certificate;
         _passwordPolicy = passwordPolicy;
         _privateFixtureDirectory = privateFixtureDirectory;
@@ -85,6 +93,8 @@ public sealed class LocalAuthenticationTestHost : IAsyncDisposable
             ?? throw new InvalidOperationException(
                 $"Required integration-test configuration is missing: set {TestDatabaseConfiguration.ConnectionEnvironmentVariable} with the private exact kordra_test locator. No database is substituted.");
 
+        var selection = new ProductPostgreSqlFixtureSelection(connectionString);
+
         var fixtureDirectory = Path.Combine(Path.GetTempPath(), $"kordra-auth-test-{Guid.NewGuid():N}");
         Directory.CreateDirectory(fixtureDirectory);
         SetPrivateMode(fixtureDirectory, directory: true);
@@ -100,10 +110,10 @@ public sealed class LocalAuthenticationTestHost : IAsyncDisposable
             CreateLocalhostCertificate(),
             policy,
             fixtureDirectory,
-            auditFactory ?? new IdentityAccessAuditTransactionAdapter(),
+            auditFactory ?? selection.IdentityAudit(),
             timeProvider ?? new ManualTimeProvider(DateTimeOffset.UtcNow),
             initializeBoot,
-            afterAuthentication);
+            afterAuthentication, selection);
         host._commandInterceptor = commandInterceptor;
         host._resourceAuthority = resourceAuthority;
         host._resourceServices = resourceServices;
@@ -262,7 +272,7 @@ public sealed class LocalAuthenticationTestHost : IAsyncDisposable
 
     public async Task<AuditDbContext> CreateAuditContextAsync()
     {
-        var context = new AuditDbContext(AuditDbContextFactory.CreateTestOptions(_connectionString));
+        var context = new AuditDbContext(Selection.Audit());
         await context.Database.OpenConnectionAsync();
         return context;
     }
@@ -318,7 +328,7 @@ public sealed class LocalAuthenticationTestHost : IAsyncDisposable
             await identity.Database.MigrateAsync();
         }
 
-        await using (var audit = new AuditDbContext(AuditDbContextFactory.CreateTestOptions(_connectionString)))
+        await using (var audit = new AuditDbContext(Selection.Audit()))
         {
             await audit.Database.MigrateAsync();
         }
@@ -326,19 +336,20 @@ public sealed class LocalAuthenticationTestHost : IAsyncDisposable
         _schemaReady = true;
         if (_resourceAuthority)
         {
-            await using var tenant = new Kordra.Modules.TenantManagement.Infrastructure.TenantDbContext(Kordra.Modules.TenantManagement.Infrastructure.TenantDbContextFactory.CreateTestOptions(_connectionString));
+            await using var tenant = new Kordra.Modules.TenantManagement.Infrastructure.TenantDbContext(Selection.Tenant());
             await tenant.Database.MigrateAsync();
-            await using var projects = new Kordra.Modules.ProjectEnvironment.Infrastructure.ProjectDbContext(Kordra.Modules.ProjectEnvironment.Infrastructure.ProjectDbContextFactory.CreateTestOptions(_connectionString));
+            await using var projects = new Kordra.Modules.ProjectEnvironment.Infrastructure.ProjectDbContext(Selection.Project());
             await projects.Database.MigrateAsync();
-            await using var inventory = new Kordra.Modules.InfrastructureInventory.Infrastructure.InventoryDbContext(Kordra.Modules.InfrastructureInventory.Infrastructure.InventoryDbContextFactory.CreateTestOptions(_connectionString));
+            await using var inventory = new Kordra.Modules.InfrastructureInventory.Infrastructure.InventoryDbContext(Selection.Inventory());
             await inventory.Database.MigrateAsync();
-            await using var credentials = new Kordra.Modules.ConnectionManagement.Infrastructure.CredentialDbContext(Kordra.Modules.ConnectionManagement.Infrastructure.CredentialDbContextFactory.CreateTestOptions(_connectionString));
+            await using var credentials = new Kordra.Modules.ConnectionManagement.Infrastructure.CredentialDbContext(Selection.Credential());
             await credentials.Database.MigrateAsync();
         }
     }
 
     private async Task StartInstanceAsync()
     {
+        _ = Selection.Identity();
         var configuration = new LocalAuthenticationConfiguration(_installationId, Guid.NewGuid());
         var builder = WebApplication.CreateEmptyBuilder(new WebApplicationOptions
         {
@@ -381,15 +392,28 @@ public sealed class LocalAuthenticationTestHost : IAsyncDisposable
         if (_resourceAuthority)
         {
             builder.Services.AddSingleton<IDbContextFactory<Kordra.Modules.TenantManagement.Infrastructure.TenantDbContext>>(
-                new Microsoft.EntityFrameworkCore.Infrastructure.PooledDbContextFactory<Kordra.Modules.TenantManagement.Infrastructure.TenantDbContext>(Kordra.Modules.TenantManagement.Infrastructure.TenantDbContextFactory.CreateTestOptions(_connectionString)));
+                new Microsoft.EntityFrameworkCore.Infrastructure.PooledDbContextFactory<Kordra.Modules.TenantManagement.Infrastructure.TenantDbContext>(Selection.Tenant()));
             builder.Services.AddSingleton<IDbContextFactory<Kordra.Modules.ProjectEnvironment.Infrastructure.ProjectDbContext>>(
-                new Microsoft.EntityFrameworkCore.Infrastructure.PooledDbContextFactory<Kordra.Modules.ProjectEnvironment.Infrastructure.ProjectDbContext>(Kordra.Modules.ProjectEnvironment.Infrastructure.ProjectDbContextFactory.CreateTestOptions(_connectionString)));
+                new Microsoft.EntityFrameworkCore.Infrastructure.PooledDbContextFactory<Kordra.Modules.ProjectEnvironment.Infrastructure.ProjectDbContext>(Selection.Project()));
             builder.Services.AddSingleton<IDbContextFactory<Kordra.Modules.InfrastructureInventory.Infrastructure.InventoryDbContext>>(
-                new Microsoft.EntityFrameworkCore.Infrastructure.PooledDbContextFactory<Kordra.Modules.InfrastructureInventory.Infrastructure.InventoryDbContext>(Kordra.Modules.InfrastructureInventory.Infrastructure.InventoryDbContextFactory.CreateTestOptions(_connectionString)));
+                new Microsoft.EntityFrameworkCore.Infrastructure.PooledDbContextFactory<Kordra.Modules.InfrastructureInventory.Infrastructure.InventoryDbContext>(Selection.Inventory()));
             builder.Services.AddSingleton<IDbContextFactory<Kordra.Modules.ConnectionManagement.Infrastructure.CredentialDbContext>>(
-                new Microsoft.EntityFrameworkCore.Infrastructure.PooledDbContextFactory<Kordra.Modules.ConnectionManagement.Infrastructure.CredentialDbContext>(Kordra.Modules.ConnectionManagement.Infrastructure.CredentialDbContextFactory.CreateTestOptions(_connectionString)));
+                new Microsoft.EntityFrameworkCore.Infrastructure.PooledDbContextFactory<Kordra.Modules.ConnectionManagement.Infrastructure.CredentialDbContext>(Selection.Credential()));
             builder.Services.AddResourceAuthorityOwnerServices();
+            if (Selection.Profile is { } selected)
+            {
+                builder.Services.AddSingleton<ITenantAuditTransactionFactory>(Selection.TenantAudit());
+                builder.Services.AddSingleton<ICatalogAuditTransactionFactory>(Selection.CatalogAudit());
+                builder.Services.AddSingleton<ICatalogClockFloorWriter>(s => CatalogClockFloorWriter.CreateDisposableTestWriter(
+                    configuration, s.GetRequiredService<IAuthorityClock>(), selected.OwnerBinding));
+                builder.Services.AddSingleton<CatalogMutationCoordinator>(s => CatalogMutationCoordinator.CreateDisposableTestCoordinator(
+                    s.GetRequiredService<IDbContextFactory<Kordra.Modules.ProjectEnvironment.Infrastructure.ProjectDbContext>>(),
+                    s.GetRequiredService<ICatalogAuthority>(), s.GetRequiredService<IEnvironmentPolicyReader>(),
+                    s.GetRequiredService<FairAsyncReaderWriterAdmissionGate>(), s.GetRequiredService<IAuthorityClock>(),
+                    s.GetRequiredService<ICatalogAuditTransactionFactory>(), selected.OwnerBinding, s.GetRequiredService<ICatalogClockFloorWriter>()));
+            }
             _resourceServices?.Invoke(builder.Services);
+            Selection.BindRegisteredOwnerTransactions(builder.Services);
         }
 
         _app = builder.Build();

@@ -76,7 +76,7 @@ public static class CompatibilityProgram
             throw new InvalidOperationException("Approved UUID schema required.");
         var locator = Environment.GetEnvironmentVariable("KORDRA_IAM_TEST_CONNECTION_STRING") ?? throw new InvalidOperationException("Private test locator required.");
         using (var check = new NpgsqlConnection(locator))
-        using (var model = AuditDbContextFactory.CreateIsolatedTestContext(check, caseId)) { }
+        using (var model = MessagingFixtureSelection.AuditContext(check, caseId)) { }
         var consumer = args[1] is not ("producer" or "producer-conflict");
         using var host = Builder(locator, caseId, args[1], consumer).Build();
         using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(40));
@@ -153,7 +153,7 @@ public sealed class NativeCompatibilityHandler
         var ownerLocator = new NpgsqlConnectionStringBuilder(fixture.Locator) { Pooling = false, Multiplexing = false }.ConnectionString;
         await using var connection = new NpgsqlConnection(ownerLocator); await connection.OpenAsync(cancellation);
         await using var transaction = await connection.BeginTransactionAsync(cancellation);
-        await using var audit = await AuditTransactionContext.CreateIsolatedTestAsync(connection, transaction, fixture.CaseId, cancellation);
+        await using var audit = await MessagingFixtureSelection.AuditTransaction(connection, transaction, fixture.CaseId, cancellation);
         var native = (MessageContext)context;
         var store = (IMessageDatabase)native.Runtime.Storage;
         var stager = new CallerOwnedMessageStager(connection, transaction, store, schema);
@@ -164,7 +164,7 @@ public sealed class NativeCompatibilityHandler
         if ((await audit.StageAsync(intent, cancellation)).Status != AuditTransactionStageStatus.Staged)
             throw new InvalidOperationException("Audit stage failed.");
         var verified = message.Verified ?? throw new InvalidOperationException("Verified native wire fixture required.");
-        var claim = await stager.StageConsumptionAsync(CallerOwnedReceiptStore.CreateIsolatedTestStore(connection, transaction, fixture.CaseId),
+        var claim = await stager.StageConsumptionAsync(MessagingFixtureSelection.ReceiptStore(connection, transaction, fixture.CaseId),
             NativeWireFixture.Registry(), native, verified, LogicalReceiptOutcome.Completed, DateTimeOffset.UtcNow, cancellation);
         if (claim.Disposition == ReceiptStageDisposition.Staged)
         {
@@ -174,7 +174,7 @@ public sealed class NativeCompatibilityHandler
             await context.PublishAsync(new NativeCompatibilityResult(fixture.CaseId, message.LogicalId));
         }
         else if (claim.Disposition == ReceiptStageDisposition.Conflict)
-            await CallerOwnedMessageJournal.CreateIsolatedTestJournal(connection, transaction, fixture.CaseId)
+            await MessagingFixtureSelection.Journal(connection, transaction, fixture.CaseId)
                 .StageQuarantineAsync(Guid.NewGuid(), fixture.CaseId, MessageQuarantineReason.HashConflict, verified.PayloadHash, DateTimeOffset.UtcNow, cancellation);
         await stager.StageHandledAsync(incoming, DateTimeOffset.UtcNow, cancellation);
         Console.WriteLine("NATIVE_FIXTURE_STAGED");

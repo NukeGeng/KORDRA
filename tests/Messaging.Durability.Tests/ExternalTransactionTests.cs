@@ -24,7 +24,7 @@ public sealed class ExternalTransactionTests
     {
         var locator = Environment.GetEnvironmentVariable("KORDRA_IAM_TEST_CONNECTION_STRING")
             ?? throw new InvalidOperationException("Exact private kordra_test locator required.");
-        var fixture = new FixtureDatabaseScope(locator, Guid.NewGuid());
+        var fixture = FixtureDatabaseScope.ForRunner(locator, Guid.NewGuid());
         var schema = fixture.Schema; var created = false;
         using var host = Host.CreateDefaultBuilder().UseWolverine(options =>
         {

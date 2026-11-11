@@ -1,3 +1,4 @@
+using Kordra.Testing;
 using System.Data.Common;
 using System.Security.Cryptography;
 using System.Text;
@@ -37,6 +38,7 @@ public abstract class CatalogTestFixture : IAsyncLifetime
     protected readonly Policies Policy = new();
     protected readonly Subject CurrentSubject = new();
     protected string Locator = "";
+    private protected ProductPostgreSqlFixtureSelection Selection = null!;
     private readonly OfflineLease _offline = new();
     private readonly HashSet<Guid> _definitions = [];
     private readonly HashSet<string> _keys = [];
@@ -46,25 +48,28 @@ public abstract class CatalogTestFixture : IAsyncLifetime
     public async Task InitializeAsync()
     {
         Locator = Environment.GetEnvironmentVariable("KORDRA_IAM_TEST_CONNECTION_STRING") ?? throw new InvalidOperationException("Private isolated kordra_test locator required.");
-        Projects = new(ProjectDbContextFactory.CreateTestOptions(Locator));
-        Inventory = new(InventoryDbContextFactory.CreateTestOptions(Locator));
-        Tenants = new(TenantDbContextFactory.CreateTestOptions(Locator));
-        Identity = new(new DbContextOptionsBuilder<KordraIdentityDbContext>().UseNpgsql(Locator,
-            p => p.MigrationsHistoryTable(KordraIdentityDbContext.MigrationHistoryTableName, "app")).Options);
-        await using (var aud = new AuditDbContext(AuditDbContextFactory.CreateTestOptions(Locator))) await aud.Database.MigrateAsync();
+        Selection = new(Locator);
+        Projects = new(Selection.Project());
+        Inventory = new(Selection.Inventory());
+        Tenants = new(Selection.Tenant());
+        Identity = new(Selection.Identity());
+        await using (var aud = new AuditDbContext(Selection.Audit())) await aud.Database.MigrateAsync();
         await using (var iam = await Identity.CreateDbContextAsync()) await iam.Database.MigrateAsync();
         await using (var ten = await Tenants.CreateDbContextAsync()) await ten.Database.MigrateAsync();
         await using (var prj = await Projects.CreateDbContextAsync()) await prj.Database.MigrateAsync();
         await using (var inv = await Inventory.CreateDbContextAsync()) await inv.Database.MigrateAsync();
-        Roles = new(Identity, Gate, new IdentityAccessAuditTransactionAdapter());
-        TenantService = new(Tenants, Roles, CurrentSubject, new ScopeOwner(Projects, Policy), new TenantAuditTransactionAdapter(), Gate, new Clock());
+        Roles = new(Identity, Gate, Selection.IdentityAudit());
+        TenantService = new(Tenants, Roles, CurrentSubject, new ScopeOwner(Projects, Policy), Selection.TenantAudit(), Gate, new Clock());
         Principal = await NewPrincipal(); CurrentSubject.Principal = Principal;
         Tenant = await NewTenant(Principal);
         await using var db = await Tenants.CreateDbContextAsync();
         Member = (await db.Memberships.SingleAsync(x => x.TenantId == Tenant && x.PrincipalId == Principal)).Id;
     }
     protected CatalogMutationCoordinator Coordinator(ICatalogAuditTransactionFactory? audit = null) =>
-        new(Projects, new Authority(TenantService, CurrentSubject), Policy, Gate, new Clock(), audit ?? new CatalogAuditTransactionFactory());
+        Selection.Profile is { } profile
+            ? CatalogMutationCoordinator.CreateDisposableTestCoordinator(Projects, new Authority(TenantService, CurrentSubject), Policy, Gate,
+                new Clock(), audit ?? Selection.CatalogAudit(), profile.OwnerBinding)
+            : new(Projects, new Authority(TenantService, CurrentSubject), Policy, Gate, new Clock(), audit ?? Selection.CatalogAudit());
     protected async Task<CatalogMutationResult> Catalog(CatalogCommand command, ICatalogAuditTransactionFactory? audit = null)
     { _keys.Add(Hash(command.Key)); return await Coordinator(audit).ExecuteAsync(command); }
     protected async Task<TargetMutationResult> Target(TargetCommand command, ICatalogAuditTransactionFactory? audit = null)
@@ -175,12 +180,12 @@ public abstract class CatalogTestFixture : IAsyncLifetime
         public void RequireHeld() { if (_disposed) throw new InvalidOperationException("Test offline lease released."); }
         public void Dispose() { _disposed = true; _file.Dispose(); File.Delete(_path); }
     }
-    protected sealed class FaultAudit(Action? beforeSave = null, bool unknownAfterCommit = false, bool failSetup = false, bool unknownWithoutCommit = false) : ICatalogAuditTransactionFactory
+    protected sealed class FaultAudit(ICatalogAuditTransactionFactory inner, Action? beforeSave = null, bool unknownAfterCommit = false, bool failSetup = false, bool unknownWithoutCommit = false) : ICatalogAuditTransactionFactory
     {
         public async ValueTask<ICatalogAuditTransaction> EnlistAsync(DbConnection connection, DbTransaction transaction, CancellationToken ct = default)
         {
             if (failSetup) throw new TimeoutException("Synthetic pre-commit setup timeout.");
-            return new Enlisted(await new CatalogAuditTransactionFactory().EnlistAsync(connection, transaction, ct), beforeSave, unknownAfterCommit, unknownWithoutCommit);
+            return new Enlisted(await inner.EnlistAsync(connection, transaction, ct), beforeSave, unknownAfterCommit, unknownWithoutCommit);
         }
         private sealed class Enlisted(ICatalogAuditTransaction inner, Action? before, bool unknownAfter, bool unknownWithout) : ICatalogAuditTransaction
         {

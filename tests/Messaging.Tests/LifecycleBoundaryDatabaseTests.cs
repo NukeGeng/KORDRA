@@ -53,7 +53,7 @@ public sealed class LifecycleBoundaryDatabaseTests
             throw new InvalidOperationException("Native cleanup SQL differs from reviewed artifact.");
         var locator = Environment.GetEnvironmentVariable("KORDRA_IAM_TEST_CONNECTION_STRING")
             ?? throw new InvalidOperationException("Private kordra_test locator required.");
-        AuditDbContextFactory.ValidateTestTarget(locator);
+        MessagingFixtureSelection.ValidateTestTarget(locator);
         var target = new NpgsqlConnectionStringBuilder(locator);
         if (target.Multiplexing || !string.IsNullOrEmpty(target.Options) || !string.IsNullOrEmpty(target.SearchPath))
             throw new InvalidOperationException("Lifecycle fixture rejects session overrides.");
@@ -71,16 +71,16 @@ public sealed class LifecycleBoundaryDatabaseTests
             var native = Assert.IsAssignableFrom<IMessageDatabase>(host.Services.GetRequiredService<IMessageStore>());
             var now = DateTimeOffset.FromUnixTimeMilliseconds(DateTimeOffset.UtcNow.ToUnixTimeMilliseconds());
             var message = NativeWireFixture.Create(caseId, Guid.NewGuid(), now);
-            var inspector = MessageReceiptInspector.CreateIsolatedTestInspector(observer, caseId);
+            var inspector = MessagingFixtureSelection.MessageReceipt(observer, caseId);
             var pending = Seed(EnvelopeStatus.Incoming);
             await using (var root = await writer.BeginTransactionAsync(ct))
             {
                 var stager = new CallerOwnedMessageStager(writer, root, native, schema);
                 await stager.StageIncomingAsync([pending]);
-                await CallerOwnedReceiptStore.CreateIsolatedTestStore(writer, root, caseId).StagePublicationAsync(message, now, ct);
+                await MessagingFixtureSelection.ReceiptStore(writer, root, caseId).StagePublicationAsync(message, now, ct);
                 using var cancelled = new CancellationTokenSource(); cancelled.Cancel();
                 await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
-                    CallerOwnedReceiptStore.CreateIsolatedTestStore(writer, root, caseId)
+                    MessagingFixtureSelection.ReceiptStore(writer, root, caseId)
                         .StageLogicalAsync(message, LogicalReceiptOutcome.Denied, now, cancelled.Token));
                 await root.RollbackAsync(ct); // Owner-confirmed rollback, not an inference from the cancellation signal.
             }
@@ -89,7 +89,7 @@ public sealed class LifecycleBoundaryDatabaseTests
             await using (var root = await writer.BeginTransactionAsync(ct))
             {
                 await new CallerOwnedMessageStager(writer, root, native, schema).StageIncomingAsync([pending]);
-                var receipts = CallerOwnedReceiptStore.CreateIsolatedTestStore(writer, root, caseId);
+                var receipts = MessagingFixtureSelection.ReceiptStore(writer, root, caseId);
                 await receipts.StagePublicationAsync(message, now, ct);
                 await receipts.StageLogicalAsync(message, LogicalReceiptOutcome.Denied, now, ct);
                 await root.CommitAsync(ct);
@@ -106,7 +106,7 @@ public sealed class LifecycleBoundaryDatabaseTests
             var oldReceipt = NativeWireFixture.Create(caseId, Guid.NewGuid(), oldReceiptTime);
             await using (var root = await writer.BeginTransactionAsync(ct))
             {
-                var receipts = CallerOwnedReceiptStore.CreateIsolatedTestStore(writer, root, caseId);
+                var receipts = MessagingFixtureSelection.ReceiptStore(writer, root, caseId);
                 await receipts.StagePublicationAsync(oldReceipt, oldReceiptTime, ct);
                 await receipts.StageLogicalAsync(oldReceipt, LogicalReceiptOutcome.Denied, oldReceiptTime, ct);
                 await root.CommitAsync(ct);

@@ -1,3 +1,4 @@
+using Kordra.Testing;
 using System.Data.Common;
 using System.Diagnostics;
 using Microsoft.EntityFrameworkCore.Diagnostics;
@@ -444,7 +445,7 @@ public sealed class IdentityAccessAuthenticationServiceTests : IAsyncLifetime
         var meEntered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var releaseMe = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var logoutReached = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        var observedAudit = new LogoutObservingAuditFactory(new IdentityAccessAuditTransactionAdapter());
+        var observedAudit = new LogoutObservingAuditFactory(_host.Selection.IdentityAudit());
         var firstMe = 0;
         await _host.DisposeAsync();
         _host = await LocalAuthenticationTestHost.StartAsync(
@@ -526,7 +527,8 @@ public sealed class IdentityAccessAuthenticationServiceTests : IAsyncLifetime
 
     private sealed class FaultAuditFactory : IIdentityAuditTransactionFactory
     {
-        private readonly IdentityAccessAuditTransactionAdapter _inner = new();
+        private readonly IdentityAccessAuditTransactionAdapter _inner = RegressionPostgreSqlSelection.LoadRunnerProfile() is { } profile
+            ? IdentityAccessAuditTransactionAdapter.CreateDisposableTestAdapter(profile.OwnerBinding) : new();
         public bool LoseNextMutationAck { get; set; }
         public bool ThrowAfterCommit { get; set; }
         public string? FailNextSetup { get; set; }

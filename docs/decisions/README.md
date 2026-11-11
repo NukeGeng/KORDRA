@@ -77,3 +77,5 @@ ADR-0020 được NukeGeng accepted ngày 2026-10-30 đúng phạm vi runtime ke
 | [0021](0021-durable-workflow-persistence.md) | Accepted scoped design T12.2 persisted workflow/CAS/timer/recovery and scoped workflow actions |
 | [0022](0022-controlworker-authority.md) | Accepted scoped design T12.3 service identity/current distributed admission/owner SQL ports and independent ControlWorker |
 | [0023](0023-workflow-qualification.md) | Accepted scoped design T12.4 fault and independent-host/Mac-close qualification; operation approval remains separate |
+
+- [ADR-0025 — Disposable PostgreSQL regression profile](0025-disposable-regression-database-profile.md): accepted test-only target selection; database operations require separately scoped authorization.

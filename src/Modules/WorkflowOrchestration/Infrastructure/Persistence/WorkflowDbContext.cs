@@ -1,3 +1,4 @@
+using DisposableTestBinding = (System.Guid RunId, string SourceSha256, string OperationManifestSha256, System.DateTimeOffset ExpiresAtUtc);
 using Kordra.Modules.WorkflowOrchestration.Domain;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
@@ -22,6 +23,12 @@ public sealed class WorkflowDbContext : DbContext
     public static WorkflowDbContext CreateFixture(NpgsqlConnection connection, Guid caseId)
     {
         var target = WorkflowFixtureTarget.Validate(connection, caseId);
+        return Create(connection, target.SchemaName);
+    }
+
+    public static WorkflowDbContext CreateDisposableTestFixture(NpgsqlConnection connection, Guid caseId, DisposableTestBinding profile)
+    {
+        var target = WorkflowFixtureTarget.ValidateDisposableTest(connection, caseId, profile);
         return Create(connection, target.SchemaName);
     }
 

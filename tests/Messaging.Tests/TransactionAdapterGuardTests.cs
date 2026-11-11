@@ -1,6 +1,8 @@
 using System.Data;
 using System.Data.Common;
 using System.Reflection;
+using System.Text.Json;
+using Kordra.Testing;
 using Kordra.Modules.Messaging.Infrastructure.Transactions;
 using Npgsql;
 using Wolverine.RDBMS;
@@ -48,6 +50,31 @@ public sealed class TransactionAdapterGuardTests
         var names = typeof(CallerOwnedMessageStager).GetMethods(BindingFlags.Public | BindingFlags.Instance | BindingFlags.DeclaredOnly)
             .Select(m => m.Name).Order().ToArray();
         Assert.Equal(new[] { "StageConsumptionAsync", "StageHandledAsync", "StageIncomingAsync", "StageOutgoingAsync", "StagePublicationAsync" }, names);
+    }
+
+    [Fact]
+    public void CommitReplyFaultRequiresTheSelectedUnpooledTarget()
+    {
+        var runId = Guid.NewGuid();
+        var now = DateTimeOffset.UtcNow;
+        var digest = new string('a', 64);
+        var database = "kordra_test_" + runId.ToString("N");
+        var profile = DisposablePostgreSqlProfile.Read(JsonSerializer.SerializeToUtf8Bytes(new
+        {
+            schemaVersion = 1, kind = "disposable-postgresql-regression",
+            runId = runId.ToString("D"), host = "127.0.0.1", port = 5432, database,
+            role = "kordra_test", schema = "app", sourceSha256 = digest, operationManifestSha256 = digest,
+            expiresAtUtc = now.AddMinutes(1).ToString("yyyy-MM-dd'T'HH:mm:ss.fffffff'Z'",
+                System.Globalization.CultureInfo.InvariantCulture)
+        }), runId, digest, digest, now);
+        const string legacy = "Host=127.0.0.1;Port=5432;Database=kordra_test;Username=kordra_test;Pooling=false";
+        var selected = new NpgsqlConnectionStringBuilder(legacy) { Database = database };
+        CommitReplyFault.ValidateTarget(legacy, null);
+        CommitReplyFault.ValidateTarget(selected.ConnectionString, profile);
+        Assert.Throws<InvalidOperationException>(() => CommitReplyFault.ValidateTarget(legacy, profile));
+        Assert.Throws<InvalidOperationException>(() => CommitReplyFault.ValidateTarget(selected.ConnectionString, null));
+        selected.Pooling = true;
+        Assert.Throws<InvalidOperationException>(() => CommitReplyFault.ValidateTarget(selected.ConnectionString, profile));
     }
 
     private static NpgsqlConnection Connection() => new("Host=127.0.0.1;Database=kordra_test;Username=kordra_test;Timeout=1");

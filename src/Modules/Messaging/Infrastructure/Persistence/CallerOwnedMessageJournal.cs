@@ -1,3 +1,4 @@
+using DisposableTestBinding = (System.Guid RunId, string SourceSha256, string OperationManifestSha256, System.DateTimeOffset ExpiresAtUtc);
 using System.Data;
 using System.Data.Common;
 using Npgsql;
@@ -27,6 +28,11 @@ public sealed class CallerOwnedMessageJournal
     }
     public static CallerOwnedMessageJournal CreateIsolatedTestJournal(NpgsqlConnection connection, DbTransaction transaction, Guid caseId)
         => new(connection, transaction, IsolatedMessagingFixture.SchemaFor(connection, caseId));
+
+    public static CallerOwnedMessageJournal CreateDisposableTestJournal(NpgsqlConnection connection, DbTransaction transaction,
+        Guid caseId, DisposableTestBinding profile)
+        => new(connection, transaction, IsolatedMessagingFixture.SchemaForDisposableTest(connection, caseId, profile));
+
 
     public Task StageQuarantineAsync(Guid recordId, Guid installationId, MessageQuarantineReason reason,
         string observedHash, DateTimeOffset recordedAtUtc, CancellationToken cancellationToken)

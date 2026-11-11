@@ -1,3 +1,4 @@
+using Kordra.Testing;
 using Kordra.Modules.ReleaseManagement.Infrastructure;
 using Kordra.Modules.ReleaseManagement;
 using Kordra.ReleaseManagement.Domain;
@@ -18,11 +19,15 @@ public sealed class ReleasePersistenceTests : IAsyncLifetime
     private readonly Guid _release = Guid.NewGuid(), _creator = Guid.NewGuid();
     private readonly DateTimeOffset _now = new(2026, 10, 27, 12, 0, 0, TimeSpan.Zero);
 
+    private static DbContextOptions<ReleaseDbContext> Options(string locator) => RegressionPostgreSqlSelection.LoadRunnerProfile() is { } profile
+            ? ReleaseDbContextFactory.CreateDisposableTestOptions(locator, profile.OwnerBinding)
+            : ReleaseDbContextFactory.CreateTestOptions(locator);
+
     public async Task InitializeAsync()
     {
         var locator = Environment.GetEnvironmentVariable("KORDRA_IAM_TEST_CONNECTION_STRING") ??
             throw new InvalidOperationException("Private isolated kordra_test locator required.");
-        _db = new ReleaseDbContext(ReleaseDbContextFactory.CreateTestOptions(locator));
+        _db = new ReleaseDbContext(Options(locator));
         await _db.Database.MigrateAsync();
         _tx = await _db.Database.BeginTransactionAsync();
         _db.Lineages.Add(new() { Id = _release, InstallationId = _installation, TenantId = _tenant, ProjectId = _project, CreatedAtUtc = _now });
@@ -258,7 +263,11 @@ public sealed class ReleasePersistenceTests : IAsyncLifetime
     public async Task CompetingEditorsCannotOverwriteAnAlreadyAdvancedVersion()
     {
         var first = await AddDraft();
-        await using var competing = new ReleaseDbContext(ReleaseDbContextFactory.CreateEnlistedOptions(_db.Database.GetDbConnection()));
+        var connection = _db.Database.GetDbConnection();
+        var options = RegressionPostgreSqlSelection.LoadRunnerProfile() is { } profile
+            ? ReleaseDbContextFactory.CreateDisposableEnlistedTestOptions(connection, profile.OwnerBinding)
+            : ReleaseDbContextFactory.CreateEnlistedOptions(connection);
+        await using var competing = new ReleaseDbContext(options);
         await competing.Database.UseTransactionAsync(_tx.GetDbTransaction());
         var stale = await competing.Revisions.SingleAsync(x => x.Id == first.Id);
         first.Label = "first"; first.Version++; await _db.SaveChangesAsync();
@@ -350,7 +359,7 @@ public sealed class ReleasePersistenceTests : IAsyncLifetime
     public async Task ConcurrentNextDraftsCannotBothCommitForOneLineage()
     {
         var locator = Environment.GetEnvironmentVariable("KORDRA_IAM_TEST_CONNECTION_STRING")!;
-        var options = ReleaseDbContextFactory.CreateTestOptions(locator);
+        var options = Options(locator);
         var release = Guid.NewGuid(); var installation = Guid.NewGuid(); var tenant = Guid.NewGuid(); var project = Guid.NewGuid();
         ReleaseRevisionRecord NewRow(long number) => new() { Id = Guid.NewGuid(), InstallationId = installation, TenantId = tenant, ProjectId = project,
             ReleaseId = release, RevisionNumber = number, Version = 1, CreatorPrincipalId = _creator, Label = "Synthetic race", ApplicationId = Guid.NewGuid(),

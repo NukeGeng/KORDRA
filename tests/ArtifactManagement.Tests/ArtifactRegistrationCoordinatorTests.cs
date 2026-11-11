@@ -1,3 +1,4 @@
+using Kordra.Testing;
 using System.Data.Common;
 using System.Security.Cryptography;
 using System.Text;
@@ -27,6 +28,7 @@ namespace Kordra.Artifacts.Tests;
 // This does not replace the later real login/owner HTTP conformance cases.
 public sealed class ArtifactRegistrationCoordinatorTests : IAsyncLifetime
 {
+    private ProductPostgreSqlFixtureSelection _selection = null!;
     private readonly Facts _facts = new();
     private readonly FairAsyncReaderWriterAdmissionGate _gate = new();
     private PooledDbContextFactory<KordraIdentityDbContext> _iam = null!;
@@ -42,10 +44,10 @@ public sealed class ArtifactRegistrationCoordinatorTests : IAsyncLifetime
     {
         var locator = Environment.GetEnvironmentVariable("KORDRA_IAM_TEST_CONNECTION_STRING")
             ?? throw new InvalidOperationException("Private isolated kordra_test locator required.");
-        _iam = new(new DbContextOptionsBuilder<KordraIdentityDbContext>().UseNpgsql(locator,
-            p => p.MigrationsHistoryTable(KordraIdentityDbContext.MigrationHistoryTableName, "app")).Options);
-        _art = new(ArtifactDbContextFactory.CreateTestOptions(locator)); _sec = new(CredentialDbContextFactory.CreateTestOptions(locator));
-        _aud = new(AuditDbContextFactory.CreateTestOptions(locator));
+        _selection = new(locator);
+        _iam = new(_selection.Identity());
+        _art = new(_selection.Artifact()); _sec = new(_selection.Credential());
+        _aud = new(_selection.Audit());
         await using (var db = await _iam.CreateDbContextAsync()) await db.Database.MigrateAsync();
         await using (var db = await _art.CreateDbContextAsync()) await db.Database.MigrateAsync();
         await using (var db = await _sec.CreateDbContextAsync()) await db.Database.MigrateAsync();
@@ -65,8 +67,8 @@ public sealed class ArtifactRegistrationCoordinatorTests : IAsyncLifetime
     {
         var authority = new ArtifactAuthorityResolver(_facts.Installation, new(_facts, _facts, _facts, _facts, _facts), _sec, _facts,
             historicalOnly ? null : _configuration);
-        var transactions = new ArtifactOwnerTransaction(_facts.Installation, _iam, hooks ?? new ArtifactAuditTransactionFactory(), _gate, _facts);
-        return new(_facts.Installation, authority, _art, new(_art, _sec), transactions,
+        var transactions = _selection.ArtifactTransaction(_facts.Installation, _iam, hooks ?? _selection.ArtifactAudit(), _gate, _facts);
+        return new(_facts.Installation, authority, _art, _selection.ArtifactReadiness(_art, _sec), transactions,
             new(_facts.Installation, authority, _art, transactions, _gate, _facts), _gate, _facts, null);
     }
     private Task<ArtifactExecutionStatus> Register(Capture response, IArtifactAuditTransactionFactory? hooks = null,
@@ -156,7 +158,7 @@ public sealed class ArtifactRegistrationCoordinatorTests : IAsyncLifetime
     [InlineData(4)]
     public async Task Changed_authority_during_each_audit_stage_never_discloses_and_preserves_confirmed_M(int stage)
     {
-        var response = new Capture(); var hooks = new Hooks(count => { if (count == stage) _facts.Grant = _facts.Grant with { AssignmentRevision = 2 }; });
+        var response = new Capture(); var hooks = new Hooks(_selection, count => { if (count == stage) _facts.Grant = _facts.Grant with { AssignmentRevision = 2 }; });
         Assert.Equal(ArtifactExecutionStatus.Denied, await Register(response, hooks)); Assert.Null(response.Bytes);
         await using var db = await _art.CreateDbContextAsync();
         var rows = await db.Registrations.Where(r => r.InstallationId == _facts.Installation).ToArrayAsync();
@@ -173,7 +175,7 @@ public sealed class ArtifactRegistrationCoordinatorTests : IAsyncLifetime
     [InlineData(4)]
     public async Task Lost_commit_ACK_at_each_stage_fences_without_guessed_failure_or_body(int stage)
     {
-        var response = new Capture(); Assert.Equal(ArtifactExecutionStatus.Unknown, await Register(response, new Hooks(_ => { }, stage)));
+        var response = new Capture(); Assert.Equal(ArtifactExecutionStatus.Unknown, await Register(response, new Hooks(_selection, _ => { }, stage)));
         Assert.True(response.Aborted); Assert.Null(response.Bytes); Assert.Equal(stage <= 2 ? 0 : 2, _server.Requests.Count);
         await using var db = await _art.CreateDbContextAsync();
         var row = await db.Registrations.SingleAsync(r => r.InstallationId == _facts.Installation);
@@ -210,7 +212,7 @@ public sealed class ArtifactRegistrationCoordinatorTests : IAsyncLifetime
     [Fact]
     public async Task Minimum_schema_checks_and_non_destructive_downgrade_are_explicit()
     {
-        Assert.True(await new ArtifactWriteReadiness(_art, _sec).CheckUnderAdmissionAsync(default));
+        Assert.True(await _selection.ArtifactReadiness(_art, _sec).CheckUnderAdmissionAsync(default));
         await using var db = await _art.CreateDbContextAsync();
         Assert.Throws<NotSupportedException>(() => db.GetService<IMigrator>().GenerateScript("20261025124612_InitialArtifactRegistration", "0"));
     }
@@ -247,7 +249,7 @@ public sealed class ArtifactRegistrationCoordinatorTests : IAsyncLifetime
     [InlineData(4)]
     public async Task Original_use_expiry_at_M_or_D_is_not_renewed(int stage)
     {
-        var response = new Capture(); var hooks = new Hooks(count => { if (count == stage) _facts.Now = _facts.Now.AddSeconds(5); });
+        var response = new Capture(); var hooks = new Hooks(_selection, count => { if (count == stage) _facts.Now = _facts.Now.AddSeconds(5); });
         Assert.Equal(ArtifactExecutionStatus.Denied, await Register(response, hooks)); Assert.Null(response.Bytes);
         await using var db = await _art.CreateDbContextAsync();
         Assert.Equal(stage == 4 ? "Registered" : "Failed", (await db.Registrations.SingleAsync(r => r.InstallationId == _facts.Installation)).State);
@@ -256,7 +258,7 @@ public sealed class ArtifactRegistrationCoordinatorTests : IAsyncLifetime
     [Fact]
     public async Task Shortened_expiry_seen_at_U_is_not_restored_at_C()
     {
-        var hooks = new Hooks(count =>
+        var hooks = new Hooks(_selection, count =>
         {
             if (count == 1) _facts.Grant = _facts.Grant with { ExpiresAtUtc = _facts.Now.AddSeconds(1) };
             if (count == 2) { _facts.Now = _facts.Now.AddSeconds(1); _facts.Grant = _facts.Grant with { ExpiresAtUtc = _facts.Now.AddMinutes(20) }; }
@@ -337,11 +339,11 @@ public sealed class ArtifactRegistrationCoordinatorTests : IAsyncLifetime
         public Task<bool> IsActivePrincipalAsync(Guid p, CancellationToken ct = default) => Task.FromResult(p == Subject.PrincipalId);
         public Task<ArtifactProjectAuthority?> ReadCurrentUnderAdmissionAsync(Guid project, CancellationToken ct = default) => Task.FromResult<ArtifactProjectAuthority?>(Project);
     }
-    private sealed class Hooks(Action<int> staged, int loseAck = 0) : IArtifactAuditTransactionFactory
+    private sealed class Hooks(ProductPostgreSqlFixtureSelection selection, Action<int> staged, int loseAck = 0) : IArtifactAuditTransactionFactory
     {
         private int _count;
         public async ValueTask<IArtifactAuditTransaction> EnlistAsync(DbConnection c, DbTransaction t, CancellationToken ct) =>
-            new Enlisted(await new ArtifactAuditTransactionFactory().EnlistAsync(c, t, ct), staged, Interlocked.Increment(ref _count), loseAck);
+            new Enlisted(await selection.ArtifactAudit().EnlistAsync(c, t, ct), staged, Interlocked.Increment(ref _count), loseAck);
         private sealed class Enlisted(IArtifactAuditTransaction inner, Action<int> hook, int count, int lose) : IArtifactAuditTransaction
         {
             public bool CommitAttempted => inner.CommitAttempted;

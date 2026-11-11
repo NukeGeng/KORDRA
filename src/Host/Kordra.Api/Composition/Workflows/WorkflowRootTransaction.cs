@@ -1,3 +1,4 @@
+using DisposableTestBinding = (System.Guid RunId, string SourceSha256, string OperationManifestSha256, System.DateTimeOffset ExpiresAtUtc);
 using System.Data;
 using System.Runtime.CompilerServices;
 using Kordra.BuildingBlocks.Security;
@@ -53,9 +54,19 @@ public sealed class WorkflowRootTransaction : IAsyncDisposable
         _messages = messages; _admission = admission;
     }
 
-    public static async Task<WorkflowRootTransaction> CreateIsolatedTestAsync(NpgsqlConnection connection,
+    public static Task<WorkflowRootTransaction> CreateIsolatedTestAsync(NpgsqlConnection connection,
         NpgsqlTransaction root, Guid caseId, MessageContext messages, FairAsyncReaderWriterAdmissionGate admission,
         CancellationToken ct = default)
+        => CreateTestCoreAsync(connection, root, caseId, messages, admission, null, ct);
+
+    public static Task<WorkflowRootTransaction> CreateDisposableTestAsync(NpgsqlConnection connection,
+        NpgsqlTransaction root, Guid caseId, MessageContext messages, FairAsyncReaderWriterAdmissionGate admission,
+        DisposableTestBinding profile, CancellationToken ct = default)
+        => CreateTestCoreAsync(connection, root, caseId, messages, admission, profile, ct);
+
+    private static async Task<WorkflowRootTransaction> CreateTestCoreAsync(NpgsqlConnection connection,
+        NpgsqlTransaction root, Guid caseId, MessageContext messages, FairAsyncReaderWriterAdmissionGate admission,
+        DisposableTestBinding? disposable, CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(connection); ArgumentNullException.ThrowIfNull(root);
         ArgumentNullException.ThrowIfNull(messages); ArgumentNullException.ThrowIfNull(admission);
@@ -64,7 +75,9 @@ public sealed class WorkflowRootTransaction : IAsyncDisposable
             throw new InvalidOperationException("Workflow composition requires an open caller root and an unenlisted native context.");
         // Native received contexts use themselves as the default envelope transaction.
         // Accept only that self binding or null; never replace a foreign owner enlistment.
-        var workflow = WorkflowDbContext.CreateFixture(connection, caseId);
+        var workflow = disposable is { } profile
+            ? WorkflowDbContext.CreateDisposableTestFixture(connection, caseId, profile)
+            : WorkflowDbContext.CreateFixture(connection, caseId);
         AuditTransactionContext? audit = null;
         try
         {
@@ -73,9 +86,13 @@ public sealed class WorkflowRootTransaction : IAsyncDisposable
             var native = messages.Runtime.Storage as IMessageDatabase
                 ?? throw new InvalidOperationException("Native PostgreSQL message storage required.");
             var messaging = new CallerOwnedMessageStager(connection, root, native, schema);
-            var receipts = CallerOwnedReceiptStore.CreateIsolatedTestStore(connection, root, caseId);
+            var receipts = disposable is { } receiptProfile
+                ? CallerOwnedReceiptStore.CreateDisposableTestStore(connection, root, caseId, receiptProfile)
+                : CallerOwnedReceiptStore.CreateIsolatedTestStore(connection, root, caseId);
             await workflow.Database.UseTransactionAsync(root, ct);
-            audit = await AuditTransactionContext.CreateIsolatedTestAsync(connection, root, caseId, ct);
+            audit = disposable is { } auditProfile
+                ? await AuditTransactionContext.CreateDisposableIsolatedTestAsync(connection, root, caseId, auditProfile, ct)
+                : await AuditTransactionContext.CreateIsolatedTestAsync(connection, root, caseId, ct);
             var owner = new WorkflowRootTransaction(workflow, audit, messaging, receipts, messages, admission);
             await messages.EnlistInOutboxAsync(new CallerOwnedEnvelopeEnlistment(messaging,
                 async () => await owner.RollbackCoreAsync()));

@@ -31,9 +31,9 @@ public sealed partial class CurrentAuthorityHttpTests
     private IDbContextFactory<CredentialDbContext> Credentials => _host.Services.GetRequiredService<IDbContextFactory<CredentialDbContext>>();
     private Guid CredentialInstallation => _host.Services.GetRequiredService<LocalAuthenticationConfiguration>().InstallationId;
 
-    private OfflineCredentialCoordinator CredentialCoordinator() => new(CredentialInstallation, Identity,
+    private OfflineCredentialCoordinator CredentialCoordinator() => _host.Selection.CredentialCoordinator(CredentialInstallation, Identity,
         new TenantOrganizationAuthority(Tenants), _host.Services.GetRequiredService<ITargetAuthorityReader>(),
-        new AuditAppendStore(new PooledDbContextFactory<AuditDbContext>(AuditDbContextFactory.CreateTestOptions(TestDatabaseConfiguration.TryGetConnectionString()!))),
+        _host.Selection.AuditStore(new PooledDbContextFactory<AuditDbContext>(_host.Selection.Audit())),
         _host.Services.GetRequiredService<FairAsyncReaderWriterAdmissionGate>(), _host.Authentication);
     private async Task<CredentialOperationResult> ApplyCredential(CredentialManifest m)
     {

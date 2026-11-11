@@ -20,7 +20,7 @@ public sealed class WorkflowPostgreSqlFixtureTests
         var locator = Environment.GetEnvironmentVariable("KORDRA_WFL_FIXTURE_CONNECTION_STRING")
             ?? throw new InvalidOperationException("Approved private WFL fixture locator required.");
         await using var connection = new NpgsqlConnection(locator);
-        await using var model = WorkflowDbContext.CreateFixture(connection, Guid.Parse(CaseId));
+        await using var model = WorkflowModelFixture.CreateFixture(connection, Guid.Parse(CaseId));
         var ddl = model.Database.GenerateCreateScript();
         var expectedHash = Environment.GetEnvironmentVariable("KORDRA_WFL_FIXTURE_SQL_SHA256");
         Assert.Equal(expectedHash, Convert.ToHexStringLower(SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(ddl))));
@@ -74,8 +74,8 @@ public sealed class WorkflowPostgreSqlFixtureTests
             });
             // Both real roots read version 1. First commits, second must lose the database CAS, with no second history row.
             await using var second = new NpgsqlConnection(locator); await second.OpenAsync(ct);
-            await using var a = WorkflowDbContext.CreateFixture(connection, Guid.Parse(CaseId));
-            await using var b = WorkflowDbContext.CreateFixture(second, Guid.Parse(CaseId));
+            await using var a = WorkflowModelFixture.CreateFixture(connection, Guid.Parse(CaseId));
+            await using var b = WorkflowModelFixture.CreateFixture(second, Guid.Parse(CaseId));
             await using var txA = await connection.BeginTransactionAsync(ct); await a.Database.UseTransactionAsync(txA, ct);
             await using var txB = await second.BeginTransactionAsync(ct); await b.Database.UseTransactionAsync(txB, ct);
             var rowA = await a.Set<WorkflowInstanceRecord>().SingleAsync(ct);
@@ -123,7 +123,7 @@ public sealed class WorkflowPostgreSqlFixtureTests
             Assert.Equal(1L, await Count(locator, "request_receipts", ct));
             // Cancellation wins while the claim context still tracks an earlier Running row.
             var cancelled = await CreateRunningWorkflow();
-            await using (var claimContext = WorkflowDbContext.CreateFixture(connection, Guid.Parse(CaseId)))
+            await using (var claimContext = WorkflowModelFixture.CreateFixture(connection, Guid.Parse(CaseId)))
             await using (var claimRoot = await connection.BeginTransactionAsync(ct))
             {
                 await claimContext.Database.UseTransactionAsync(claimRoot, ct);
@@ -144,7 +144,7 @@ public sealed class WorkflowPostgreSqlFixtureTests
             }
             // Claim wins: it must lock the instance before the step so cancellation cannot overtake its root.
             var claimed = await CreateRunningWorkflow();
-            await using (var claimContext = WorkflowDbContext.CreateFixture(connection, Guid.Parse(CaseId)))
+            await using (var claimContext = WorkflowModelFixture.CreateFixture(connection, Guid.Parse(CaseId)))
             await using (var claimRoot = await connection.BeginTransactionAsync(ct))
             {
                 await claimContext.Database.UseTransactionAsync(claimRoot, ct);
@@ -210,7 +210,7 @@ public sealed class WorkflowPostgreSqlFixtureTests
 
     private static async Task WithRoot(NpgsqlConnection connection, Func<WorkflowDbContext, NpgsqlTransaction, Task> body)
     {
-        await using var context = WorkflowDbContext.CreateFixture(connection, Guid.Parse(CaseId));
+        await using var context = WorkflowModelFixture.CreateFixture(connection, Guid.Parse(CaseId));
         await using var root = await connection.BeginTransactionAsync(); await context.Database.UseTransactionAsync(root);
         await body(context, root);
     }

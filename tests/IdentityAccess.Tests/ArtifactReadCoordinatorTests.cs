@@ -1,3 +1,4 @@
+using Kordra.Testing;
 using System.Data.Common;
 using System.Text.Json;
 using Kordra.Api;
@@ -18,6 +19,7 @@ namespace Kordra.Modules.IdentityAccess.Tests;
 [Collection("IdentityAccess PostgreSQL and local HTTPS")]
 public sealed class ArtifactReadCoordinatorTests : IAsyncLifetime
 {
+    private ProductPostgreSqlFixtureSelection _selection = null!;
     private readonly ArtifactAuthorityTestFacts _facts = new();
     private readonly FairAsyncReaderWriterAdmissionGate _gate = new();
     private PooledDbContextFactory<KordraIdentityDbContext> _iam = null!;
@@ -28,9 +30,9 @@ public sealed class ArtifactReadCoordinatorTests : IAsyncLifetime
     {
         _locator = Environment.GetEnvironmentVariable("KORDRA_IAM_TEST_CONNECTION_STRING")
             ?? throw new InvalidOperationException("Private isolated kordra_test locator required.");
-        _art = new(ArtifactDbContextFactory.CreateTestOptions(_locator)); _aud = new(AuditDbContextFactory.CreateTestOptions(_locator));
-        _iam = new(new DbContextOptionsBuilder<KordraIdentityDbContext>().UseNpgsql(_locator,
-            p => p.MigrationsHistoryTable(KordraIdentityDbContext.MigrationHistoryTableName, "app")).Options);
+        _selection = new(_locator);
+        _art = new(_selection.Artifact()); _aud = new(_selection.Audit());
+        _iam = new(_selection.Identity());
         await using (var db = await _iam.CreateDbContextAsync()) await db.Database.MigrateAsync();
         await using (var db = await _art.CreateDbContextAsync()) await db.Database.MigrateAsync();
         await using (var db = await _aud.CreateDbContextAsync()) await db.Database.MigrateAsync();
@@ -38,10 +40,10 @@ public sealed class ArtifactReadCoordinatorTests : IAsyncLifetime
     public Task DisposeAsync() => Task.CompletedTask; // Own committed synthetic append-only receipt/AUD evidence is retained.
     private ArtifactReadCoordinator Coordinator(IArtifactAuditTransactionFactory? audit = null)
     {
-        var sec = new PooledDbContextFactory<CredentialDbContext>(CredentialDbContextFactory.CreateTestOptions(_locator));
+        var sec = new PooledDbContextFactory<CredentialDbContext>(_selection.Credential());
         var resolver = new ArtifactAuthorityResolver(_facts.Installation, _facts.Reader, sec, _facts, null);
         return new(_facts.Installation, resolver, _art,
-            new(_facts.Installation, _iam, audit ?? new ArtifactAuditTransactionFactory(), _gate, _facts), _gate, _facts);
+            _selection.ArtifactTransaction(_facts.Installation, _iam, audit ?? _selection.ArtifactAudit(), _gate, _facts), _gate, _facts);
     }
     private Task<ArtifactExecutionStatus> Read(ArtifactReadCommand query, Capture capture, IArtifactAuditTransactionFactory? factory = null) =>
         Coordinator(factory).ExecuteAsync(_facts.Selection, _facts.Project.ProjectId, query, capture);
@@ -85,7 +87,7 @@ public sealed class ArtifactReadCoordinatorTests : IAsyncLifetime
             OCIImageDigest.Parse("sha256:" + new string('a', 64)), ArtifactPlatform.Create("linux", "amd64", null));
         var pending = ArtifactRegistrationReceipt.Pending(Guid.NewGuid(), _facts.Installation, _facts.Selection.BootGeneration,
             Guid.NewGuid(), _facts.Subject.PrincipalId, new(identity, null), "synthetic-read-replay-key", _facts.Now);
-        var transaction = new ArtifactOwnerTransaction(_facts.Installation, _iam, new ArtifactAuditTransactionFactory(), _gate, _facts);
+        var transaction = _selection.ArtifactTransaction(_facts.Installation, _iam, _selection.ArtifactAudit(), _gate, _facts);
         await using (var held = await _gate.AcquireWriteAsync())
         {
             var seeded = await transaction.RunAsync(_ => new(1, Guid.NewGuid(), pending.InvocationId, AuditIntentStage.Use,
@@ -122,7 +124,7 @@ public sealed class ArtifactReadCoordinatorTests : IAsyncLifetime
     public async Task Authority_change_or_earlier_expiry_before_commit_withholds_body(string fault)
     {
         _facts.SetAction("artifact.read"); var capture = new Capture();
-        var hook = new Hooks(stage =>
+        var hook = new Hooks(_selection, stage =>
         {
             if (fault == "u-revision" && stage == 1 || fault == "d-revision" && stage == 2)
                 _facts.Grant = _facts.Grant with { AssignmentRevision = _facts.Grant.AssignmentRevision + 1 };
@@ -138,7 +140,7 @@ public sealed class ArtifactReadCoordinatorTests : IAsyncLifetime
     [Fact]
     public async Task Unknown_D_commit_aborts_and_closes_without_any_body()
     {
-        _facts.SetAction("artifact.read"); var capture = new Capture(); var hook = new Hooks(_ => { }, loseSecondAck: true);
+        _facts.SetAction("artifact.read"); var capture = new Capture(); var hook = new Hooks(_selection, _ => { }, loseSecondAck: true);
         Assert.Equal(ArtifactExecutionStatus.Unknown, await Read(new(ArtifactQueryKind.List, Guid.NewGuid()), capture, hook));
         Assert.True(capture.Aborted); Assert.Null(capture.Bytes);
         await Assert.ThrowsAsync<InvalidOperationException>(async () => { await using var held = await _gate.AcquireReadAsync(); });
@@ -186,11 +188,11 @@ public sealed class ArtifactReadCoordinatorTests : IAsyncLifetime
         }
         public void Abort() => Aborted = true;
     }
-    private sealed class Hooks(Action<int> staged, bool loseSecondAck = false) : IArtifactAuditTransactionFactory
+    private sealed class Hooks(ProductPostgreSqlFixtureSelection selection, Action<int> staged, bool loseSecondAck = false) : IArtifactAuditTransactionFactory
     {
         private int _count;
         public async ValueTask<IArtifactAuditTransaction> EnlistAsync(DbConnection c, DbTransaction t, CancellationToken ct) =>
-            new Enlisted(await new ArtifactAuditTransactionFactory().EnlistAsync(c, t, ct), staged, Interlocked.Increment(ref _count), loseSecondAck);
+            new Enlisted(await selection.ArtifactAudit().EnlistAsync(c, t, ct), staged, Interlocked.Increment(ref _count), loseSecondAck);
         private sealed class Enlisted(IArtifactAuditTransaction inner, Action<int> hook, int count, bool lose) : IArtifactAuditTransaction
         {
             public bool CommitAttempted => inner.CommitAttempted;

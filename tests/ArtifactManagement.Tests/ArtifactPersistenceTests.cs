@@ -1,3 +1,4 @@
+using Kordra.Testing;
 using Kordra.ArtifactManagement.Domain;
 using Kordra.Modules.ArtifactManagement;
 using Kordra.Modules.ArtifactManagement.Infrastructure;
@@ -14,14 +15,16 @@ public sealed class ArtifactPersistenceTests : IAsyncLifetime
     private readonly Guid _installation = Guid.NewGuid(), _tenant = Guid.NewGuid(), _project = Guid.NewGuid(),
         _registry = Guid.NewGuid(), _principal = Guid.NewGuid();
     private ArtifactDbContext _db = null!;
+    private ProductPostgreSqlFixtureSelection _selection = null!;
     private IDbContextTransaction? _transaction;
-    private ArtifactRegistrationStore Store => new(_db);
+    private ArtifactRegistrationStore Store => _selection.ArtifactStore(_db);
 
     public async Task InitializeAsync()
     {
         var locator = Environment.GetEnvironmentVariable("KORDRA_IAM_TEST_CONNECTION_STRING")
             ?? throw new InvalidOperationException("Private isolated kordra_test locator required.");
-        _db = new(ArtifactDbContextFactory.CreateTestOptions(locator));
+        _selection = new(locator);
+        _db = new(_selection.Artifact());
         await _db.Database.MigrateAsync();
         _transaction = await _db.Database.BeginTransactionAsync();
     }
@@ -249,7 +252,7 @@ public sealed class ArtifactPersistenceTests : IAsyncLifetime
     {
         var pending = Pending(); await Register(pending);
         var locator = Environment.GetEnvironmentVariable("KORDRA_IAM_TEST_CONNECTION_STRING")!;
-        await using var outside = new ArtifactDbContext(ArtifactDbContextFactory.CreateTestOptions(locator));
+        await using var outside = new ArtifactDbContext(new ProductPostgreSqlFixtureSelection(locator).Artifact());
         Assert.False(await outside.Registrations.AnyAsync(r => r.InstallationId == _installation));
         await _transaction!.RollbackAsync();
         Assert.False(await outside.Registrations.AnyAsync(r => r.InstallationId == _installation));

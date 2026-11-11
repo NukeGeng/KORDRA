@@ -1,3 +1,4 @@
+using DisposableTestBinding = (System.Guid RunId, string SourceSha256, string OperationManifestSha256, System.DateTimeOffset ExpiresAtUtc);
 using Kordra.BuildingBlocks.Security;
 using Kordra.Modules.ArtifactManagement.Infrastructure;
 using Kordra.Modules.ArtifactManagement.Infrastructure.Registry;
@@ -24,14 +25,36 @@ public static class ArtifactRuntimeServices
 
     /// <summary>Caller supplies guarded owner factories and the same installation/session/admission services.</summary>
     public static void AddArtifactRuntimeOwnerServices(this IServiceCollection services, RegistryTrustConfiguration? configuration)
+        => AddOwnerServices(services, configuration, null);
+
+    public static void AddDisposableTestArtifactOwnerServices(this IServiceCollection services,
+        RegistryTrustConfiguration? configuration, DisposableTestBinding profile)
+        => AddOwnerServices(services, configuration, profile);
+
+    private static void AddOwnerServices(IServiceCollection services, RegistryTrustConfiguration? configuration,
+        DisposableTestBinding? disposableTest)
     {
         services.AddArtifactProjectAuthorityOwnerServices();
-        services.AddSingleton<IArtifactAuditTransactionFactory, ArtifactAuditTransactionFactory>();
-        services.AddSingleton<ArtifactWriteReadiness>();
+        services.AddSingleton<IArtifactAuditTransactionFactory>(_ => disposableTest is { } profile
+            ? ArtifactAuditTransactionFactory.CreateDisposableTestFactory(profile) : new ArtifactAuditTransactionFactory());
+        services.AddSingleton(s => disposableTest is { } profile
+            ? ArtifactWriteReadiness.CreateDisposableTestReadiness(s.GetRequiredService<IDbContextFactory<ArtifactDbContext>>(),
+                s.GetRequiredService<IDbContextFactory<CredentialDbContext>>(), profile)
+            : new ArtifactWriteReadiness(s.GetRequiredService<IDbContextFactory<ArtifactDbContext>>(),
+                s.GetRequiredService<IDbContextFactory<CredentialDbContext>>()));
         services.AddSingleton(s => new ArtifactAuthorityResolver(Installation(s), s.GetRequiredService<ArtifactProjectAuthorityReader>(),
             s.GetRequiredService<IDbContextFactory<CredentialDbContext>>(), s.GetRequiredService<IAuthorityClock>(), configuration));
-        services.AddSingleton(s => new ArtifactOwnerTransaction(Installation(s), s.GetRequiredService<IDbContextFactory<KordraIdentityDbContext>>(),
-            s.GetRequiredService<IArtifactAuditTransactionFactory>(), s.GetRequiredService<FairAsyncReaderWriterAdmissionGate>(), s.GetRequiredService<IAuthorityClock>()));
+        services.AddSingleton(s =>
+        {
+            var identity = s.GetRequiredService<IDbContextFactory<KordraIdentityDbContext>>();
+            var audits = s.GetRequiredService<IArtifactAuditTransactionFactory>();
+            var gate = s.GetRequiredService<FairAsyncReaderWriterAdmissionGate>();
+            var clock = s.GetRequiredService<IAuthorityClock>();
+            var installation = Installation(s);
+            return disposableTest is { } profile
+                ? ArtifactOwnerTransaction.CreateDisposableTestTransaction(installation, identity, audits, gate, clock, profile)
+                : new ArtifactOwnerTransaction(installation, identity, audits, gate, clock);
+        });
         services.AddSingleton(s => new ArtifactReadCoordinator(Installation(s), s.GetRequiredService<ArtifactAuthorityResolver>(),
             s.GetRequiredService<IDbContextFactory<ArtifactDbContext>>(), s.GetRequiredService<ArtifactOwnerTransaction>(),
             s.GetRequiredService<FairAsyncReaderWriterAdmissionGate>(), s.GetRequiredService<IAuthorityClock>()));

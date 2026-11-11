@@ -69,7 +69,7 @@ public sealed class RoleDefinitionTests : IAsyncLifetime
     public async Task Exact_revision_replay_conflict_update_and_retirement_never_follow_latest_implicitly()
     {
         var gate = new FairAsyncReaderWriterAdmissionGate();
-        var store = new RoleDefinitionStore(_contexts, gate, new IdentityAccessAuditTransactionAdapter());
+        var store = new RoleDefinitionStore(_contexts, gate, _host.Selection.IdentityAudit());
         using var offline = new TestOfflineLease();
         var manifest = Guid.NewGuid();
         var first = await store.PublishOfflineAsync(offline, manifest, Guid.Empty, 0, "Viewer", [new("org.read", "organization")]);
@@ -90,7 +90,7 @@ public sealed class RoleDefinitionTests : IAsyncLifetime
     [Fact]
     public async Task Missing_offline_lease_or_unknown_permission_cannot_publish()
     {
-        var store = new RoleDefinitionStore(_contexts, new(), new IdentityAccessAuditTransactionAdapter());
+        var store = new RoleDefinitionStore(_contexts, new(), _host.Selection.IdentityAudit());
         using var offline = new TestOfflineLease();
         Assert.Equal("invalid", (await store.PublishOfflineAsync(offline, Guid.NewGuid(), Guid.Empty, 0, "Admin", [new("platform.system.manage", "organization")])).Status);
         offline.Dispose();

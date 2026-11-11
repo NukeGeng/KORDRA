@@ -1,3 +1,4 @@
+using DisposableTestBinding = (System.Guid RunId, string SourceSha256, string OperationManifestSha256, System.DateTimeOffset ExpiresAtUtc);
 using System.Data.Common;
 using System.Security.Cryptography;
 using System.Text;
@@ -22,6 +23,19 @@ public sealed class CatalogMutationCoordinator(IDbContextFactory<ProjectDbContex
     ICatalogAuthority authority, IEnvironmentPolicyReader policies, FairAsyncReaderWriterAdmissionGate gate,
     IAuthorityClock clock, ICatalogAuditTransactionFactory audits, ICatalogClockFloorWriter? clockFloor = null)
 {
+    private readonly DisposableTestBinding? disposableTest;
+    private CatalogMutationCoordinator(IDbContextFactory<ProjectDbContext> contexts,
+        ICatalogAuthority authority, IEnvironmentPolicyReader policies, FairAsyncReaderWriterAdmissionGate gate,
+        IAuthorityClock clock, ICatalogAuditTransactionFactory audits, ICatalogClockFloorWriter? clockFloor,
+        DisposableTestBinding profile) : this(contexts, authority, policies, gate, clock, audits, clockFloor)
+        => disposableTest = profile;
+
+    public static CatalogMutationCoordinator CreateDisposableTestCoordinator(IDbContextFactory<ProjectDbContext> contexts,
+        ICatalogAuthority authority, IEnvironmentPolicyReader policies, FairAsyncReaderWriterAdmissionGate gate,
+        IAuthorityClock clock, ICatalogAuditTransactionFactory audits, DisposableTestBinding profile,
+        ICatalogClockFloorWriter? clockFloor = null)
+        => new(contexts, authority, policies, gate, clock, audits, clockFloor, profile);
+
     private sealed record Prepared(string Status, object? Resource = null, Guid Id = default, long Revision = 0, bool Replay = false, Guid IntentId = default);
 
     public async Task<EnvironmentCreationV2Result> ExecuteEnvironmentV2Async(EnvironmentCreateV2Command command, CancellationToken ct = default)
@@ -75,8 +89,12 @@ public sealed class CatalogMutationCoordinator(IDbContextFactory<ProjectDbContex
         if (principal is null || principal == Guid.Empty) return new("denied");
         var contentHash = Hash(JsonSerializer.Serialize(new { principal, commandType = command.GetType().Name, command }));
         await using var prjContext = await contexts.CreateDbContextAsync(ct);
+        if (disposableTest is { } target)
+            ProjectDbContextFactory.ValidateDisposableTestTarget(prjContext.Database.GetDbConnection().ConnectionString, target);
         await using var transaction = await prjContext.Database.BeginTransactionAsync(ct);
-        await using var invContext = new InventoryDbContext(InventoryDbContextFactory.CreateEnlistedOptions(prjContext.Database.GetDbConnection()));
+        await using var invContext = new InventoryDbContext(disposableTest is { } ownerProfile
+            ? InventoryDbContextFactory.CreateDisposableEnlistedTestOptions(prjContext.Database.GetDbConnection(), ownerProfile)
+            : InventoryDbContextFactory.CreateEnlistedOptions(prjContext.Database.GetDbConnection()));
         await invContext.Database.UseTransactionAsync(transaction.GetDbTransaction(), ct);
         var projects = new ProjectCatalogStore(prjContext, policies);
         var inventory = new TargetRegistryStore(invContext, projects);
@@ -147,8 +165,14 @@ public interface ICatalogAuditTransaction : IAsyncDisposable
 
 public sealed class CatalogAuditTransactionFactory : ICatalogAuditTransactionFactory
 {
+    private readonly DisposableTestBinding? disposableTest;
+    public CatalogAuditTransactionFactory() { }
+    private CatalogAuditTransactionFactory(DisposableTestBinding profile) => disposableTest = profile;
+    public static CatalogAuditTransactionFactory CreateDisposableTestFactory(DisposableTestBinding profile) => new(profile);
     public async ValueTask<ICatalogAuditTransaction> EnlistAsync(DbConnection connection, DbTransaction transaction, CancellationToken ct = default) =>
-        new Enlisted(await AuditTransactionContext.CreateAsync(connection, transaction, ct));
+        new Enlisted(disposableTest is { } profile
+            ? await AuditTransactionContext.CreateDisposableTestAsync(connection, transaction, profile, ct)
+            : await AuditTransactionContext.CreateAsync(connection, transaction, ct));
     private sealed class Enlisted(AuditTransactionContext audit) : ICatalogAuditTransaction
     {
         public async Task<AuditAppendOutcome> CommitAsync(AuditIntent intent, Func<CancellationToken, Task<bool>> saveOwners, CancellationToken ct = default)

@@ -36,7 +36,7 @@ public sealed class WorkflowRootDatabaseTests
             ?? throw new InvalidOperationException("Approved private workflow transaction locator required.");
         var caseId = Guid.ParseExact(WorkflowTransactionSchemaTests.ProposedCases[slot], "D"); var schema = "t12_" + caseId.ToString("N");
         var scripts = ReadApprovedScripts(caseId);
-        await using var setup = new NpgsqlConnection(locator); _ = WorkflowFixtureTarget.Validate(setup, caseId);
+        await using var setup = new NpgsqlConnection(locator); IsolatedWorkflowFixture.Validate(setup, caseId);
         await setup.OpenAsync(ct); Assert.Equal(0L, await Scalar(setup, "SELECT count(*) FROM pg_namespace WHERE nspname=@schema", ct, ("schema", schema)));
         var created = false; var state = new WorkflowFixtureState(caseId, locator);
         using var host = WorkflowTransactionSchemaTests.NativeBuilder(locator, schema, state, slot == 2).Build();
@@ -108,15 +108,15 @@ public sealed class WorkflowRootDatabaseTests
                 await using var connection = state.NewOwnedConnection(); await connection.OpenAsync(ct);
                 await using (var transaction = await connection.BeginTransactionAsync(ct))
                 {
-                    await using var first = await WorkflowRootTransaction.CreateIsolatedTestAsync(connection, transaction,
+                    await using var first = await IsolatedWorkflowFixture.CreateRoot(connection, transaction,
                         caseId, new MessageContext(runtime), state.Gate, ct);
-                    await Assert.ThrowsAsync<InvalidOperationException>(() => WorkflowRootTransaction.CreateIsolatedTestAsync(
+                    await Assert.ThrowsAsync<InvalidOperationException>(() => IsolatedWorkflowFixture.CreateRoot(
                         connection, transaction, caseId, new MessageContext(runtime), state.Gate, ct));
                     await first.RollbackAsync();
                 }
                 // A later actual PostgreSQL transaction remains eligible even if Npgsql recycles its wrapper.
                 await using var next = await connection.BeginTransactionAsync(ct);
-                await using var successor = await WorkflowRootTransaction.CreateIsolatedTestAsync(connection, next,
+                await using var successor = await IsolatedWorkflowFixture.CreateRoot(connection, next,
                     caseId, new MessageContext(runtime), state.Gate, ct);
                 await successor.RollbackAsync();
             }
@@ -126,7 +126,7 @@ public sealed class WorkflowRootDatabaseTests
                 var invocation = NewInvocation(caseId);
                 await using var connection = state.NewOwnedConnection(); await connection.OpenAsync(ct);
                 await using var transaction = await connection.BeginTransactionAsync(ct);
-                await using var root = await WorkflowRootTransaction.CreateIsolatedTestAsync(connection, transaction,
+                await using var root = await IsolatedWorkflowFixture.CreateRoot(connection, transaction,
                     caseId, new MessageContext(runtime), state.Gate, ct);
                 await root.StageCreationAsync(invocation.Specification, ct);
                 await root.StageAuditAsync(invocation.Audit, ct);
@@ -163,7 +163,7 @@ public sealed class WorkflowRootDatabaseTests
                 await using var connection = state.NewOwnedConnection(); await connection.OpenAsync(ct);
                 await using var transaction = await connection.BeginTransactionAsync(ct);
                 var messages = new MessageContext(runtime);
-                await using var root = await WorkflowRootTransaction.CreateIsolatedTestAsync(connection, transaction, caseId, messages, state.Gate, ct);
+                await using var root = await IsolatedWorkflowFixture.CreateRoot(connection, transaction, caseId, messages, state.Gate, ct);
                 if (boundary == 0)
                 {
                     using var cancelled = new CancellationTokenSource(); cancelled.Cancel();
@@ -214,7 +214,7 @@ public sealed class WorkflowRootDatabaseTests
                 {
                     await using var seedConnection = state.NewOwnedConnection(); await seedConnection.OpenAsync(ct);
                     await using var seedRoot = await seedConnection.BeginTransactionAsync(ct);
-                    var receipts = CallerOwnedReceiptStore.CreateIsolatedTestStore(seedConnection, seedRoot, caseId);
+                    var receipts = IsolatedWorkflowFixture.Receipt(seedConnection, seedRoot, caseId);
                     Assert.Equal(ReceiptStageDisposition.Staged, (await receipts.StagePublicationAsync(invocation.Output, DateTimeOffset.UtcNow, ct)).Disposition);
                     await seedRoot.CommitAsync(ct);
                 }
@@ -222,7 +222,7 @@ public sealed class WorkflowRootDatabaseTests
                 var predecessor = connection.ProcessID;
                 await using var transaction = await connection.BeginTransactionAsync(ct);
                 var messages = new MessageContext(runtime);
-                await using var root = await WorkflowRootTransaction.CreateIsolatedTestAsync(connection, transaction, caseId, messages, state.Gate, ct);
+                await using var root = await IsolatedWorkflowFixture.CreateRoot(connection, transaction, caseId, messages, state.Gate, ct);
                 await root.StageCreationAsync(spec, ct); await root.StageAuditAsync(invocation.Audit, ct);
                 await root.StageClockFloorAsync(DateTimeOffset.UtcNow, ct);
                 if (orphan)
@@ -252,7 +252,7 @@ public sealed class WorkflowRootDatabaseTests
                 {
                     await using var competing = state.NewOwnedConnection(); await competing.OpenAsync(ct);
                     await using var competingRoot = await competing.BeginTransactionAsync(ct);
-                    await using var other = await AuditTransactionContext.CreateIsolatedTestAsync(competing, competingRoot, caseId, ct);
+                    await using var other = await IsolatedWorkflowFixture.Audit(competing, competingRoot, caseId, ct);
                     Assert.Equal(AuditTransactionStageStatus.Staged, (await other.StageAsync(invocation.Audit, ct)).Status);
                     Assert.Equal(AuditAppendStatus.Durable, (await other.CommitAsync(ct)).Status);
                     Assert.Equal(WorkflowCommitDisposition.NoCommitAttempt, await root.CommitAsync(ct));
@@ -281,7 +281,7 @@ public sealed class WorkflowRootDatabaseTests
                     Assert.Equal(new Observation(1, 4, 1, 1, 1, 1, 1, 0, 0, 1), await Observe(invocation, null, ct));
                     await using var reader = state.NewOwnedConnection(); await reader.OpenAsync(ct);
                     Assert.NotEqual(predecessor, reader.ProcessID);
-                    await using var wfl = WorkflowReceiptInspector.CreateIsolatedTestInspector(reader, caseId);
+                    await using var wfl = IsolatedWorkflowFixture.WorkflowInspector(reader, caseId);
                     var expected = new WorkflowReceiptExpectation(new(spec.InstallationId, spec.TenantId, spec.InstanceId),
                         spec.RequestId, spec.SpecificationHash, 1);
                     Assert.Equal(WorkflowReceiptInspectionStatus.MatchingObserved, await wfl.InspectAsync(expected, ct));
@@ -289,7 +289,7 @@ public sealed class WorkflowRootDatabaseTests
                         expected.RequestId, new string('f', 64), 1), ct));
                     Assert.Equal(WorkflowReceiptInspectionStatus.StillUnknown, await wfl.InspectAsync(new(
                         new(spec.InstallationId, Guid.NewGuid(), spec.InstanceId), spec.RequestId, spec.SpecificationHash, 1), ct));
-                    var msg = MessageReceiptInspector.CreateIsolatedTestInspector(reader, caseId);
+                    var msg = IsolatedWorkflowFixture.Inspector(reader, caseId);
                     var publication = await msg.InspectPublicationAsync(invocation.Output.Binding.Identity, invocation.Output.PayloadHash, ct);
                     Assert.Equal(ReceiptInspectionStatus.MatchingObserved, publication.Status);
                     Assert.Equal(invocation.Output.Delivery.MessageId, publication.OriginalMessageId);
@@ -368,7 +368,7 @@ public sealed class WorkflowRootDatabaseTests
 
     private sealed class FixtureAuditReaderFactory(NpgsqlConnection reader, Guid caseId) : IDbContextFactory<AuditDbContext>
     {
-        public AuditDbContext CreateDbContext() => AuditDbContextFactory.CreateIsolatedTestContext(reader, caseId);
+        public AuditDbContext CreateDbContext() => IsolatedWorkflowFixture.AuditContext(reader, caseId);
     }
 
     private sealed record Observation(long Instances, long Steps, long Requests, long Audit, long Publications, long Matching, long Floor, long Logical, long Handled, long Outgoing);

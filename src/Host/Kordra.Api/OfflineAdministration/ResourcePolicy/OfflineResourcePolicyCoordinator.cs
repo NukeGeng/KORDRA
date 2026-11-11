@@ -1,3 +1,4 @@
+using DisposableTestBinding = (System.Guid RunId, string SourceSha256, string OperationManifestSha256, System.DateTimeOffset ExpiresAtUtc);
 using System.Security.Cryptography;
 using System.Text.Json;
 using Kordra.BuildingBlocks.Security;
@@ -23,30 +24,42 @@ public sealed class OfflineResourcePolicyCoordinator(Guid installationId, IDbCon
     IPolicyTenantAuthority tenants, IAuditAppendPort auditLookup, FairAsyncReaderWriterAdmissionGate gate, IAuthorityClock clock,
     IOfflinePolicyAuditTransactionFactory? auditTransactions = null)
 {
+    private readonly DisposableTestBinding? disposableTest;
+    private OfflineResourcePolicyCoordinator(Guid installationId, IDbContextFactory<KordraIdentityDbContext> contexts,
+    IPolicyTenantAuthority tenants, IAuditAppendPort auditLookup, FairAsyncReaderWriterAdmissionGate gate, IAuthorityClock clock,
+    IOfflinePolicyAuditTransactionFactory? auditTransactions, DisposableTestBinding profile)
+        : this(installationId, contexts, tenants, auditLookup, gate, clock, auditTransactions) => disposableTest = profile;
+    public static OfflineResourcePolicyCoordinator CreateDisposableTestCoordinator(Guid installationId, IDbContextFactory<KordraIdentityDbContext> contexts,
+    IPolicyTenantAuthority tenants, IAuditAppendPort auditLookup, FairAsyncReaderWriterAdmissionGate gate, IAuthorityClock clock,
+    IOfflinePolicyAuditTransactionFactory? auditTransactions, DisposableTestBinding profile)
+        => new(installationId, contexts, tenants, auditLookup, gate, clock, auditTransactions, profile);
+
     public async Task<ResourcePolicyImpact?> InspectAsync(IOfflineProvisioningLease custody, string json, CancellationToken ct = default)
     {
-        custody.RequireHeld(); var manifest = ResourcePolicyManifest.Parse(json);
+        custody.RequireHeld(); var manifest = ParseManifest(json);
         if (manifest is null || manifest.InstallationId != installationId) return null;
         await using var admission = await gate.AcquireReadAsync(ct);
         await using var db = await contexts.CreateDbContextAsync(ct);
         if (!MatchesDatabase(db, manifest)) return null;
         await db.Database.OpenConnectionAsync(ct);
-        await using var prj = new ProjectDbContext(ProjectDbContextFactory.CreateOfflineEnlistedOptions(db.Database.GetDbConnection()));
+        await using var prj = new ProjectDbContext(disposableTest is { } ownerProfile
+            ? ProjectDbContextFactory.CreateDisposableEnlistedTestOptions(db.Database.GetDbConnection(), ownerProfile)
+            : ProjectDbContextFactory.CreateOfflineEnlistedOptions(db.Database.GetDbConnection()));
         var store = new PolicyBindingStore(prj);
         if (!await tenants.IsActiveTenantUnderAdmissionAsync(manifest.TenantId, ct) ||
             await store.ReadOwnershipUnderAdmissionAsync(manifest.TenantId, manifest.ProjectId, null, ct) is null) return null;
-        if (manifest.PolicyId is not { } id) return new(manifest.Hash(), 0, Array.Empty<Guid>(), false);
+        if (manifest.PolicyId is not { } id) return new(ManifestHash(manifest), 0, Array.Empty<Guid>(), false);
         var impact = await store.ReadPolicyImpactUnderAdmissionAsync(manifest.TenantId, manifest.ProjectId, id, ct);
         custody.RequireHeld();
-        return new(manifest.Hash(), impact.Count, impact.BindingIds, impact.Count > impact.BindingIds.Count);
+        return new(ManifestHash(manifest), impact.Count, impact.BindingIds, impact.Count > impact.BindingIds.Count);
     }
 
     public async Task<ResourcePolicyOperationResult> ExecuteAsync(IOfflineProvisioningLease custody, string json,
         string approvedManifestHash, CancellationToken ct = default)
     {
-        custody.RequireHeld(); var manifest = ResourcePolicyManifest.Parse(json);
+        custody.RequireHeld(); var manifest = ParseManifest(json);
         if (installationId == Guid.Empty || manifest is null || manifest.InstallationId != installationId) return new("invalid");
-        var hash = manifest.Hash();
+        var hash = ManifestHash(manifest);
         if (hash != approvedManifestHash) return new("denied");
         using var budget = CancellationTokenSource.CreateLinkedTokenSource(ct); budget.CancelAfter(TimeSpan.FromSeconds(10)); ct = budget.Token;
         await using var admission = await gate.AcquireWriteAsync(ct);
@@ -72,7 +85,9 @@ public sealed class OfflineResourcePolicyCoordinator(Guid installationId, IDbCon
             }
             if (!await tenants.IsActiveTenantUnderAdmissionAsync(manifest.TenantId, ct)) return new("denied");
             await using var transaction = await db.Database.BeginTransactionAsync(ct);
-            await using var projectDb = new ProjectDbContext(ProjectDbContextFactory.CreateOfflineEnlistedOptions(db.Database.GetDbConnection()));
+            await using var projectDb = new ProjectDbContext(disposableTest is { } ownerProfile
+            ? ProjectDbContextFactory.CreateDisposableEnlistedTestOptions(db.Database.GetDbConnection(), ownerProfile)
+            : ProjectDbContextFactory.CreateOfflineEnlistedOptions(db.Database.GetDbConnection()));
             await projectDb.Database.UseTransactionAsync(transaction.GetDbTransaction(), ct);
             var projects = new PolicyBindingStore(projectDb);
             if (await projects.ReadOwnershipUnderAdmissionAsync(manifest.TenantId, manifest.ProjectId, null, ct) is null) return new("denied");
@@ -102,7 +117,8 @@ public sealed class OfflineResourcePolicyCoordinator(Guid installationId, IDbCon
             // All preparatory owner work is reversible; failure here has not attempted a commit.
             await iam.PersistAsync(ct); await projects.PersistAsync(ct);
             await iam.StageClockFloorAsync(installationId, TrustedUtcNow(), ct);
-            await using var auditTransaction = await (auditTransactions ?? new OfflinePolicyAuditTransactionFactory())
+            await using var auditTransaction = await (auditTransactions ?? (disposableTest is { } auditProfile
+                ? OfflinePolicyAuditTransactionFactory.CreateDisposableTestFactory(auditProfile) : new OfflinePolicyAuditTransactionFactory()))
                 .EnlistAsync(db.Database.GetDbConnection(), transaction.GetDbTransaction(), new AuditLease(custody), ct);
             var staged = await auditTransaction.StageAsync(intent, ct);
             if (staged.Status != AuditTransactionStageStatus.Staged) return new("unavailable");
@@ -119,6 +135,10 @@ public sealed class OfflineResourcePolicyCoordinator(Guid installationId, IDbCon
         catch when (!commitAttempted) { return new("unavailable"); }
         catch { gate.Close(); return new("unknown"); }
     }
+    private ResourcePolicyManifest? ParseManifest(string json) => disposableTest is { } profile
+        ? ResourcePolicyManifest.ParseDisposableTest(json, profile) : ResourcePolicyManifest.Parse(json);
+    private string ManifestHash(ResourcePolicyManifest manifest) => disposableTest is { } profile
+        ? manifest.HashDisposableTest(profile) : manifest.Hash();
     private static bool PolicyReadyForCommit(ResourcePolicyPayload payload, string operation, DateTimeOffset now) =>
         payload.EffectiveFromUtc <= now &&
         (operation != "bind" || payload.Status == "active") &&
@@ -126,8 +146,15 @@ public sealed class OfflineResourcePolicyCoordinator(Guid installationId, IDbCon
 
     private DateTimeOffset TrustedUtcNow()
     { try { return clock.GetTrustedUtcNow(); } catch { gate.Close(); throw; } }
-    private static bool MatchesDatabase(KordraIdentityDbContext db, ResourcePolicyManifest manifest)
+    private bool MatchesDatabase(KordraIdentityDbContext db, ResourcePolicyManifest manifest)
     {
+        if (disposableTest is { } profile)
+        {
+            IdentityAccessDbContextFactory.ValidateDisposableTestTarget(db.Database.GetConnectionString()!, profile);
+            return manifest.IsValidDisposableTest(profile) &&
+                manifest.DatabaseIdentity.DatabaseName == "kordra_test_" + profile.RunId.ToString("N") &&
+                manifest.DatabaseIdentity.ProvisioningRole == "kordra_test";
+        }
         var parsed = new NpgsqlConnectionStringBuilder(db.Database.GetConnectionString());
         return parsed.Host == "127.0.0.1" && parsed.Port == 5432 && parsed.Database == manifest.DatabaseIdentity.DatabaseName && parsed.Username == manifest.DatabaseIdentity.ProvisioningRole;
     }

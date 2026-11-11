@@ -12,6 +12,31 @@ public sealed class ResourcePolicyManifestTests
         "create", null, 0, ResourcePolicyRuleTests.Payload(), [new(null, "environment", Guid.Parse("55555555-5555-5555-5555-555555555555"), 0)]);
 
     [Fact]
+    public void DisposableManifestKeepsExactTargetInCanonicalHashAndDoesNotOptInDefaultParser()
+    {
+        var run = Guid.NewGuid();
+        var profile = (run, new string('a', 64), new string('b', 64), DateTimeOffset.UtcNow.AddMinutes(10));
+        var selected = Example() with { DatabaseIdentity = new("kordra_test_" + run.ToString("N"), "kordra_test") };
+        Assert.False(selected.IsValid());
+        Assert.Throws<InvalidDataException>(() => selected.CanonicalBytes());
+        var bytes = selected.CanonicalDisposableTestBytes(profile);
+        var json = Encoding.UTF8.GetString(bytes);
+        Assert.Null(ResourcePolicyManifest.Parse(json));
+        var parsed = ResourcePolicyManifest.ParseDisposableTest(json, profile);
+        Assert.NotNull(parsed);
+        Assert.Equal(bytes, parsed.CanonicalDisposableTestBytes(profile));
+        Assert.Equal(selected.HashDisposableTest(profile), parsed.HashDisposableTest(profile));
+        Assert.Contains(selected.DatabaseIdentity.DatabaseName, json, StringComparison.Ordinal);
+        Assert.Null(ResourcePolicyManifest.ParseDisposableTest(json.Replace(selected.DatabaseIdentity.DatabaseName, "kordra_test"), profile));
+        Assert.Null(ResourcePolicyManifest.ParseDisposableTest(json.Replace("\"provisioningRole\":\"kordra_test\"", "\"provisioningRole\":\"postgres\""), profile));
+        Assert.Null(ResourcePolicyManifest.ParseDisposableTest(json, (Guid.NewGuid(), profile.Item2, profile.Item3, profile.Item4)));
+        Assert.Null(ResourcePolicyManifest.ParseDisposableTest(json, (run, profile.Item2, profile.Item3, DateTimeOffset.UtcNow.AddSeconds(-1))));
+        Assert.Null(ResourcePolicyManifest.ParseDisposableTest(Encoding.UTF8.GetString(Example().CanonicalBytes()), profile));
+        var changed = selected with { TenantId = Guid.NewGuid() };
+        Assert.NotEqual(selected.HashDisposableTest(profile), changed.HashDisposableTest(profile));
+    }
+
+    [Fact]
     public void Canonical_manifest_round_trip_binds_all_approved_inputs_and_keeps_explicit_nulls()
     {
         var m = Example(); var json = Encoding.UTF8.GetString(m.CanonicalBytes());

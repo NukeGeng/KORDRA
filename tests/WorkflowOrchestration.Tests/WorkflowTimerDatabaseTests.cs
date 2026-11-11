@@ -112,7 +112,7 @@ public sealed class WorkflowTimerDatabaseTests
             await using (var staleConnection = Openable())
             {
                 await staleConnection.OpenAsync(ct);
-                await using var staleContext = WorkflowDbContext.CreateFixture(staleConnection, Case);
+                await using var staleContext = WorkflowModelFixture.CreateFixture(staleConnection, Case);
                 _ = await staleContext.Set<WorkflowInstanceRecord>().SingleAsync(x => x.InstanceId == staleRequest.Identity.InstanceId, ct);
                 await WithRoot(connection, async (context, transaction) => {
                     await new WorkflowStore(context).StageTransitionAsync(staleRequest.Identity, staleRequest.StepId, Guid.NewGuid(),
@@ -130,7 +130,7 @@ public sealed class WorkflowTimerDatabaseTests
             });
             await using (var b = Openable())
             {
-                await b.OpenAsync(ct); await using var bContext = WorkflowDbContext.CreateFixture(b, Case);
+                await b.OpenAsync(ct); await using var bContext = WorkflowModelFixture.CreateFixture(b, Case);
                 _ = await bContext.Set<WorkflowInstanceRecord>().SingleAsync(x => x.InstanceId == contested.Identity.InstanceId, ct);
                 await WithRoot(connection, async (context, transaction) => {
                     await new WorkflowTimerStore(context).StageWaitingAsync(contested, ct); await transaction.CommitAsync(ct);
@@ -150,7 +150,7 @@ public sealed class WorkflowTimerDatabaseTests
             Assert.Equal(102L, await TimerCount());
             await using (var read = Openable())
             {
-                await read.OpenAsync(ct); await using var context = WorkflowDbContext.CreateFixture(read, Case); var store = new WorkflowTimerStore(context);
+                await read.OpenAsync(ct); await using var context = WorkflowModelFixture.CreateFixture(read, Case); var store = new WorkflowTimerStore(context);
                 Assert.Empty(await store.DiscoverDueAsync(Case, Case, Created.AddMinutes(59), ct: ct));
                 Assert.Empty(await store.DiscoverDueAsync(Case, Guid.NewGuid(), Created.AddHours(1), ct: ct));
                 var due = await store.DiscoverDueAsync(Case, Case, Created.AddHours(1), ct: ct);
@@ -180,7 +180,7 @@ public sealed class WorkflowTimerDatabaseTests
                     Assert.Equal(committed.WorkflowVersion, duplicate.WorkflowVersion); await transaction.RollbackAsync(ct);
                 });
                 await using var read = Openable(); await read.OpenAsync(ct);
-                await using var observed = WorkflowDbContext.CreateFixture(read, Case);
+                await using var observed = WorkflowModelFixture.CreateFixture(read, Case);
                 var stored = await observed.Set<WorkflowInstanceRecord>().AsNoTracking()
                     .SingleAsync(x => x.InstanceId == fractional.Identity.InstanceId, ct);
                 Assert.Equal(canonicalSpecifications[fractional.Identity.InstanceId], stored.Specification);
@@ -233,14 +233,14 @@ public sealed class WorkflowTimerDatabaseTests
         NpgsqlConnection Openable()
         {
             var value = new NpgsqlConnection(new NpgsqlConnectionStringBuilder(locator) { Pooling = false, Multiplexing = false }.ConnectionString);
-            _ = Kordra.Modules.WorkflowOrchestration.Infrastructure.WorkflowFixtureTarget.Validate(value, Case); return value;
+            WorkflowModelFixture.Validate(value, Case); return value;
         }
         async Task<long> Count(string sql)
         { await using var read = Openable(); await read.OpenAsync(ct); await using var command = new NpgsqlCommand(sql, read); return (long)(await command.ExecuteScalarAsync(ct))!; }
         Task<long> TimerCount() => Count("SELECT count(*) FROM " + Schema + ".timers");
         async Task WithRoot(NpgsqlConnection c, Func<WorkflowDbContext, NpgsqlTransaction, Task> action)
         {
-            await using var context = WorkflowDbContext.CreateFixture(c, Case); await using var transaction = await c.BeginTransactionAsync(ct);
+            await using var context = WorkflowModelFixture.CreateFixture(c, Case); await using var transaction = await c.BeginTransactionAsync(ct);
             await context.Database.UseTransactionAsync(transaction, ct); await action(context, transaction);
         }
         async Task<WorkflowTimerScheduleRequest> Prepare(bool completeEarlier = true, DateTimeOffset? origin = null,

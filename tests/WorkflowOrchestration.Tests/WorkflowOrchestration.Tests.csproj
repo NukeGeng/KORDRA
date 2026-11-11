@@ -21,4 +21,6 @@
     <None Include="../../src/Modules/WorkflowOrchestration/Infrastructure/Migrations/wfl-v1.sql" Link="Fixtures/wfl-v1.sql" CopyToOutputDirectory="PreserveNewest" />
     <None Include="../../src/Modules/WorkflowOrchestration/Infrastructure/Migrations/wfl-v1.manifest.json" Link="Fixtures/wfl-v1.manifest.json" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
+  <ItemGroup><Compile Include="../Shared/DisposablePostgreSqlProfile.cs" Link="Fixtures/DisposablePostgreSqlProfile.cs" /></ItemGroup>
+  <ItemGroup><Compile Include="../Shared/RegressionPostgreSqlSelection.cs" Link="Fixtures/RegressionPostgreSqlSelection.cs" /></ItemGroup>
 </Project>

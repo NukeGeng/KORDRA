@@ -22,7 +22,7 @@ public sealed class AuditTransactionEnlistmentTests
         await using var connection = new NpgsqlConnection(connectionString);
         await connection.OpenAsync();
         await using var transaction = await connection.BeginTransactionAsync();
-        await using var audit = await AuditTransactionContext.CreateAsync(
+        await using var audit = await TestDatabaseConfiguration.TransactionForRunnerAsync(
             connection, transaction, timeProvider: new FixedTimestampProvider(recordedAt));
         var intent = AuditIntentCanonicalizerTests.CreateIntent();
         Assert.Equal(AuditTransactionStageStatus.Staged, (await audit.StageAsync(intent)).Status);
@@ -48,7 +48,7 @@ public sealed class AuditTransactionEnlistmentTests
         await using var transaction = await connection.BeginTransactionAsync();
         using var deadline = new CancellationTokenSource();
         using var delayed = new DelayedRollbackTransaction(connection, transaction);
-        await using var audit = await AuditTransactionContext.CreateAsync(connection, delayed, deadline.Token);
+        await using var audit = await TestDatabaseConfiguration.TransactionForRunnerAsync(connection, delayed, deadline.Token);
         try
         {
             deadline.CancelAfter(TimeSpan.FromMilliseconds(100));
@@ -97,7 +97,7 @@ public sealed class AuditTransactionEnlistmentTests
             await using var connection = new NpgsqlConnection(connectionString);
             await connection.OpenAsync();
             await using var transaction = await connection.BeginTransactionAsync();
-            await using var audit = await AuditTransactionContext.CreateAsync(connection, transaction);
+            await using var audit = await TestDatabaseConfiguration.TransactionForRunnerAsync(connection, transaction);
             var staged = await audit.StageAsync(intent);
             Assert.Equal(AuditTransactionStageStatus.Staged, staged.Status);
 
@@ -139,7 +139,7 @@ public sealed class AuditTransactionEnlistmentTests
             await ownerWrite.ExecuteNonQueryAsync();
         }
 
-        await using var audit = await AuditTransactionContext.CreateAsync(connection, transaction);
+        await using var audit = await TestDatabaseConfiguration.TransactionForRunnerAsync(connection, transaction);
         var staged = await audit.StageAsync(intent);
         Assert.Equal(AuditTransactionStageStatus.Staged, staged.Status);
         Assert.Null(staged.Receipt);
@@ -181,7 +181,7 @@ public sealed class AuditTransactionEnlistmentTests
             await ownerWrite.ExecuteNonQueryAsync();
         }
 
-        await using var audit = await AuditTransactionContext.CreateAsync(connection, transaction);
+        await using var audit = await TestDatabaseConfiguration.TransactionForRunnerAsync(connection, transaction);
         var staged = await audit.StageAsync(intent);
         Assert.Equal(AuditTransactionStageStatus.Staged, staged.Status);
         Assert.Null(staged.Receipt);

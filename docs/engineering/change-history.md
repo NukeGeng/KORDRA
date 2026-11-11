@@ -549,3 +549,7 @@ Added pure due-wake/counter rules, BCL owner facts, caller-root waiting-timer st
 ## FEAT-WFL-001 — PR27 timestamp precision correction
 
 PR27-WFL-TIMESTAMP-001 reproduced valid seven-digit canonical timestamps being rejected after PostgreSQL microsecond reload. Timer owner date comparisons now use native parameterized equality/projection, preserving exact canonical JSON/hash rather than rounding them or adding tolerance. Existing approved real DB fixture passed fractional/pre-epoch/duplicate and adjacent-microsecond-denial regressions with cleanup; source-only reconciliation retains failed evidence and unchanged SQL/resources/128-instance cap. No accepted ADR, schema or authority change. Current-head CI/independent PR follow-up remain publication gates; unfinished D2 source is retained separately.
+
+## ADR-0025 test target integration — in progress
+
+The integration branch carries the accepted explicit disposable PostgreSQL test profile and owner test seams. Runtime/default target selection remains unchanged. The initial full gate found 12 fixture/hash failures; the targeted IdentityAccess rerun passed 11 cases and the timer offline test passed with the profile enabled. Full validation on the repaired tree and PR review remain pending.

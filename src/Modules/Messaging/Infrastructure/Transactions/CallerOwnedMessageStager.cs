@@ -74,11 +74,7 @@ public sealed class CallerOwnedMessageStager
         if (result.Disposition != ReceiptStageDisposition.Staged) return result;
         // Duplicate/conflict has no new work to admit. For a new key, any capacity failure must
         // roll back this provisional receipt together with owner/AUD state; no native send occurs.
-        var capacity = _schema == "msg" ? new PublicationCapacityGuard(_connection, _transaction) :
-            _connection is Npgsql.NpgsqlConnection fixture && _schema.StartsWith("t12_", StringComparison.Ordinal) &&
-            Guid.TryParseExact(_schema[4..], "N", out var caseId)
-                ? PublicationCapacityGuard.CreateIsolatedTestGuard(fixture, _transaction, caseId)
-                : throw new InvalidOperationException("No approved publication capacity profile for this schema.");
+        var capacity = receipts.CreatePublicationCapacityGuard();
         capacity.RequireCaller(_connection, _transaction, _schema);
         var capacityStatus = await capacity.CheckAsync(registry,
             context.Runtime.Options.Transports.GetOrCreate<PostgresqlTransport>(), cancellationToken).ConfigureAwait(false);

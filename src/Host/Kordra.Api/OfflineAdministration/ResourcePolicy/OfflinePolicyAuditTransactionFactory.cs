@@ -1,3 +1,4 @@
+using DisposableTestBinding = (System.Guid RunId, string SourceSha256, string OperationManifestSha256, System.DateTimeOffset ExpiresAtUtc);
 using System.Data.Common;
 using Kordra.Modules.AuditCompliance.Contracts;
 using Kordra.Modules.AuditCompliance.Infrastructure;
@@ -15,8 +16,15 @@ public interface IOfflinePolicyAuditTransaction : IAsyncDisposable
 }
 public sealed class OfflinePolicyAuditTransactionFactory : IOfflinePolicyAuditTransactionFactory
 {
+    private readonly DisposableTestBinding? disposableTest;
+    public OfflinePolicyAuditTransactionFactory() { }
+    private OfflinePolicyAuditTransactionFactory(DisposableTestBinding profile) => disposableTest = profile;
+    public static OfflinePolicyAuditTransactionFactory CreateDisposableTestFactory(DisposableTestBinding profile) => new(profile);
+
     public async ValueTask<IOfflinePolicyAuditTransaction> EnlistAsync(DbConnection connection, DbTransaction transaction, IOfflineAuditLease lease, CancellationToken ct = default) =>
-        new Enlisted(await AuditTransactionContext.CreateOfflineAsync(connection, transaction, lease, ct));
+        new Enlisted(disposableTest is { } profile
+            ? await AuditTransactionContext.CreateDisposableOfflineTestAsync(connection, transaction, lease, profile, ct)
+            : await AuditTransactionContext.CreateOfflineAsync(connection, transaction, lease, ct));
     private sealed class Enlisted(AuditTransactionContext context) : IOfflinePolicyAuditTransaction
     {
         public Task<AuditTransactionStageOutcome> StageAsync(AuditIntent intent, CancellationToken ct = default) => context.StageAsync(intent, ct);

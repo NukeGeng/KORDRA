@@ -1,3 +1,4 @@
+using Kordra.Testing;
 using System.Net;
 using System.Data.Common;
 using System.Text;
@@ -32,8 +33,9 @@ namespace Kordra.Modules.IdentityAccess.Tests;
 [Collection("IdentityAccess PostgreSQL and local HTTPS")]
 public sealed class ReleaseHttpTests : IAsyncLifetime
 {
+    private ProductPostgreSqlFixtureSelection _selection = null!;
     private LocalAuthenticationTestHost _host = null!; private HttpClient _client = null!;
-    private readonly DisclosureClockFault _clockFault = new();
+    private DisclosureClockFault _clockFault = null!;
     private ApprovalAuthorityCaptureResult? _captured;
     private ApprovalUseResult? _approvalUse;
     private ApprovalMutationResult? _approvalMutation;
@@ -45,10 +47,12 @@ public sealed class ReleaseHttpTests : IAsyncLifetime
     public async Task InitializeAsync()
     {
         var locator = TestDatabaseConfiguration.TryGetConnectionString() ?? throw new InvalidOperationException("Private isolated test locator required.");
-        var rel = new PooledDbContextFactory<ReleaseDbContext>(ReleaseDbContextFactory.CreateTestOptions(locator));
-        var apr = new PooledDbContextFactory<ApprovalDbContext>(ApprovalDbContextFactory.CreateTestOptions(locator));
-        var art = new PooledDbContextFactory<ArtifactDbContext>(ArtifactDbContextFactory.CreateTestOptions(locator));
-        var aud = new PooledDbContextFactory<AuditDbContext>(AuditDbContextFactory.CreateTestOptions(locator));
+        _selection = new(locator);
+        _clockFault = new(_selection);
+        var rel = new PooledDbContextFactory<ReleaseDbContext>(_selection.Release());
+        var apr = new PooledDbContextFactory<ApprovalDbContext>(_selection.Approval());
+        var art = new PooledDbContextFactory<ArtifactDbContext>(_selection.Artifact());
+        var aud = new PooledDbContextFactory<AuditDbContext>(_selection.Audit());
         await using (var db = await rel.CreateDbContextAsync()) await db.Database.MigrateAsync();
         await using (var db = await apr.CreateDbContextAsync()) await db.Database.MigrateAsync();
         await using (var db = await art.CreateDbContextAsync()) await db.Database.MigrateAsync();
@@ -73,7 +77,7 @@ public sealed class ReleaseHttpTests : IAsyncLifetime
                 var query = new ApprovalReadQuery(Guid.NewGuid(), Guid.TryParse(context.Request.Query["request"], out var requestId) ? requestId : null);
                 var response = new ApprovalCallerBoundResponseCommitter(context, subject, _environment, context.Request.Path.Value!,
                     services.GetRequiredService<IAuthorityClock>(), context.Request.QueryString.Value ?? "");
-                var status = await new ApprovalReadCoordinator(services.GetRequiredService<LocalAuthenticationConfiguration>().InstallationId,
+                var status = await _selection.NewApprovalReadCoordinator(services.GetRequiredService<LocalAuthenticationConfiguration>().InstallationId,
                     services.GetRequiredService<IDbContextFactory<KordraIdentityDbContext>>(), rel, apr, capture, eligibility,
                     services.GetRequiredService<IArtifactAuditTransactionFactory>(), services.GetRequiredService<FairAsyncReaderWriterAdmissionGate>(),
                     services.GetRequiredService<IAuthorityClock>(), new ApprovalSchemaReadiness(services.GetRequiredService<LocalAuthenticationConfiguration>().InstallationId, apr, services.GetRequiredService<IReleaseSchemaReadiness>()),
@@ -104,9 +108,9 @@ public sealed class ReleaseHttpTests : IAsyncLifetime
                     var durable = new StoredApprovalAuthorityReader(new DurableApprovalAuthorityReader(new DurablePrincipalReader(identity),
                         (IDurableGrantEvidenceReader)services.GetRequiredService<TenantMembershipService>(), services.GetRequiredService<IRoleDefinitionReader>(), clock));
                     var subjectReader = new ApprovalSubjectReader(rel, services.GetRequiredService<ReleaseSelectionReader>());
-                    var uses = new ApprovalUseAdmission(install, identity, capture, auditFactory, gate, clock);
-                    var mutations = new ApprovalMutationTransaction(install, identity, rel, capture, durable, subjectReader, auditFactory, new AuditMutationEvidenceReader(aud), gate, clock);
-                    var disclosures = new ApprovalMutationDisclosure(install, identity, rel, apr, capture,
+                    var uses = _selection.NewApprovalUseAdmission(install, identity, capture, auditFactory, gate, clock);
+                    var mutations = _selection.NewApprovalMutationTransaction(install, identity, rel, capture, durable, subjectReader, auditFactory, new AuditMutationEvidenceReader(aud), gate, clock);
+                    var disclosures = _selection.NewApprovalMutationDisclosure(install, identity, rel, apr, capture,
                         new ApprovalEligibilityReader(subjectReader, durable, clock), auditFactory, gate, clock);
                     var response = new ApprovalCallerBoundResponseCommitter(context, subject, command.EnvironmentId, context.Request.Path.Value!, clock, context.Request.QueryString.Value ?? "");
                     _approvalDisclosure = await new ApprovalMutationExecutionCoordinator(uses, mutations, disclosures, gate,
@@ -116,7 +120,7 @@ public sealed class ReleaseHttpTests : IAsyncLifetime
                     if (_approvalDisclosure != "completed") context.Abort();
                     return;
                 }
-                _approvalUse = await new ApprovalUseAdmission(services.GetRequiredService<LocalAuthenticationConfiguration>().InstallationId,
+                _approvalUse = await _selection.NewApprovalUseAdmission(services.GetRequiredService<LocalAuthenticationConfiguration>().InstallationId,
                     services.GetRequiredService<IDbContextFactory<KordraIdentityDbContext>>(), capture,
                     _approvalAudit ?? services.GetRequiredService<IArtifactAuditTransactionFactory>(), services.GetRequiredService<FairAsyncReaderWriterAdmissionGate>(),
                     services.GetRequiredService<IAuthorityClock>()).BeginAsync(subject, command, _project, "synthetic-approval-key-1234", correlation);
@@ -126,7 +130,7 @@ public sealed class ReleaseHttpTests : IAsyncLifetime
                         new DurablePrincipalReader(services.GetRequiredService<IDbContextFactory<KordraIdentityDbContext>>()),
                         (IDurableGrantEvidenceReader)services.GetRequiredService<TenantMembershipService>(), services.GetRequiredService<IRoleDefinitionReader>(),
                         services.GetRequiredService<IAuthorityClock>()));
-                    _approvalMutation = await new ApprovalMutationTransaction(services.GetRequiredService<LocalAuthenticationConfiguration>().InstallationId,
+                    _approvalMutation = await _selection.NewApprovalMutationTransaction(services.GetRequiredService<LocalAuthenticationConfiguration>().InstallationId,
                         services.GetRequiredService<IDbContextFactory<KordraIdentityDbContext>>(), rel, capture, durable,
                         new ApprovalSubjectReader(rel, services.GetRequiredService<ReleaseSelectionReader>()),
                         _approvalAudit ?? services.GetRequiredService<IArtifactAuditTransactionFactory>(), new AuditMutationEvidenceReader(aud),
@@ -135,7 +139,7 @@ public sealed class ReleaseHttpTests : IAsyncLifetime
                     if (_approvalMutation.Status is "durable" or "replay")
                     {
                         _approvalReply = new ApprovalReply();
-                        _approvalDisclosure = await new ApprovalMutationDisclosure(services.GetRequiredService<LocalAuthenticationConfiguration>().InstallationId,
+                        _approvalDisclosure = await _selection.NewApprovalMutationDisclosure(services.GetRequiredService<LocalAuthenticationConfiguration>().InstallationId,
                             services.GetRequiredService<IDbContextFactory<KordraIdentityDbContext>>(), rel, apr, capture,
                             new ApprovalEligibilityReader(new ApprovalSubjectReader(rel, services.GetRequiredService<ReleaseSelectionReader>()), durable, services.GetRequiredService<IAuthorityClock>()),
                             services.GetRequiredService<IArtifactAuditTransactionFactory>(), services.GetRequiredService<FairAsyncReaderWriterAdmissionGate>(),
@@ -274,12 +278,12 @@ public sealed class ReleaseHttpTests : IAsyncLifetime
             Assert.True(await audit.Entries.AnyAsync(x => x.TenantRef == _tenant && x.Stage == "U" && x.Permission == "release.request-approval"));
         using var anonymous = _host.CreateClient(); using var denied = await anonymous.GetAsync("/test-approval-capture");
         Assert.Equal(HttpStatusCode.Unauthorized, denied.StatusCode);
-        _approvalAudit = new ApprovalUseAuditFault(false);
+        _approvalAudit = new ApprovalUseAuditFault(_selection, false);
         using var setupFailure = await _client.GetAsync("/test-approval-capture?use=1");
         Assert.Equal("unavailable", _approvalUse!.Status); Assert.Null(_approvalUse.Ticket);
         var gate = _host.Services.GetRequiredService<FairAsyncReaderWriterAdmissionGate>();
         await using (var held = await gate.AcquireReadAsync()) { }
-        _approvalAudit = new ApprovalUseAuditFault(true);
+        _approvalAudit = new ApprovalUseAuditFault(_selection, true);
         using var unknown = await _client.GetAsync("/test-approval-capture?use=1");
         Assert.Equal("unknown", _approvalUse!.Status); Assert.Null(_approvalUse.Ticket);
         await Assert.ThrowsAsync<InvalidOperationException>(async () => { await using var held = await gate.AcquireReadAsync(); });
@@ -297,12 +301,12 @@ public sealed class ReleaseHttpTests : IAsyncLifetime
         }
         public void Abort() { Bytes = null; }
     }
-    private sealed class ApprovalUseAuditFault(bool unknownCommit) : IArtifactAuditTransactionFactory
+    private sealed class ApprovalUseAuditFault(ProductPostgreSqlFixtureSelection selection, bool unknownCommit) : IArtifactAuditTransactionFactory
     {
         public async ValueTask<IArtifactAuditTransaction> EnlistAsync(DbConnection connection, DbTransaction transaction, CancellationToken ct)
         {
             if (!unknownCommit) throw new InvalidOperationException("Synthetic precommit setup failure.");
-            return new Unknown(await new ArtifactAuditTransactionFactory().EnlistAsync(connection, transaction, ct));
+            return new Unknown(await selection.ArtifactAudit().EnlistAsync(connection, transaction, ct));
         }
         private sealed class Unknown(IArtifactAuditTransaction inner) : IArtifactAuditTransaction
         {
@@ -678,6 +682,12 @@ public sealed class ReleaseHttpTests : IAsyncLifetime
             new ReleaseSchemaReadiness(incompleteInstallation, services.GetRequiredService<IDbContextFactory<ReleaseDbContext>>())).CheckAsync(default));
         await VerifyApprovalRecoveryAsync(services, installation, approvalId, approvalRoot, "request");
     }
+    private OfflineApprovalRecoveryCoordinator CreateApprovalRecovery(Guid installation,
+        IDbContextFactory<KordraIdentityDbContext> identity, IArtifactProcessQuiescence processes)
+        => _selection.Profile is { } profile
+            ? OfflineApprovalRecoveryCoordinator.CreateDisposableTestCoordinator(installation, identity, processes, profile.OwnerBinding)
+            : new(installation, identity, processes);
+
     private async Task VerifyApprovalRecoveryAsync(IServiceProvider services, Guid installation, Guid approvalId, string resource, string action, bool committed = true)
     {
         ApprovalRequestCommandReceipt recoveryReceipt;
@@ -699,8 +709,8 @@ public sealed class ReleaseHttpTests : IAsyncLifetime
                 recoveryReceipt.PrincipalId, action, resource, "synthetic-approval-key-1234"), BusinessHash = command.BusinessHash };
         }
         var custody = new RecoveryCustody();
-        var recovery = new OfflineApprovalRecoveryCoordinator(installation, recoveryIdentity, new RecoveryProcesses(true));
-        Assert.Equal("denied", (await new OfflineApprovalRecoveryCoordinator(installation, recoveryIdentity, new RecoveryProcesses(false))
+        var recovery = CreateApprovalRecovery(installation, recoveryIdentity, new RecoveryProcesses(true));
+        Assert.Equal("denied", (await CreateApprovalRecovery(installation, recoveryIdentity, new RecoveryProcesses(false))
             .InspectAsync(custody, plan.CanonicalBytes())).Status);
         var inspected = await recovery.InspectAsync(custody, plan.CanonicalBytes());
         Assert.Equal(committed ? "confirmed" : "no_commit", inspected.Status); Assert.NotNull(inspected.BoundPlan);
@@ -735,7 +745,7 @@ public sealed class ReleaseHttpTests : IAsyncLifetime
                 try
                 {
                     var nativePlan = plan with { OldProcessId = child.Id };
-                    var nativeRecovery = new OfflineApprovalRecoveryCoordinator(installation, recoveryIdentity, new ArtifactProcessQuiescence());
+                    var nativeRecovery = CreateApprovalRecovery(installation, recoveryIdentity, new ArtifactProcessQuiescence());
                     Assert.Equal("denied", (await nativeRecovery.InspectAsync(nativeCustody, nativePlan.CanonicalBytes())).Status);
                     child.StandardInput.Close(); await child.WaitForExitAsync().WaitAsync(TimeSpan.FromSeconds(5));
                     var checkedPlan = await nativeRecovery.InspectAsync(nativeCustody, nativePlan.CanonicalBytes());
@@ -757,14 +767,17 @@ public sealed class ReleaseHttpTests : IAsyncLifetime
     {
         var installation = _host.Services.GetRequiredService<LocalAuthenticationConfiguration>().InstallationId;
         var manifest = new { schemaVersion = 1, manifestId = Guid.NewGuid().ToString("D"), installationId = installation.ToString("D"),
-            expectedDatabase = "kordra_test", expectedRole = "kordra_admin", tenantId = _tenant.ToString("D"), projectId = _project.ToString("D"),
+            expectedDatabase = _selection.Database, expectedRole = _selection.Profile is null ? "kordra_admin" : "kordra_test", tenantId = _tenant.ToString("D"), projectId = _project.ToString("D"),
             policyId = Guid.NewGuid().ToString("D"), expectedPolicyRevision = 0, payload = new { schemaVersion = 1,
                 purpose = "release-intent-v1", status = "active", effectiveFromUtc = "2026-10-27T00:00:00.000000Z", expiresAtUtc = expiresAt?.ToString("yyyy-MM-dd'T'HH:mm:ss.ffffff'Z'", System.Globalization.CultureInfo.InvariantCulture),
                 rules = new[] { new { classification = "Test", effect, separationOfDuties = effect == "allow" ? "self_allowed" : "independent", allowUnattestedProvenance = effect == "allow",
                     pendingLifetimeSeconds = 3600, grantLifetimeSeconds = 300, blockedWindowsUtc = Array.Empty<object>() } } },
             bindingChanges = new[] { new { environmentId = _environment.ToString("D"), expectedEnvironmentRevision = 1,
                 expectedBindingId = (string?)null, expectedBindingRevision = 0 } } };
-        var selected = ApprovalPolicyManifest.Parse(JsonSerializer.SerializeToUtf8Bytes(manifest));
+        var input = JsonSerializer.SerializeToUtf8Bytes(manifest);
+        var selected = _selection.Profile is { } profile
+            ? ApprovalPolicyManifest.ParseDisposableTest(input, profile.OwnerBinding)
+            : ApprovalPolicyManifest.Parse(input);
         await using var db = await _host.Services.GetRequiredService<IDbContextFactory<ApprovalDbContext>>().CreateDbContextAsync();
         await using var tx = await db.Database.BeginTransactionAsync();
         var now = _host.Clock.GetUtcNow(); now = new DateTimeOffset(now.UtcTicks - now.UtcTicks % 10, TimeSpan.Zero);
@@ -831,7 +844,7 @@ public sealed class ReleaseHttpTests : IAsyncLifetime
         Assert.Equal("request_denied", body.RootElement.GetProperty("code").GetString());
         Assert.False(body.RootElement.TryGetProperty("items", out _));
     }
-    private sealed class DisclosureClockFault : IArtifactAuditTransactionFactory
+    private sealed class DisclosureClockFault(ProductPostgreSqlFixtureSelection selection) : IArtifactAuditTransactionFactory
     {
         public Action? AfterDisclosure;
         public Action? AfterApprovalDisclosure;
@@ -839,7 +852,7 @@ public sealed class ReleaseHttpTests : IAsyncLifetime
         public bool LoseApprovalMutationReply, ApprovalCommitAttempted, FailApprovalMutationStage;
         public ReleaseMutationTransactionTests.CommitReplyStream? Transport;
         public async ValueTask<IArtifactAuditTransaction> EnlistAsync(DbConnection connection, DbTransaction transaction, CancellationToken ct)
-            => new Wrapped(await new ArtifactAuditTransactionFactory().EnlistAsync(connection, transaction, ct), this, connection);
+            => new Wrapped(await selection.ArtifactAudit().EnlistAsync(connection, transaction, ct), this, connection);
         private sealed class Wrapped(IArtifactAuditTransaction inner, DisclosureClockFault owner, DbConnection connection) : IArtifactAuditTransaction
         {
             private bool _disclosure;

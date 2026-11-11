@@ -70,11 +70,11 @@ public sealed partial class CurrentAuthorityHttpTests : IAsyncLifetime
         var payload = new ResourcePolicyPayload(1, "target.read", "project_without_environment", "active",
             DateTimeOffset.FromUnixTimeMilliseconds(_host.Clock.GetUtcNow().AddMinutes(-1).ToUnixTimeMilliseconds()), null, [new("NoEnvironment", "allow")]);
         var manifest = new ResourcePolicyManifest(1, Guid.NewGuid(), _host.Services.GetRequiredService<LocalAuthenticationConfiguration>().InstallationId,
-            new("kordra_test", "kordra_test"), _tenant, _project, "create", null, 0, payload, [new(null, "project_without_environment", null, 0)]);
-        var coordinator = new OfflineResourcePolicyCoordinator(manifest.InstallationId, Identity, tenants,
-            new AuditAppendStore(new PooledDbContextFactory<AuditDbContext>(AuditDbContextFactory.CreateTestOptions(TestDatabaseConfiguration.TryGetConnectionString()!))),
+            new(_host.Selection.Database, "kordra_test"), _tenant, _project, "create", null, 0, payload, [new(null, "project_without_environment", null, 0)]);
+        var coordinator = _host.Selection.PolicyCoordinator(manifest.InstallationId, Identity, tenants,
+            _host.Selection.AuditStore(new PooledDbContextFactory<AuditDbContext>(_host.Selection.Audit())),
             _host.Services.GetRequiredService<FairAsyncReaderWriterAdmissionGate>(), _host.Authentication);
-        var published = await coordinator.ExecuteAsync(_offline, Encoding.UTF8.GetString(manifest.CanonicalBytes()), manifest.Hash());
+        var published = await coordinator.ExecuteAsync(_offline, Encoding.UTF8.GetString(_host.Selection.PolicyBytes(manifest)), _host.Selection.PolicyHash(manifest));
         Assert.Equal("success", published.Status); _policy = published.PolicyId; _policies.Add(_policy);
         _client = _host.CreateClient();
         using var login = await _host.LoginAsync(_client, user, LocalAuthenticationTestHost.ValidPassword);
@@ -149,12 +149,12 @@ public sealed partial class CurrentAuthorityHttpTests : IAsyncLifetime
         var installation = _host.Services.GetRequiredService<LocalAuthenticationConfiguration>().InstallationId;
         var payload = new ResourcePolicyPayload(1, "target.read", "environment", "active",
             DateTimeOffset.FromUnixTimeMilliseconds(_host.Clock.GetUtcNow().AddMinutes(-1).ToUnixTimeMilliseconds()), null, [new("Production", allowRead ? "allow" : "deny")]);
-        var manifest = new ResourcePolicyManifest(1, Guid.NewGuid(), installation, new("kordra_test", "kordra_test"),
+        var manifest = new ResourcePolicyManifest(1, Guid.NewGuid(), installation, new(_host.Selection.Database, "kordra_test"),
             _tenant, _project, "create", null, 0, payload, []);
-        var coordinator = new OfflineResourcePolicyCoordinator(installation, Identity, _host.Services.GetRequiredService<TenantMembershipService>(),
-            new AuditAppendStore(new PooledDbContextFactory<AuditDbContext>(AuditDbContextFactory.CreateTestOptions(TestDatabaseConfiguration.TryGetConnectionString()!))),
+        var coordinator = _host.Selection.PolicyCoordinator(installation, Identity, _host.Services.GetRequiredService<TenantMembershipService>(),
+            _host.Selection.AuditStore(new PooledDbContextFactory<AuditDbContext>(_host.Selection.Audit())),
             _host.Services.GetRequiredService<FairAsyncReaderWriterAdmissionGate>(), _host.Authentication);
-        var result = await coordinator.ExecuteAsync(_offline, Encoding.UTF8.GetString(manifest.CanonicalBytes()), manifest.Hash());
+        var result = await coordinator.ExecuteAsync(_offline, Encoding.UTF8.GetString(_host.Selection.PolicyBytes(manifest)), _host.Selection.PolicyHash(manifest));
         Assert.Equal("success", result.Status); _policies.Add(result.PolicyId); return result.PolicyId;
     }
     private async Task<HttpResponseMessage> CreateEnvironment(string key, string json, bool csrf = true)

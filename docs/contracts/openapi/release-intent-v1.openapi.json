@@ -3683,8 +3683,8 @@
     "src/Host/Kordra.Api/Endpoints/Releases/ReleaseRequestParser.cs": "32d5551452b1d2526b42f08d39da9fbc5a7908da95c130e1898897e5bee7d800",
     "src/Host/Kordra.Api/Endpoints/Releases/ReleaseCallerBoundResponseCommitter.cs": "85c7a73de6f11015d5a945ada8986058d3bfa060e9cc6d7115a3f512a47415e9",
     "src/Host/Kordra.Api/Composition/Releases/ReleasePayloadBuilder.cs": "5a8eee582fc52d8dc9d990d4ece09337b7554f8b581c60bcf7be336bda4c471d",
-    "src/Host/Kordra.Api/Composition/Releases/ReleaseMutationDisclosure.cs": "6e1c853d84f4f323a6cfd1b29631508c7d97127351b038891201be274c7927d5",
-    "src/Host/Kordra.Api/Composition/Releases/ReleaseReadCoordinator.cs": "591379d3f53e1408a59163ed5c9bb1534f8cc1bd549d71d67678401469d36dea",
+    "src/Host/Kordra.Api/Composition/Releases/ReleaseMutationDisclosure.cs": "c14320cfae66484fd2058656fe449cdbae94387ab8c7f302da57b079a5b86e70",
+    "src/Host/Kordra.Api/Composition/Releases/ReleaseReadCoordinator.cs": "4374370e284845353c97d0e1ac93f5f11bfe7f184bc0ed00e61286f0998db131",
     "src/Modules/ReleaseManagement/Domain/ReleaseIntent.cs": "68b2ef23ac8d19142bff33db5aafb6ea29c8d64a68f37bacadb772a5d1289fcf",
     "src/Host/Kordra.Api/Endpoints/LocalAuthenticationEndpoints.cs": "981e20def34e590369c61737d0ece1947810f51d1c5ad9106f725aaa87dddc55"
   }

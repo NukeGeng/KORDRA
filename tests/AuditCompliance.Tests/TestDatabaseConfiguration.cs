@@ -1,3 +1,7 @@
+using System.Data.Common;
+using Kordra.Testing;
+using Kordra.Modules.AuditCompliance.Infrastructure;
+using Microsoft.EntityFrameworkCore;
 using Npgsql;
 
 namespace Kordra.Modules.AuditCompliance.Tests;
@@ -16,8 +20,29 @@ public static class TestDatabaseConfiguration
                 $"Required integration-test configuration is missing: set {ConnectionEnvironmentVariable} using the private kordra_test locator. Database verification cannot be skipped.");
         }
 
-        ValidateTarget(connectionString);
+        var profile = RegressionPostgreSqlSelection.LoadRunnerProfile();
+        if (profile is null) ValidateTarget(connectionString);
+        else profile.ValidateLocator(connectionString, DateTimeOffset.UtcNow);
         return connectionString;
+    }
+
+    internal static string ExpectedRunnerDatabase => RegressionPostgreSqlSelection.LoadRunnerProfile()?.Database ?? "kordra_test";
+    internal static DbContextOptions<AuditDbContext> OptionsForRunner(string locator)
+    {
+        var profile = RegressionPostgreSqlSelection.LoadRunnerProfile();
+        if (profile is null) return AuditDbContextFactory.CreateTestOptions(locator);
+        var parsed = new NpgsqlConnectionStringBuilder(locator);
+        return parsed.Pooling
+            ? AuditDbContextFactory.CreateDisposableSingleConnectionPoolTestOptions(locator, profile.OwnerBinding)
+            : AuditDbContextFactory.CreateDisposableTestOptions(locator, profile.OwnerBinding);
+    }
+    internal static Task<AuditTransactionContext> TransactionForRunnerAsync(DbConnection connection, DbTransaction transaction,
+        CancellationToken cancellationToken = default, TimeProvider? timeProvider = null)
+    {
+        var profile = RegressionPostgreSqlSelection.LoadRunnerProfile();
+        return profile is null
+            ? AuditTransactionContext.CreateAsync(connection, transaction, cancellationToken, timeProvider)
+            : AuditTransactionContext.CreateDisposableTestAsync(connection, transaction, profile.OwnerBinding, cancellationToken, timeProvider);
     }
 
     public static void ValidateTarget(string connectionString)

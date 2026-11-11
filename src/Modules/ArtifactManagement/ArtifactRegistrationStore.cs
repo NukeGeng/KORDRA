@@ -1,3 +1,4 @@
+using DisposableTestBinding = (System.Guid RunId, string SourceSha256, string OperationManifestSha256, System.DateTimeOffset ExpiresAtUtc);
 using System.Text.Json;
 using Kordra.ArtifactManagement.Domain;
 using Kordra.Modules.ArtifactManagement.Contracts;
@@ -15,6 +16,13 @@ public sealed record PreparedArtifactRegistration(string Status, Guid Registrati
 /// </summary>
 public sealed class ArtifactRegistrationStore(ArtifactDbContext db)
 {
+    private readonly DisposableTestBinding? disposableTest;
+
+    private ArtifactRegistrationStore(ArtifactDbContext db, DisposableTestBinding profile) : this(db) => disposableTest = profile;
+
+    /// <summary>Explicit test composition only. The caller still owns its open transaction.</summary>
+    public static ArtifactRegistrationStore CreateDisposableTestStore(ArtifactDbContext db, DisposableTestBinding profile) => new(db, profile);
+
     public async Task<PreparedArtifactRegistration> PreparePendingAsync(ArtifactRegistrationReceipt pending,
         CancellationToken cancellationToken = default)
     {
@@ -140,6 +148,9 @@ public sealed class ArtifactRegistrationStore(ArtifactDbContext db)
     private void RequireTransaction(bool offline = false)
     {
         if (db.Database.CurrentTransaction is null) throw new InvalidOperationException("ART mutation requires the caller's shared transaction.");
-        ArtifactDbContextFactory.ValidateEnlistedTarget(db.Database.GetDbConnection(), offline);
+        if (disposableTest is { } profile)
+            ArtifactDbContextFactory.ValidateDisposableTestTarget(db.Database.GetDbConnection().ConnectionString, profile);
+        else
+            ArtifactDbContextFactory.ValidateEnlistedTarget(db.Database.GetDbConnection(), offline);
     }
 }

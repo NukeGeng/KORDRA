@@ -1,3 +1,4 @@
+using DisposableTestBinding = (System.Guid RunId, string SourceSha256, string OperationManifestSha256, System.DateTimeOffset ExpiresAtUtc);
 using System.Data;
 using System.Security.Cryptography;
 using System.Text;
@@ -19,6 +20,9 @@ public sealed class WorkflowReceiptInspector : IWorkflowReceiptInspector, IAsync
     private WorkflowReceiptInspector(WorkflowDbContext context) => _context = context;
     public static WorkflowReceiptInspector CreateIsolatedTestInspector(NpgsqlConnection independent, Guid caseId)
         => new(WorkflowDbContext.CreateFixture(independent, caseId));
+
+    public static WorkflowReceiptInspector CreateDisposableTestInspector(NpgsqlConnection independent, Guid caseId, DisposableTestBinding profile)
+        => new(WorkflowDbContext.CreateDisposableTestFixture(independent, caseId, profile));
 
     public async Task<WorkflowReceiptInspectionStatus> InspectAsync(WorkflowReceiptExpectation expected, CancellationToken ct = default)
     {

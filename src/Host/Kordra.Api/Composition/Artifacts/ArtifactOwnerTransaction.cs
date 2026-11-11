@@ -1,3 +1,4 @@
+using DisposableTestBinding = (System.Guid RunId, string SourceSha256, string OperationManifestSha256, System.DateTimeOffset ExpiresAtUtc);
 using System.Data.Common;
 using Kordra.BuildingBlocks.Security;
 using Kordra.Modules.ArtifactManagement;
@@ -23,8 +24,14 @@ public interface IArtifactAuditTransaction : IAsyncDisposable
 }
 public sealed class ArtifactAuditTransactionFactory : IArtifactAuditTransactionFactory
 {
+    private readonly DisposableTestBinding? disposableTest;
+    public ArtifactAuditTransactionFactory() { }
+    private ArtifactAuditTransactionFactory(DisposableTestBinding profile) => disposableTest = profile;
+    public static ArtifactAuditTransactionFactory CreateDisposableTestFactory(DisposableTestBinding profile) => new(profile);
     public async ValueTask<IArtifactAuditTransaction> EnlistAsync(DbConnection c, DbTransaction t, CancellationToken ct) =>
-        new Enlisted(await AuditTransactionContext.CreateAsync(c, t, ct));
+        new Enlisted(disposableTest is { } profile
+            ? await AuditTransactionContext.CreateDisposableTestAsync(c, t, profile, ct)
+            : await AuditTransactionContext.CreateAsync(c, t, ct));
     private sealed class Enlisted(AuditTransactionContext audit) : IArtifactAuditTransaction
     {
         public bool CommitAttempted => audit.CommitAttempted;
@@ -39,6 +46,16 @@ public sealed record ArtifactOwnerCommit(string Status, PreparedArtifactRegistra
 public sealed class ArtifactOwnerTransaction(Guid installation, IDbContextFactory<KordraIdentityDbContext> identity,
     IArtifactAuditTransactionFactory audits, FairAsyncReaderWriterAdmissionGate gate, IAuthorityClock clock)
 {
+    private readonly DisposableTestBinding? disposableTest;
+    private ArtifactOwnerTransaction(Guid installation, IDbContextFactory<KordraIdentityDbContext> identity,
+    IArtifactAuditTransactionFactory audits, FairAsyncReaderWriterAdmissionGate gate, IAuthorityClock clock, DisposableTestBinding profile)
+        : this(installation, identity, audits, gate, clock) => disposableTest = profile;
+
+    /// <summary>Explicit ADR-0025 test composition; runtime construction remains unchanged.</summary>
+    public static ArtifactOwnerTransaction CreateDisposableTestTransaction(Guid installation, IDbContextFactory<KordraIdentityDbContext> identity,
+    IArtifactAuditTransactionFactory audits, FairAsyncReaderWriterAdmissionGate gate, IAuthorityClock clock, DisposableTestBinding profile)
+        => new(installation, identity, audits, gate, clock, profile);
+
     public async Task<ArtifactOwnerCommit> RunAsync(Func<PreparedArtifactRegistration?, AuditIntent> intent,
         Func<ArtifactRegistrationStore, CancellationToken, Task<PreparedArtifactRegistration?>> prepare,
         Func<CancellationToken, Task<bool>> stillCurrent, CancellationToken ct)
@@ -48,13 +65,19 @@ public sealed class ArtifactOwnerTransaction(Guid installation, IDbContextFactor
         try
         {
             await using var iam = await identity.CreateDbContextAsync(ct);
-            ArtifactDbContextFactory.ValidateEnlistedTarget(iam.Database.GetDbConnection());
+            if (disposableTest is { } target)
+                ArtifactDbContextFactory.ValidateDisposableTestTarget(iam.Database.GetDbConnection().ConnectionString, target);
+            else ArtifactDbContextFactory.ValidateEnlistedTarget(iam.Database.GetDbConnection());
             await using var tx = await iam.Database.BeginTransactionAsync(ct);
-            await using var art = new ArtifactDbContext(ArtifactDbContextFactory.CreateEnlistedOptions(iam.Database.GetDbConnection()));
+            await using var art = new ArtifactDbContext(disposableTest is { } ownerProfile
+                ? ArtifactDbContextFactory.CreateDisposableEnlistedTestOptions(iam.Database.GetDbConnection(), ownerProfile)
+                : ArtifactDbContextFactory.CreateEnlistedOptions(iam.Database.GetDbConnection()));
             await art.Database.UseTransactionAsync(tx.GetDbTransaction(), ct);
             audit = await audits.EnlistAsync(iam.Database.GetDbConnection(), tx.GetDbTransaction(), ct);
             await using var ownedAudit = audit;
-            var prepared = await prepare(new(art), ct);
+            var store = disposableTest is { } storeProfile
+                ? ArtifactRegistrationStore.CreateDisposableTestStore(art, storeProfile) : new(art);
+            var prepared = await prepare(store, ct);
             if (prepared is { Status: not ("staged_pending" or "staged_registered" or "staged_failed") }) return new("rejected", prepared);
             if ((await audit.StageAsync(intent(prepared), ct)).Status != AuditTransactionStageStatus.Staged) return new("unavailable");
             await art.SaveChangesAsync(ct);

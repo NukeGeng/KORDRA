@@ -1,3 +1,4 @@
+using Kordra.Testing;
 using System.Text.RegularExpressions;
 using Kordra.Modules.ConnectionManagement.Infrastructure;
 using Microsoft.EntityFrameworkCore;
@@ -22,7 +23,7 @@ public sealed class RegistryCredentialMigrationTests
         var locator = Environment.GetEnvironmentVariable("KORDRA_IAM_TEST_CONNECTION_STRING")
             ?? throw new InvalidOperationException("Private isolated kordra_test locator required.");
         // The owner factory rejects any database/user other than the isolated test target.
-        await using var db = new CredentialDbContext(CredentialDbContextFactory.CreateTestOptions(locator));
+        await using var db = new CredentialDbContext(new ProductPostgreSqlFixtureSelection(locator).Credential());
         var migrator = db.GetService<IMigrator>();
         var schema = "t10_sec_" + Guid.NewGuid().ToString("N");
         string Isolate(string sql) => Regex.Replace(sql, @"\bapp\b", schema, RegexOptions.CultureInvariant);

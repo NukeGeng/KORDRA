@@ -21,7 +21,7 @@ public sealed class TwoProcessDeliveryTests
     {
         var locator = Environment.GetEnvironmentVariable("KORDRA_IAM_TEST_CONNECTION_STRING")
             ?? throw new InvalidOperationException("Private fixture locator required.");
-        var fixture = new FixtureDatabaseScope(locator, Guid.NewGuid()); var logicalId = Guid.NewGuid(); var created = false;
+        var fixture = FixtureDatabaseScope.ForRunner(locator, Guid.NewGuid()); var logicalId = Guid.NewGuid(); var created = false;
         var children = new List<Child>();
         await using var setup = fixture.CreateConnection(); await setup.OpenAsync();
         try
@@ -86,7 +86,7 @@ public sealed class TwoProcessDeliveryTests
     {
         var locator = Environment.GetEnvironmentVariable("KORDRA_IAM_TEST_CONNECTION_STRING")
             ?? throw new InvalidOperationException("Private fixture locator required.");
-        var fixture = new FixtureDatabaseScope(locator, Guid.NewGuid()); var logicalId = Guid.NewGuid();
+        var fixture = FixtureDatabaseScope.ForRunner(locator, Guid.NewGuid()); var logicalId = Guid.NewGuid();
         var children = new List<Child>(); var created = false;
         await using var setup = fixture.CreateConnection(); await setup.OpenAsync();
         try

@@ -1,3 +1,4 @@
+using DisposableTestBinding = (System.Guid RunId, string SourceSha256, string OperationManifestSha256, System.DateTimeOffset ExpiresAtUtc);
 using Kordra.Modules.AuditCompliance.Contracts;
 using Microsoft.EntityFrameworkCore;
 
@@ -6,6 +7,15 @@ namespace Kordra.Modules.AuditCompliance.Infrastructure;
 /// <summary>Owner adapter for immutable append and exact intent-id lookup.</summary>
 public sealed class AuditAppendStore(IDbContextFactory<AuditDbContext> contextFactory) : IAuditAppendPort
 {
+    private readonly DisposableTestBinding? _disposableTest;
+
+    private AuditAppendStore(IDbContextFactory<AuditDbContext> factory, DisposableTestBinding profile) : this(factory)
+        => _disposableTest = profile;
+
+    /// <summary>Explicit ADR-0025 test composition for the standalone append and lookup port.</summary>
+    public static AuditAppendStore CreateDisposableTestStore(IDbContextFactory<AuditDbContext> factory, DisposableTestBinding profile)
+        => new(factory, profile);
+
     public async ValueTask<AuditAppendOutcome> AppendAsync(
         AuditIntent intent,
         CancellationToken cancellationToken = default)
@@ -47,11 +57,15 @@ public sealed class AuditAppendStore(IDbContextFactory<AuditDbContext> contextFa
         {
             await using var anchor = await contextFactory.CreateDbContextAsync(cancellationToken);
             cancellationToken.ThrowIfCancellationRequested();
+            var connection = anchor.Database.GetDbConnection();
+            if (_disposableTest is { } selection)
+                AuditDbContextFactory.ValidateDisposableAppendTestTarget(connection, selection);
             await anchor.Database.OpenConnectionAsync(cancellationToken);
             cancellationToken.ThrowIfCancellationRequested();
-            var connection = anchor.Database.GetDbConnection();
             await using var transaction = await connection.BeginTransactionAsync(cancellationToken);
-            await using var enlistment = await AuditTransactionContext.CreateAsync(connection, transaction, cancellationToken);
+            await using var enlistment = _disposableTest is { } profile
+                ? await AuditTransactionContext.CreateDisposableAppendTestAsync(connection, transaction, profile, cancellationToken)
+                : await AuditTransactionContext.CreateAsync(connection, transaction, cancellationToken);
             var staged = await enlistment.StageAsync(intent, cancellationToken);
             cancellationToken.ThrowIfCancellationRequested();
             if (staged.Status == AuditTransactionStageStatus.Staged)
@@ -86,6 +100,8 @@ public sealed class AuditAppendStore(IDbContextFactory<AuditDbContext> contextFa
         try
         {
             await using var dbContext = await contextFactory.CreateDbContextAsync(cancellationToken);
+            if (_disposableTest is { } profile)
+                AuditDbContextFactory.ValidateDisposableAppendTestTarget(dbContext.Database.GetDbConnection(), profile);
             var entry = await dbContext.Entries.AsNoTracking()
                 .SingleOrDefaultAsync(value => value.IntentId == intentId, cancellationToken);
             return entry is null

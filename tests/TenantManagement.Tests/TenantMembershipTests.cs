@@ -1,3 +1,4 @@
+using Kordra.Testing;
 using System.Data.Common;
 using Kordra.Api;
 using Kordra.BuildingBlocks.Security;
@@ -17,6 +18,7 @@ namespace Kordra.Modules.TenantManagement.Tests;
 
 public sealed class TenantMembershipTests : IAsyncLifetime
 {
+    private ProductPostgreSqlFixtureSelection _selection = null!;
     private PooledDbContextFactory<TenantDbContext> _ten = null!;
     private PooledDbContextFactory<KordraIdentityDbContext> _iam = null!;
     private readonly List<Guid> _tenants = [], _principals = [], _definitions = [];
@@ -34,13 +36,13 @@ public sealed class TenantMembershipTests : IAsyncLifetime
     {
         var locator = Environment.GetEnvironmentVariable("KORDRA_IAM_TEST_CONNECTION_STRING")
             ?? throw new InvalidOperationException("Private exact kordra_test locator is required; no database substituted.");
-        _ten = new(TenantDbContextFactory.CreateTestOptions(locator)); // exact target/role guard before all connections
-        _iam = new(new DbContextOptionsBuilder<KordraIdentityDbContext>().UseNpgsql(locator,
-            p => p.MigrationsHistoryTable(KordraIdentityDbContext.MigrationHistoryTableName, "app")).Options);
-        await using (var audit = new AuditDbContext(AuditDbContextFactory.CreateTestOptions(locator))) await audit.Database.MigrateAsync();
+        _selection = new(locator);
+        _ten = new(_selection.Tenant()); // exact target/role guard before all connections
+        _iam = new(_selection.Identity());
+        await using (var audit = new AuditDbContext(_selection.Audit())) await audit.Database.MigrateAsync();
         await using (var iam = await _iam.CreateDbContextAsync()) await iam.Database.MigrateAsync();
         await using (var ten = await _ten.CreateDbContextAsync()) await ten.Database.MigrateAsync();
-        _roles = new(_iam, _gate, new IdentityAccessAuditTransactionAdapter());
+        _roles = new(_iam, _gate, _selection.IdentityAudit());
         _service = Service();
         _founder = await Principal(); _recipient = await Principal();
         _subject.Principal = _founder;
@@ -382,7 +384,7 @@ public sealed class TenantMembershipTests : IAsyncLifetime
         Assert.Equal("denied", (await _service.ExecuteAsync(Assign(role, scope))).Status);
         Assert.Equal("denied", (await _service.ExecuteAsync(Assign(role, scope) with { ExpiresAtUtc = _clock.Now.AddMinutes(6) })).Status);
         var command = Assign(role, scope) with { ExpiresAtUtc = _clock.Now.AddMinutes(4) };
-        var service = Service(new FaultAudit(beforeSave: () => _clock.Now = _clock.Now.AddMinutes(6)));
+        var service = Service(new FaultAudit(_selection.TenantAudit(), beforeSave: () => _clock.Now = _clock.Now.AddMinutes(6)));
         Assert.Equal("unavailable", (await service.ExecuteAsync(command)).Status);
         await using var db = await _ten.CreateDbContextAsync();
         Assert.Empty(await db.Assignments.Where(x => x.TenantId == _tenant && x.MembershipId == _recipientMember).ToArrayAsync());
@@ -468,9 +470,9 @@ public sealed class TenantMembershipTests : IAsyncLifetime
     public async Task Setup_failure_does_not_close_admission_and_subject_loss_rolls_back_owner_and_receipt()
     {
         var (role, scope, _) = await ProjectCapability(); var command = Assign(role, scope);
-        await Assert.ThrowsAsync<TimeoutException>(() => Service(new FaultAudit(failSetup: true)).ExecuteAsync(command));
+        await Assert.ThrowsAsync<TimeoutException>(() => Service(new FaultAudit(_selection.TenantAudit(), failSetup: true)).ExecuteAsync(command));
         await AssertGateOpen();
-        Assert.Equal("unavailable", (await Service(new FaultAudit(beforeSave: () => _subject.Principal = null)).ExecuteAsync(command)).Status);
+        Assert.Equal("unavailable", (await Service(new FaultAudit(_selection.TenantAudit(), beforeSave: () => _subject.Principal = null)).ExecuteAsync(command)).Status);
         await AssertGateOpen();
         _subject.Principal = _founder;
         Assert.Equal("success", (await _service.ExecuteAsync(command)).Status); // rejected attempt wrote no receipt
@@ -480,7 +482,7 @@ public sealed class TenantMembershipTests : IAsyncLifetime
     public async Task Lost_commit_ack_closes_admission_and_restart_replays_durable_receipt_once()
     {
         var (role, scope, _) = await ProjectCapability(); var command = Assign(role, scope);
-        Assert.Equal("unavailable", (await Service(new FaultAudit(unknownAfterCommit: true)).ExecuteAsync(command)).Status);
+        Assert.Equal("unavailable", (await Service(new FaultAudit(_selection.TenantAudit(), unknownAfterCommit: true)).ExecuteAsync(command)).Status);
         await Assert.ThrowsAsync<InvalidOperationException>(async () => { await using var closed = await _gate.AcquireReadAsync(); });
         _gate = new(); _service = Service();
         var recovered = await _service.ExecuteAsync(command); Assert.Equal("success", recovered.Status);
@@ -536,11 +538,11 @@ public sealed class TenantMembershipTests : IAsyncLifetime
     public async Task Owner_mutation_and_audit_commit_once_and_rollback_together()
     {
         var locator = Environment.GetEnvironmentVariable("KORDRA_IAM_TEST_CONNECTION_STRING")!;
-        await using var audit = new AuditDbContext(AuditDbContextFactory.CreateTestOptions(locator));
+        await using var audit = new AuditDbContext(_selection.Audit());
         var before = await audit.Entries.CountAsync(x => x.TenantRef == _tenant);
         var (role, scope, _) = await ProjectCapability();
         var command = Assign(role, scope);
-        Assert.Equal("unavailable", (await Service(new FaultAudit(beforeSave: () => _subject.Principal = null)).ExecuteAsync(command)).Status);
+        Assert.Equal("unavailable", (await Service(new FaultAudit(_selection.TenantAudit(), beforeSave: () => _subject.Principal = null)).ExecuteAsync(command)).Status);
         Assert.Equal(before + 1, await audit.Entries.CountAsync(x => x.TenantRef == _tenant)); // only founding project grant
         _subject.Principal = _founder;
         var result = await _service.ExecuteAsync(command); Assert.Equal("success", result.Status);
@@ -560,7 +562,7 @@ public sealed class TenantMembershipTests : IAsyncLifetime
 
     private async Task AssertGateOpen() { await using var lease = await _gate.AcquireReadAsync(); }
     private TenantMembershipService Service(ITenantAuditTransactionFactory? audit = null) =>
-        new(_ten, _roles, _subject, _scopes, audit ?? new TenantAuditTransactionAdapter(), _gate, _clock);
+        new(_ten, _roles, _subject, _scopes, audit ?? _selection.TenantAudit(), _gate, _clock);
     private TenantCommand Assign(DefinitionWriteResult role, TenantScope scope) => new(Guid.NewGuid().ToString("N"), "assign", _tenant,
         _recipientMember, 1, role.DefinitionId, role.Revision, scope);
     private async Task<EffectiveAssignment?> Effective(Guid principal, string permission, TenantScope scope, Guid? tenant = null)
@@ -628,12 +630,12 @@ public sealed class TenantMembershipTests : IAsyncLifetime
         public void RequireHeld() { if (_disposed) throw new InvalidOperationException("Offline test lease released."); }
         public void Dispose() { _disposed = true; _file.Dispose(); File.Delete(_path); }
     }
-    private sealed class FaultAudit(Action? beforeSave = null, bool failSetup = false, bool unknownAfterCommit = false) : ITenantAuditTransactionFactory
+    private sealed class FaultAudit(ITenantAuditTransactionFactory inner, Action? beforeSave = null, bool failSetup = false, bool unknownAfterCommit = false) : ITenantAuditTransactionFactory
     {
         public async ValueTask<ITenantAuditTransaction> EnlistAsync(DbConnection connection, DbTransaction transaction, CancellationToken cancellationToken = default)
         {
             if (failSetup) throw new TimeoutException("Synthetic pre-commit audit setup failure.");
-            return new Transaction(await new TenantAuditTransactionAdapter().EnlistAsync(connection, transaction, cancellationToken), beforeSave, unknownAfterCommit);
+            return new Transaction(await inner.EnlistAsync(connection, transaction, cancellationToken), beforeSave, unknownAfterCommit);
         }
         private sealed class Transaction(ITenantAuditTransaction inner, Action? before, bool unknown) : ITenantAuditTransaction
         {

@@ -1,3 +1,4 @@
+using DisposableTestBinding = (System.Guid RunId, string SourceSha256, string OperationManifestSha256, System.DateTimeOffset ExpiresAtUtc);
 using Kordra.BuildingBlocks.Security;
 using Kordra.Modules.AuditCompliance.Contracts;
 using Kordra.Modules.AuditCompliance.Infrastructure;
@@ -33,6 +34,20 @@ public sealed class ReleaseMutationTransaction(Guid installationId, IDbContextFa
     IAuditMutationEvidenceReader auditEvidence,
     FairAsyncReaderWriterAdmissionGate gate, IAuthorityClock clock)
 {
+    private readonly DisposableTestBinding? disposableTest;
+    private ReleaseMutationTransaction(Guid installationId, IDbContextFactory<KordraIdentityDbContext> identity,
+    ReleaseProjectAuthorityReader authority, ReleaseSelectionReader selections, IArtifactAuditTransactionFactory audits,
+    IAuditMutationEvidenceReader auditEvidence,
+    FairAsyncReaderWriterAdmissionGate gate, IAuthorityClock clock, DisposableTestBinding profile)
+        : this(installationId, identity, authority, selections, audits, auditEvidence, gate, clock) => disposableTest = profile;
+
+    /// <summary>Explicit ADR-0025 test composition; runtime construction remains unchanged.</summary>
+    public static ReleaseMutationTransaction CreateDisposableTestTransaction(Guid installationId, IDbContextFactory<KordraIdentityDbContext> identity,
+    ReleaseProjectAuthorityReader authority, ReleaseSelectionReader selections, IArtifactAuditTransactionFactory audits,
+    IAuditMutationEvidenceReader auditEvidence,
+    FairAsyncReaderWriterAdmissionGate gate, IAuthorityClock clock, DisposableTestBinding profile)
+        => new(installationId, identity, authority, selections, audits, auditEvidence, gate, clock, profile);
+
     public async Task<ReleaseMutationResult> ExecuteAsync(ReleaseUseTicket ticket, CancellationToken ct = default)
     {
         if (ticket is null || installationId == Guid.Empty || ticket.InstallationId != installationId ||
@@ -57,9 +72,13 @@ public sealed class ReleaseMutationTransaction(Guid installationId, IDbContextFa
             var auditReason = ReleaseCommandHash.AuditReason(installationId, Convert.ToHexStringLower(key), command.BusinessHash);
             var expectedIntentId = ReleaseCommandHash.AuditIntentId(Convert.ToHexStringLower(key));
             await using var iam = await identity.CreateDbContextAsync(token);
-            IdentityAccessDbContextFactory.ValidateRuntimeOrTestTransactionTarget(iam.Database.GetDbConnection().ConnectionString);
+            if (disposableTest is { } target)
+                IdentityAccessDbContextFactory.ValidateDisposableTestTarget(iam.Database.GetDbConnection().ConnectionString, target);
+            else IdentityAccessDbContextFactory.ValidateRuntimeOrTestTransactionTarget(iam.Database.GetDbConnection().ConnectionString);
             await using var tx = await iam.Database.BeginTransactionAsync(token);
-            await using var rel = new ReleaseDbContext(ReleaseDbContextFactory.CreateEnlistedOptions(iam.Database.GetDbConnection()));
+            await using var rel = new ReleaseDbContext(disposableTest is { } ownerProfile
+                ? ReleaseDbContextFactory.CreateDisposableEnlistedTestOptions(iam.Database.GetDbConnection(), ownerProfile)
+                : ReleaseDbContextFactory.CreateEnlistedOptions(iam.Database.GetDbConnection()));
             await rel.Database.UseTransactionAsync(tx.GetDbTransaction(), token);
             var receipts = new ReleaseReceiptStore(rel);
             var replay = await receipts.FindUnderAdmissionAsync(installationId, tenant, command.ProjectId,

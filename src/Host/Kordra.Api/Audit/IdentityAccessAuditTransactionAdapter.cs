@@ -1,3 +1,4 @@
+using DisposableTestBinding = (System.Guid RunId, string SourceSha256, string OperationManifestSha256, System.DateTimeOffset ExpiresAtUtc);
 using System.Data.Common;
 using Kordra.Modules.AuditCompliance.Contracts;
 using Kordra.Modules.AuditCompliance.Infrastructure;
@@ -8,12 +9,19 @@ namespace Kordra.Api;
 /// <summary>Host composition adapter that exposes AUD enlistment to IAM without cross-owner table access.</summary>
 public sealed class IdentityAccessAuditTransactionAdapter : IIdentityAuditTransactionFactory
 {
+    private readonly DisposableTestBinding? disposableTest;
+    public IdentityAccessAuditTransactionAdapter() { }
+    private IdentityAccessAuditTransactionAdapter(DisposableTestBinding profile) => disposableTest = profile;
+    public static IdentityAccessAuditTransactionAdapter CreateDisposableTestAdapter(DisposableTestBinding profile) => new(profile);
+
     public async ValueTask<IIdentityAuditTransaction> EnlistAsync(
         DbConnection connection,
         DbTransaction transaction,
         CancellationToken cancellationToken = default)
     {
-        var context = await AuditTransactionContext.CreateAsync(connection, transaction, cancellationToken);
+        var context = disposableTest is { } profile
+            ? await AuditTransactionContext.CreateDisposableTestAsync(connection, transaction, profile, cancellationToken)
+            : await AuditTransactionContext.CreateAsync(connection, transaction, cancellationToken);
         return new EnlistedAuditTransaction(context);
     }
 

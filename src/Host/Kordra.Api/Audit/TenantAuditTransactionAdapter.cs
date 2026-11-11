@@ -1,3 +1,4 @@
+using DisposableTestBinding = (System.Guid RunId, string SourceSha256, string OperationManifestSha256, System.DateTimeOffset ExpiresAtUtc);
 using System.Data.Common;
 using Kordra.Modules.AuditCompliance.Contracts;
 using Kordra.Modules.AuditCompliance.Infrastructure;
@@ -8,8 +9,14 @@ namespace Kordra.Api;
 /// <summary>Host-only AUD enlistment bridge; does not register TEN endpoints or grant authority.</summary>
 public sealed class TenantAuditTransactionAdapter(ICatalogClockFloorWriter? clockFloor = null) : ITenantAuditTransactionFactory
 {
+    private readonly DisposableTestBinding? disposableTest;
+    private TenantAuditTransactionAdapter(DisposableTestBinding profile, ICatalogClockFloorWriter? clockFloor) : this(clockFloor) => disposableTest = profile;
+    public static TenantAuditTransactionAdapter CreateDisposableTestAdapter(DisposableTestBinding profile, ICatalogClockFloorWriter? clockFloor = null) => new(profile, clockFloor);
+
     public async ValueTask<ITenantAuditTransaction> EnlistAsync(DbConnection connection, DbTransaction transaction, CancellationToken cancellationToken = default) =>
-        new Enlisted(await AuditTransactionContext.CreateAsync(connection, transaction, cancellationToken), connection, transaction, clockFloor);
+        new Enlisted(disposableTest is { } profile
+            ? await AuditTransactionContext.CreateDisposableTestAsync(connection, transaction, profile, cancellationToken)
+            : await AuditTransactionContext.CreateAsync(connection, transaction, cancellationToken), connection, transaction, clockFloor);
 
     private sealed class Enlisted(AuditTransactionContext context, DbConnection connection, DbTransaction transaction, ICatalogClockFloorWriter? clockFloor) : ITenantAuditTransaction
     {

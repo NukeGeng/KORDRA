@@ -20,4 +20,7 @@
   <ItemGroup><Compile Include="../Shared/NomadTlsFixture.cs" Link="Fixtures/NomadTlsFixture.cs" /></ItemGroup>
   <ItemGroup><Compile Include="../ConnectionManagement.Tests/FixtureKeychainNative.cs" Link="Fixtures/FixtureKeychainNative.cs" /></ItemGroup>
   <ItemGroup><Compile Include="../Shared/KubernetesTlsFixture.cs" Link="Fixtures/KubernetesTlsFixture.cs" /></ItemGroup>
+  <ItemGroup><Compile Include="../Shared/DisposablePostgreSqlProfile.cs" Link="Fixtures/DisposablePostgreSqlProfile.cs" /></ItemGroup>
+  <ItemGroup><Compile Include="../Shared/RegressionPostgreSqlSelection.cs" Link="Fixtures/RegressionPostgreSqlSelection.cs" /></ItemGroup>
+  <ItemGroup><Compile Include="../Shared/ProductPostgreSqlFixtureSelection.cs" Link="Fixtures/ProductPostgreSqlFixtureSelection.cs" /></ItemGroup>
 </Project>

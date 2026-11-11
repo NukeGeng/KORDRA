@@ -1,3 +1,4 @@
+using DisposableTestBinding = (System.Guid RunId, string SourceSha256, string OperationManifestSha256, System.DateTimeOffset ExpiresAtUtc);
 using System.Security.Cryptography;
 using System.Text;
 using Kordra.BuildingBlocks.Security;
@@ -42,6 +43,17 @@ public sealed class ReleaseUseAdmission(Guid installationId, IDbContextFactory<K
     ReleaseProjectAuthorityReader authority, IArtifactAuditTransactionFactory audits,
     FairAsyncReaderWriterAdmissionGate gate, IAuthorityClock clock)
 {
+    private readonly DisposableTestBinding? disposableTest;
+    private ReleaseUseAdmission(Guid installationId, IDbContextFactory<KordraIdentityDbContext> identity,
+    ReleaseProjectAuthorityReader authority, IArtifactAuditTransactionFactory audits,
+    FairAsyncReaderWriterAdmissionGate gate, IAuthorityClock clock, DisposableTestBinding profile)
+        : this(installationId, identity, authority, audits, gate, clock) => disposableTest = profile;
+    /// <summary>Explicit ADR-0025 test composition; default construction remains unchanged.</summary>
+    public static ReleaseUseAdmission CreateDisposableTestComposition(Guid installationId, IDbContextFactory<KordraIdentityDbContext> identity,
+    ReleaseProjectAuthorityReader authority, IArtifactAuditTransactionFactory audits,
+    FairAsyncReaderWriterAdmissionGate gate, IAuthorityClock clock, DisposableTestBinding profile)
+        => new(installationId, identity, authority, audits, gate, clock, profile);
+
     public async Task<ReleaseUseResult> BeginAsync(SessionSelection subject, ReleaseMutationCommand command,
         string idempotencyKey, Guid correlationId, CancellationToken ct = default)
     {
@@ -60,7 +72,9 @@ public sealed class ReleaseUseAdmission(Guid installationId, IDbContextFactory<K
             var invocationLimit = now.AddSeconds(10);
             var until = original.ValidUntilUtc < invocationLimit ? original.ValidUntilUtc : invocationLimit;
             await using var iam = await identity.CreateDbContextAsync(token);
-            IdentityAccessDbContextFactory.ValidateRuntimeOrTestTransactionTarget(iam.Database.GetDbConnection().ConnectionString);
+            if (disposableTest is { } target)
+                IdentityAccessDbContextFactory.ValidateDisposableTestTarget(iam.Database.GetDbConnection().ConnectionString, target);
+            else IdentityAccessDbContextFactory.ValidateRuntimeOrTestTransactionTarget(iam.Database.GetDbConnection().ConnectionString);
             await using var tx = await iam.Database.BeginTransactionAsync(token);
             audit = await audits.EnlistAsync(iam.Database.GetDbConnection(), tx.GetDbTransaction(), token);
             await using var ownedAudit = audit;

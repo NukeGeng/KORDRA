@@ -55,7 +55,7 @@ public sealed class NativeIngressDatabaseTests
             throw new InvalidOperationException("Ingress DDL differs from approved review artifact.");
         var locator = Environment.GetEnvironmentVariable("KORDRA_IAM_TEST_CONNECTION_STRING")
             ?? throw new InvalidOperationException("Private test locator required.");
-        AuditDbContextFactory.ValidateTestTarget(locator);
+        MessagingFixtureSelection.ValidateTestTarget(locator);
         var target = new NpgsqlConnectionStringBuilder(locator);
         if (target.Multiplexing || !string.IsNullOrEmpty(target.Options) || !string.IsNullOrEmpty(target.SearchPath))
             throw new InvalidOperationException("Native ingress fixture rejects session overrides.");
