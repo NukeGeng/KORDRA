@@ -2,6 +2,7 @@ using Kordra.Modules.Messaging.Contracts;
 using Kordra.Modules.Messaging.Infrastructure.Persistence;
 using Wolverine;
 using Wolverine.Runtime.Serialization;
+using Wolverine.Postgresql.Transport;
 
 namespace Kordra.Modules.Messaging.Infrastructure.Serialization;
 
@@ -18,9 +19,14 @@ public sealed class NativeMessageIngressRule : IEnvelopeRule
     private readonly MessageScope _scope;
     private readonly Uri _destination;
     private readonly TimeProvider _time;
+    private readonly IReadOnlyDictionary<string, Uri> _destinations;
 
     public NativeMessageIngressRule(CompiledMessageRegistry registry, Guid installationId, MessageScope scope,
         Uri trustedDestination, TimeProvider time)
+        : this(registry, installationId, scope, trustedDestination, time, null) { }
+
+    public NativeMessageIngressRule(CompiledMessageRegistry registry, Guid installationId, MessageScope scope,
+        Uri trustedDestination, TimeProvider time, PostgresqlTransport? transport)
     {
         _registry = registry ?? throw new ArgumentNullException(nameof(registry));
         _scope = scope ?? throw new ArgumentNullException(nameof(scope));
@@ -31,6 +37,10 @@ public sealed class NativeMessageIngressRule : IEnvelopeRule
             !string.IsNullOrEmpty(trustedDestination.Fragment))
             throw new ArgumentException("Trusted installation and dedicated native destination required.");
         _installationId = installationId; _destination = trustedDestination;
+        _destinations = registry.Routes.ToDictionary(route => route,
+            route => new Uri("postgresql://" + (transport?.SanitizeIdentifier(route) ?? route)), StringComparer.Ordinal);
+        if (!_destinations.Values.Contains(trustedDestination))
+            throw new ArgumentException("Trusted destination must match a compiled native route.");
     }
 
     public void Modify(Envelope envelope)
@@ -44,11 +54,19 @@ public sealed class NativeMessageIngressRule : IEnvelopeRule
             if (envelope.Message is not null || envelope.Serializer is not null || envelope.Id == Guid.Empty)
                 throw new InvalidOperationException();
             observed = envelope.Data ?? [];
-            verified = new MessageEnvelopeCodec(_registry).Read(observed, envelope.ContentType ?? "",
-                _installationId, _scope, _time.GetUtcNow());
+            verified = new MessageEnvelopeCodec(_registry).ReadForInspection(observed, envelope.ContentType ?? "",
+                _installationId, _scope);
             if (envelope.Id != verified.Delivery.MessageId || envelope.MessageType != verified.Binding.Identity.TypeId ||
-                envelope.Destination != _destination || _destination != new Uri("postgresql://" + _registry.RouteFor(verified.Binding)))
+                envelope.Destination != _destination || _destination != _destinations[_registry.RouteFor(verified.Binding)])
                 throw new InvalidOperationException();
+            var now = _time.GetUtcNow();
+            if (verified.Binding.OccurredAtUtc > now) throw new InvalidOperationException();
+            if (verified.Binding.DeadlineUtc <= now)
+            {
+                RejectedEnvelopeDiagnostic.ReplaceInPlace(envelope, observed, _installationId, _destination,
+                    MessageQuarantineReason.Expired);
+                return;
+            }
         }
         catch (Exception error) when (error is InvalidOperationException or ArgumentException or WolverineSerializationException)
         {

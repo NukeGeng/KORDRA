@@ -182,7 +182,7 @@ namespace Kordra.Modules.ProjectEnvironment.Infrastructure.Migrations
 
                     b.ToTable("prj_policy_binding_history", "app", t =>
                         {
-                            t.HasCheckConstraint("ck_prj_policy_binding_history", "binding_revision > 0 AND policy_revision > 0 AND octet_length(content_hash) = 32 AND action = 'target.read' AND ((scope_kind = 'environment' AND environment_id IS NOT NULL) OR (scope_kind = 'project_without_environment' AND environment_id IS NULL))");
+                            t.HasCheckConstraint("ck_prj_policy_binding_history", "binding_revision > 0 AND policy_revision > 0 AND octet_length(content_hash) = 32 AND (action = 'target.read' OR (action IN ('workflow.start','workflow.read','workflow.cancel','workflow.reconcile') AND scope_kind = 'environment' AND environment_id IS NOT NULL)) AND ((scope_kind = 'environment' AND environment_id IS NOT NULL) OR (scope_kind = 'project_without_environment' AND environment_id IS NULL))");
 
                             t.HasCheckConstraint("ck_prj_policy_binding_history_scope_identity", "scope_id = COALESCE(environment_id, project_id)");
                         });
@@ -247,7 +247,7 @@ namespace Kordra.Modules.ProjectEnvironment.Infrastructure.Migrations
 
                     b.ToTable("prj_policy_bindings", "app", t =>
                         {
-                            t.HasCheckConstraint("ck_prj_policy_binding", "binding_revision > 0 AND policy_revision > 0 AND action = 'target.read' AND policy_id <> '00000000-0000-0000-0000-000000000000' AND ((scope_kind = 'environment' AND environment_id IS NOT NULL) OR (scope_kind = 'project_without_environment' AND environment_id IS NULL))");
+                            t.HasCheckConstraint("ck_prj_policy_binding", "binding_revision > 0 AND policy_revision > 0 AND (action = 'target.read' OR (action IN ('workflow.start','workflow.read','workflow.cancel','workflow.reconcile') AND scope_kind = 'environment' AND environment_id IS NOT NULL)) AND policy_id <> '00000000-0000-0000-0000-000000000000' AND ((scope_kind = 'environment' AND environment_id IS NOT NULL) OR (scope_kind = 'project_without_environment' AND environment_id IS NULL))");
 
                             t.HasCheckConstraint("ck_prj_policy_binding_scope_identity", "scope_id = COALESCE(environment_id, project_id)");
                         });

@@ -7,7 +7,7 @@ module_id: MOD-MSG
 feature_id: FEAT-MSG-001
 phase: MVP
 source_paths: [".github/workflows/product-ci.yml", "Kordra.slnx", "src/Modules/Messaging/Infrastructure/", "src/Modules/Messaging/Contracts/"]
-test_paths: ["tests/Messaging.Durability.Tests/", "tests/Messaging.Tests/"]
+test_paths: ["tests/InfrastructureInventory.Bootstrap.Tests/IsolatedWorkflowFixture.cs", "tests/Shared/RegressionPostgreSqlSelection.cs", "tests/Shared/DisposablePostgreSqlProfile.cs", "tests/Messaging.Tests/MessagingFixtureSelectionTests.cs", "tests/Messaging.Tests/MessagingFixtureSelection.cs", "tests/InfrastructureInventory.Bootstrap.Tests/DisposableRecoveryReaderTests.cs", "tests/InfrastructureInventory.Bootstrap.Tests/DisposableWorkflowMessagingTargetTests.cs", "tests/Messaging.Durability.Tests/", "tests/Messaging.Tests/"]
 planned_test_paths: ["tests/Messaging.Durability.Tests/", "tests/Messaging.Tests/"]
 planned_source_paths: ["src/Modules/Messaging/Contracts/", "src/Modules/Messaging/Infrastructure/", "Kordra.slnx"]
 planned_doc_paths: ["docs/decisions/0020-messaging-runtime-adoption.md", "docs/contracts/durable-messaging-v1.md", "docs/engineering/t12-1-design.vi.md"]
@@ -184,3 +184,39 @@ Accepted ADR-0021/0022 covers the inactive Host composition dependency on existi
 ## T12.2c native destination integration — 2026-11-01
 
 Caller-owned publication/consumption resolves the registered logical route through the configured PostgreSQL transport's public identifier sanitizer before native destination matching. The actual approved WFL/AUD/MSG fixture uses a hyphenated logical route and verifies real native delivery with canonical queue identity, exact caller enlistment, logical receipt and Handled/root atomicity. No route allowlist, payload/scope check, capacity guard or receipt gate is relaxed; production registration remains outside this inactive test-target composition.
+
+The receipt reader exposes whether a successful exact-key SELECT returned zero rows. The existing StillUnknown outcome for missing receipts is preserved. Failed, malformed, conflicting or ambiguous queries never report exact-key absence.
+
+The isolated receipt reader now observes an expired delivery only when its exact ID/installation/hash has an Expired journal record, one nonreplayable unarchived native DLQ record on the compiled destination, and no pending copy in the native inbox, outbox or any declared queue. All predicates use one SELECT. A quiesced custodian must interpret the observation with owner/transaction evidence. The separately approved v2 metadata fixture passed all 21 cases on PostgreSQL and independently verified schema cleanup. Synthetic metadata qualification leaves the native settlement writer qualification outstanding.
+
+The native ingress rule now distinguishes a structurally valid expired message from malformed input. Historical inspection validates the closed immutable envelope while execution reads still enforce the original time window. Expired input becomes a bounded Expired diagnostic before handler dispatch. Matching that diagnostic requires the retained original wire bytes, installation, delivery and destination. The prepared native expiry fixture uses the existing pinned transport and journal writer to test DLQ creation, rollback/commit visibility and zero business effects; actual operation qualification is pending.
+
+The separately approved native expiry fixture passed: one expired delivery entered native diagnostic DLQ with original ID/destination/wire digest and nonreplayable disposition, journal rollback stayed invisible, committed journal became observable, and no business/logical/AUD effect occurred. The owned host stopped and independent cleanup verified schema absence.
+
+The integrated WFL fixture exposed a route normalization mismatch for hyphenated logical routes. Ingress and the expired-delivery observer now use the same native sanitizer as publication. Regression tests cover accepted and expired messages on a hyphenated route and exact SQL destination binding.
+
+An expired Handled observation now supports the receiver-abort recovery path. Exact scope, route, journal, unique inbox identity, absence of conflicting DLQ and absence of pending copies are checked in one read. Native discard calls completion in the pinned transport version. [Wolverine 6.59.0 discard source](https://github.com/JasperFx/wolverine/blob/0313f3f49ed34d203f077f65210efe3adfa36079/src/Wolverine/ErrorHandling/DiscardEnvelope.cs)
+
+
+### Explicit disposable WFL/MSG test options — 2026-11-08
+
+Accepted ADR-0025 adds separate manifest-profile projection entry points for WFL revision1–5 isolated contexts and MSG receipt/journal/capacity/inspection construction. Exact disposable database, fixed test identity, case namespace and binding validity are checked without ambient/global target overrides. Existing default constructors/target guards remain unchanged. Offline tests inspect real model revisions/case separation and reject old/runtime/wrong targets and expired/unbound selections without opening connections. Host root/provenance/custody and actual fixture runner threading/qualification remain pending; these options do not establish durable writes, authority, operation permission or a complete regression run.
+
+
+### Disposable root/provenance selection preparation — 2026-11-08
+
+Accepted ADR-0025 adds explicit WFL caller-root creation, origin capture/independent probe, dedicated fixture custody acquisition and composed WFL/MSG/AUD recovery readers for the selected disposable database. The profile is retained as private selection metadata; legacy/default methods keep their original target choices. Opaque origin and custody selections must match the reader/root profile, preventing a same-case lease from another database/manifest being used as coordination. No origin is accepted from a request body; observation does not grant replay/reopen. Closed-reader and invalid-custody negative tests perform no DB operations. Actual cross-database custody, native transaction/provenance and full test-host qualification remain pending separate operation approval after integration.
+
+ADR-0025 native/isolated fixture wiring (working tree): explicit runner selection now reaches actual WFL models/revisions, AUD enlistment, MSG receipts/journals/capacity/inspectors, native handlers, transaction probes, custody and recovery readers. SQL-only exports retain explicit offline metadata paths; live fixture construction validates the selected target before opening connections. Existing crash/redelivery/COMMIT-loss and authorization assertions remain in place. This is source plus offline verification, not current-binary live recovery evidence or database-operation approval.
+
+The durability fixture has separate explicit disposable owner and case-derived restricted transport-role selections (`kordra_t12_<case:N>`). Default constructors/role guards remain unchanged; the base profile never authorizes the restricted role implicitly. No role creation, ACL/HBA change, host start or cleanup was executed. The independent T12.1f startup fixture targets its separately approved PostgreSQL instance/port and is deliberately not redirected by this profile.
+
+### Disposable caller-owned publication capacity — 2026-11-10
+
+The native wake fixture failed on its fresh ADR-0025 database and independently verified schema and database cleanup. Source inspection found that new publication receipts used the selected caller root while their capacity check selected the legacy fixture target. Capacity now derives from the bound receipt store and uses the same transaction, schema and disposable binding. Runtime and legacy receipt composition retain their existing guards. Current-binary live qualification remains pending.
+
+The v3 disposable native run passed wake publication and host replacement/redelivery. Its next case reached the COMMIT-response injector, which still pinned the legacy test database. The injector now validates the explicit selected profile before installing the stream fault, including the unpooled requirement. The wire interception and pinned Npgsql guard are unchanged. Live fault validation on the revised binary remains pending.
+
+The two-process delivery and loopback COMMIT-loss regression fixtures now select the same explicit ADR-0025 target as their child executables. The legacy guard tests still construct the legacy scope explicitly. Full disposable regression remains pending.
+
+The local disposable full-regression manifest now includes the required case purpose for all seven native MSG fixtures. The first full run stopped these seven cases before their DB work because the field was absent. CI fixture generation and the accepted message contract are unchanged.

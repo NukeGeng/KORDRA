@@ -24,6 +24,8 @@
   <ItemGroup><Compile Include="../Shared/NomadTlsFixture.cs" Link="Fixtures/NomadTlsFixture.cs" /></ItemGroup>
   <ItemGroup><Compile Include="../Shared/KubernetesTlsFixture.cs" Link="Fixtures/KubernetesTlsFixture.cs" /></ItemGroup>
   <ItemGroup><None Update="Fixtures/workflow-transition-requested-v1.*" CopyToOutputDirectory="PreserveNewest" /></ItemGroup>
+  <ItemGroup><None Update="Fixtures/workflow-transition-recorded-v1.*" CopyToOutputDirectory="PreserveNewest" /></ItemGroup>
   <ItemGroup Condition="'$(T12CodegenBootstrap)' == 'true'"><Compile Remove="Internal/Generated/**/*.cs" /></ItemGroup>
   <ItemGroup><Compile Include="../Messaging.Tests/CommitReplyFault.cs" Link="Fixtures/CommitReplyFault.cs" /></ItemGroup>
+  <ItemGroup><Compile Include="../Shared/ProductPostgreSqlFixtureSelection.cs" Link="Fixtures/ProductPostgreSqlFixtureSelection.cs" /></ItemGroup>
 </Project>

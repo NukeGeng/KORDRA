@@ -97,7 +97,7 @@ public sealed class WorkflowTransactionSchemaTests
         }
     }
 
-    private static void ConfigureTransportMetadata(IHost host)
+    internal static void ConfigureTransportMetadata(IHost host)
     {
         // Public metadata composition only: no ConnectAsync, StartAsync or connection opening.
         // Native transport queue objects are attached during ConfigureAsync, before SQL export.
@@ -132,7 +132,7 @@ public sealed class WorkflowTransactionSchemaTests
         });
     }
 
-    private static string StableNativeScript(IDatabase database, string expectedSchema)
+    internal static string StableNativeScript(IDatabase database, string expectedSchema)
     {
         _ = database.ToDatabaseScript(); // Native metadata post-processing, not SQL rewriting.
         var schemas = database.AllObjects().SelectMany(x => x.AllNames()).Select(x => x.Schema).Distinct(StringComparer.Ordinal).ToArray();

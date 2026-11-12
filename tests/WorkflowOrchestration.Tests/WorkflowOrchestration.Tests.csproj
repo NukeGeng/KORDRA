@@ -20,6 +20,14 @@
     <None Update="Fixtures/**/*" CopyToOutputDirectory="PreserveNewest" />
     <None Include="../../src/Modules/WorkflowOrchestration/Infrastructure/Migrations/wfl-v1.sql" Link="Fixtures/wfl-v1.sql" CopyToOutputDirectory="PreserveNewest" />
     <None Include="../../src/Modules/WorkflowOrchestration/Infrastructure/Migrations/wfl-v1.manifest.json" Link="Fixtures/wfl-v1.manifest.json" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="../../src/Modules/WorkflowOrchestration/Infrastructure/Migrations/wfl-v2-wake.sql" Link="Fixtures/wfl-v2-wake.sql" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="../../src/Modules/WorkflowOrchestration/Infrastructure/Migrations/wfl-v2-wake.manifest.json" Link="Fixtures/wfl-v2-wake.manifest.json" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="../../src/Modules/WorkflowOrchestration/Infrastructure/Migrations/wfl-v3-cancellation.sql" Link="Fixtures/wfl-v3-cancellation.sql" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="../../src/Modules/WorkflowOrchestration/Infrastructure/Migrations/wfl-v3-cancellation.manifest.json" Link="Fixtures/wfl-v3-cancellation.manifest.json" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="../../src/Modules/WorkflowOrchestration/Infrastructure/Migrations/wfl-v4-start.sql" Link="Fixtures/wfl-v4-start.sql" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="../../src/Modules/WorkflowOrchestration/Infrastructure/Migrations/wfl-v4-start.manifest.json" Link="Fixtures/wfl-v4-start.manifest.json" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="../../src/Modules/WorkflowOrchestration/Infrastructure/Migrations/wfl-v5-operator-decisions.sql" Link="Fixtures/wfl-v5-operator-decisions.sql" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="../../src/Modules/WorkflowOrchestration/Infrastructure/Migrations/wfl-v5-operator-decisions.manifest.json" Link="Fixtures/wfl-v5-operator-decisions.manifest.json" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
   <ItemGroup><Compile Include="../Shared/DisposablePostgreSqlProfile.cs" Link="Fixtures/DisposablePostgreSqlProfile.cs" /></ItemGroup>
   <ItemGroup><Compile Include="../Shared/RegressionPostgreSqlSelection.cs" Link="Fixtures/RegressionPostgreSqlSelection.cs" /></ItemGroup>

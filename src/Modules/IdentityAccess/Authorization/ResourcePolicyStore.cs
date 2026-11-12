@@ -37,7 +37,9 @@ public sealed class ResourcePolicyStore(KordraIdentityDbContext db) : ICurrentRe
         payload = ResourcePolicies.Parse(System.Text.Encoding.UTF8.GetString(ResourcePolicies.CanonicalBytes(payload)))!;
         if (policyId is { } existing)
         {
-            if (await ReadCurrentUnderAdmissionAsync(tenantId, projectId, existing, expected, ct) is null) return null;
+            var original = await ReadCurrentUnderAdmissionAsync(tenantId, projectId, existing, expected, ct);
+            if (original is null || original.Payload.Action != payload.Action ||
+                original.Payload.SchemaVersion != payload.SchemaVersion) return null;
             head = await db.Set<ResourcePolicyHead>().SingleAsync(x => x.PolicyId == existing, ct);
         }
         var id = policyId ?? Guid.NewGuid(); var revision = checked(expected + 1);

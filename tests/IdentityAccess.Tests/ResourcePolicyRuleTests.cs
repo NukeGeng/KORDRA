@@ -10,6 +10,35 @@ public sealed class ResourcePolicyRuleTests
     internal static ResourcePolicyPayload Payload(string scope = "environment") => new(1, "target.read", scope, "active", Now, null,
         [new(scope == "environment" ? "Development" : "NoEnvironment", "allow")]);
 
+    [Theory]
+    [InlineData("workflow.start")]
+    [InlineData("workflow.read")]
+    [InlineData("workflow.cancel")]
+    [InlineData("workflow.reconcile")]
+    public void WorkflowV2RequiresExactActionAndPilotClassification(string action)
+    {
+        var payload = new ResourcePolicyPayload(2, action, "environment", "active", Now, Now.AddHours(1),
+            [new("Test", "allow")]);
+        var policy = new ResourcePolicySnapshot(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), 1, payload, ResourcePolicies.Hash(payload));
+        var selection = new ResourcePolicySelection(Guid.NewGuid(), 1, policy.TenantId, policy.ProjectId,
+            Guid.NewGuid(), "environment", policy.PolicyId, 1, "Test", action);
+
+        Assert.Equal(ResourceEligibility.Allow, ResourcePolicies.Evaluate(policy, selection, Now));
+        Assert.Equal(ResourceEligibility.Deny, ResourcePolicies.Evaluate(policy, selection with { Action = "target.read" }, Now));
+        Assert.Equal(ResourceEligibility.Deny, ResourcePolicies.Evaluate(policy, selection with { TenantId = Guid.NewGuid() }, Now));
+        Assert.Equal(ResourceEligibility.Deny, ResourcePolicies.Evaluate(policy, selection with { Classification = "Production" }, Now));
+        Assert.Equal(ResourceEligibility.Deny, ResourcePolicies.Evaluate(policy, selection with { PolicyRevision = 2 }, Now));
+        Assert.Equal(ResourceEligibility.Deny, ResourcePolicies.Evaluate(policy, selection, Now.AddHours(1)));
+        var deny = payload with { Rules = [new("Test", "allow"), new("Test", "deny")] };
+        Assert.Equal(ResourceEligibility.Deny, ResourcePolicies.Evaluate(
+            policy with { Payload = deny, ContentHash = ResourcePolicies.Hash(deny) }, selection, Now));
+        var bytes = ResourcePolicies.CanonicalBytes(payload);
+        Assert.Equal(bytes, ResourcePolicies.CanonicalBytes(ResourcePolicies.Parse(Encoding.UTF8.GetString(bytes))!));
+        Assert.False(ResourcePolicies.IsValid(payload with { SchemaVersion = 1 }));
+        Assert.False(ResourcePolicies.IsValid(payload with { ScopeKind = "project_without_environment" }));
+        Assert.False(ResourcePolicies.IsValid(payload with { Rules = [new("Production", "allow")] }));
+    }
+
     [Fact]
     public void Canonical_policy_is_fixed_order_and_round_trips_without_a_second_allowlist()
     {

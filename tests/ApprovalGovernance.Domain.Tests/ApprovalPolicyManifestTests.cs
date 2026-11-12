@@ -11,6 +11,30 @@ public sealed class ApprovalPolicyManifestTests
         {"schemaVersion":1,"manifestId":"11111111-1111-1111-1111-111111111111","installationId":"22222222-2222-2222-2222-222222222222","expectedDatabase":"kordra","expectedRole":"kordra_admin","tenantId":"33333333-3333-3333-3333-333333333333","projectId":"44444444-4444-4444-4444-444444444444","policyId":"55555555-5555-5555-5555-555555555555","expectedPolicyRevision":0,"payload":{"schemaVersion":1,"purpose":"release-intent-v1","status":"active","effectiveFromUtc":"2026-10-27T00:00:00.000000Z","expiresAtUtc":null,"rules":[{"classification":"Test","effect":"allow","separationOfDuties":"independent","allowUnattestedProvenance":true,"pendingLifetimeSeconds":86400,"grantLifetimeSeconds":1800,"blockedWindowsUtc":[]}]},"bindingChanges":[]}
         """;
     [Fact]
+    public void DisposableManifestPinsExactRoleAndDatabaseWithoutChangingDefaultCanonicalVector()
+    {
+        var run = Guid.NewGuid();
+        var profile = (run, new string('a', 64), new string('b', 64), DateTimeOffset.UtcNow.AddMinutes(10));
+        var database = "kordra_test_" + run.ToString("N");
+        var selected = Valid.Replace("\"expectedDatabase\":\"kordra\"", "\"expectedDatabase\":\"" + database + "\"")
+            .Replace("\"expectedRole\":\"kordra_admin\"", "\"expectedRole\":\"kordra_test\"");
+        var bytes = Encoding.UTF8.GetBytes(selected);
+        Assert.Throws<ArgumentException>(() => ApprovalPolicyManifest.Parse(bytes));
+        var manifest = ApprovalPolicyManifest.ParseDisposableTest(bytes, profile);
+        Assert.Equal(database, manifest.ExpectedDatabase); Assert.Equal("kordra_test", manifest.ExpectedRole);
+        Assert.Equal(manifest.CommandHash, ApprovalPolicyManifest.ParseDisposableTest(manifest.GetCanonicalBytes(), profile).CommandHash);
+        var canonical = Encoding.UTF8.GetString(manifest.GetCanonicalBytes());
+        Assert.Contains("\"expectedRole\":\"kordra_test\"", canonical);
+        Assert.Contains(database, canonical);
+        Assert.Throws<ArgumentException>(() => ApprovalPolicyManifest.ParseDisposableTest(Encoding.UTF8.GetBytes(Valid), profile));
+        Assert.Throws<ArgumentException>(() => ApprovalPolicyManifest.ParseDisposableTest(bytes, (Guid.NewGuid(), profile.Item2, profile.Item3, profile.Item4)));
+        Assert.Throws<ArgumentException>(() => ApprovalPolicyManifest.ParseDisposableTest(bytes, (run, profile.Item2, profile.Item3, DateTimeOffset.UtcNow.AddSeconds(-1))));
+        Assert.Throws<ArgumentException>(() => ApprovalPolicyManifest.ParseDisposableTest(Encoding.UTF8.GetBytes(selected.Replace(database, "kordra_test")), profile));
+        Assert.Throws<ArgumentException>(() => ApprovalPolicyManifest.ParseDisposableTest(Encoding.UTF8.GetBytes(selected.Replace("\"expectedRole\":\"kordra_test\"", "\"expectedRole\":\"postgres\"")), profile));
+        Assert.Equal("6c511078110cc95c7a080d3b68c9a1a95b761097fdb2f69ec503c463a6ba6994", Parse(Valid).CommandHash);
+    }
+
+    [Fact]
     public void ManifestHash_UsesIndependentCanonicalVectorAndCopyIsolation()
     {
         var manifest = Parse(Valid);

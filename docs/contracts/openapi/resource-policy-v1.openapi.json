@@ -484,7 +484,7 @@
     "src/Host/Kordra.Api/Endpoints/LocalAuthenticationEndpoints.cs": "981e20def34e590369c61737d0ece1947810f51d1c5ad9106f725aaa87dddc55",
     "src/Host/Kordra.Api/Authorization/CurrentResourcePolicyReader.cs": "93446235d3d8ce0bb7f298a09c223fdb1df74be97812e16b82c65b85bb88ebe2",
     "src/Modules/ProjectEnvironment/Contracts/EnvironmentCreationV2.cs": "ee07f8812de6d8b7bd9b53e3cd5c95e0ccbf1b1752a5cb67e5b576a4fd0925f4",
-    "src/Modules/IdentityAccess/Contracts/ResourcePolicies.cs": "5c004ddfe2f78ad7911625e00fd0151bd0afb32dd5309cc084613014c7375602",
+    "src/Modules/IdentityAccess/Contracts/ResourcePolicies.cs": "cf4e35f46d1211db257fc96e68cefe2f656f01ac219ea5d473035d56971b4c8a",
     "src/Modules/IdentityAccess/Contracts/AuthorityAdmission.cs": "91d364ff5a67a021aa350bbb7e10a101f4a135e6db70b06ad46f2c4e57fd2f8f",
     "src/Modules/InfrastructureInventory/Contracts/ITargetMetadataReader.cs": "7f3ed5df9ccbd0e3bd0538e5fc10e919460d0872669649746cac82305b5a4280",
     "src/Modules/InfrastructureInventory/CurrentTargetMetadataReader.cs": "97b933e9282ec656a0834af4b760e6327b468c4cb8153a4c47f749886c3bea81",

@@ -550,6 +550,306 @@ Added pure due-wake/counter rules, BCL owner facts, caller-root waiting-timer st
 
 PR27-WFL-TIMESTAMP-001 reproduced valid seven-digit canonical timestamps being rejected after PostgreSQL microsecond reload. Timer owner date comparisons now use native parameterized equality/projection, preserving exact canonical JSON/hash rather than rounding them or adding tolerance. Existing approved real DB fixture passed fractional/pre-epoch/duplicate and adjacent-microsecond-denial regressions with cleanup; source-only reconciliation retains failed evidence and unchanged SQL/resources/128-instance cap. No accepted ADR, schema or authority change. Current-head CI/independent PR follow-up remain publication gates; unfinished D2 source is retained separately.
 
-## ADR-0025 test target integration — in progress
+## T12.2d native wake preparation — in progress
 
-The integration branch carries the accepted explicit disposable PostgreSQL test profile and owner test seams. Runtime/default target selection remains unchanged. The initial full gate found 12 fixture/hash failures; the targeted IdentityAccess rerun passed 11 cases and the timer offline test passed with the profile enabled. Full validation on the repaired tree and PR review remain pending.
+FEAT-WFL-001 / MOD-WFL: restored retained D2 source separately from PR27 fix, repaired interrupted epoch-test arguments, added immutable descriptor/golden vector, inactive Host wire factory and additive offline revision2 model/artifact. Pure targeted tests pass; no new DB/host/provider operation, new dependency or ADR acceptance. D2 remains unfinished and unpublished.
+
+## D2 initial root fixture preparation
+
+FEAT-WFL-001 adds inactive initial timer dispatch staging and a compiled, operation-gated WFL/AUD/MSG fixture proposal. No database/host execution has occurred. Generic publication restrictions and original revision1 SQL remain unchanged; source and deterministic preparation are not completed D2.
+
+## D2 initial root actual result and recovery continuation
+
+FEAT-WFL-001: first approved D2 initial wake-root fixture passed with cleanup. Original manifest/167 hashes, approval and execution log remain private and immutable. Added a read-only wake receipt port for ongoing recovery implementation; actual qualification of later source and remaining lifecycle gates is separate.
+
+## TimerDue receive path — implementation in progress
+
+FEAT-WFL-001 adds inactive exact TimerDue delivery validation and root-bound pure WaitUntil completion, plus malformed/tampered delivery and no-autocommit tests. No new schema, actual listener/fixture execution or permission/ADR change.
+
+## D2 paired-result/native receiver preparation
+
+FEAT-WFL-001 adds closed TimerDue result DTO/codec, exact root result matching, independent golden/hash/negative tests and a test-only native receiver/profile. Metadata-only static code generation preserves the original C handler and adds the wake handler; no host/listener or database was started.
+
+## D2 native receive/redelivery batch preparation
+
+FEAT-WFL-001 prepares the bounded native receive/result/redelivery fixture and exact SQL export. The existing synthetic waiting-timer seeder now accepts an explicit fixture case while preserving its original default. No new DB/listener operation executed; earlier initial-producer approval/result remains scoped to its frozen input.
+
+## D2 native receive/redelivery actual result
+
+FEAT-WFL-001 native lifecycle batch passed first actual execution with sequential hosts, independent atomicity/result/receipt checks, identical-envelope no-repeat and verified cleanup. An empty approval-file preparation error was rejected before any execution intent/locator access; the empty predecessor receipt was retained and corrected under the same explicit owner authorization. No test assertion was removed.
+
+## D2 combined recovery reader preparation
+
+FEAT-WFL-001 adds a read-only multi-owner recovery observation reader and7 no-IO binding/closed-reader tests. Original native success/cleanup evidence remains frozen. Recorded a narrow clock-comparator clarification; no clock policy or public runtime activation was silently changed.
+
+## D2 clarified clock and recovery observation progress
+
+FEAT-WFL-001 records the owner clock clarification and implements latched UTC/monotonic/DB guards, descriptor-bound budgets and an optional checked timer-floor/precommit path.17 pure clock tests passed; no OS clock or DB operation occurred. D2-WFL-OBS-001 corrects missing-operation observations at older parent versions; its actual pre-commit regression is added to the pending fault fixture.
+
+## D2 exact transaction provenance preparation
+
+FEAT-WFL-001 adds opaque staged timer-root provenance and a read-only PostgreSQL transaction probe with classification/public-construction guards. No DB/process/role operation or new dependency occurred; actual fault qualification and cross-process provenance are pending.
+
+### 2026-11-02 — FEAT-WFL-001 consolidated D2 fault fixture preparation
+
+Added a guarded one-workflow/one-producer-host fixture for confirmed rollback, synthetic monotonic precommit expiry and actual COMMIT response loss, including independent transaction and WFL/MSG/AUD checks. Source and SQL export only pending fresh operation approval. No DB/credential/host operation performed during preparation; no ADR, permission, provider or Clients change.
+
+### 2026-11-03 — FEAT-WFL-001 D2 fault fixture reconciliation
+
+Retained failed attempt01 and independently verified cleanup. Fixed fixture timestamp reuse without weakening runtime clock checks. Corrected scheduler receipt observation ordering (`D2-WFL-OBS-002`) consistently with the general receipt reader: no descriptor means StillUnknown even at older parent; refresh parent before judging an observed descriptor. Existing schema/SQL/permission/architecture unchanged; revised fault binary remains unqualified until an explicitly approved execution.
+
+### 2026-11-03 — FEAT-WFL-001 approved D2 fault v2 passed
+
+Executed exactly owner-approved revised batch; real PostgreSQL root rollback, precommit budget and dropped COMMIT response assertions passed. Independent WFL/MSG/AUD observation never authorizes replay or reopens admission. Stopped the owned producer, removed only its disposable schema and independently verified absence. Preserved failed attempt01 and its approval/source hashes. No worker/process restart, new grants, provider/company/Clients operation or full D2 completion.
+
+### 2026-11-03 — FEAT-WFL-001 native receiver COMMIT-response fault preparation
+
+Added optional server-owned test hooks at the actual staged receiver root and a guarded new UUID fixture test for lost COMMIT response. Successful fixture behavior is unchanged without hooks; no Product runtime/DI, dependency, permission or wire alteration. Prepared SQL/export is no-IO; no new DB/native host operation until exact approval. Prior actual producer pass remains valid only for its frozen artifacts.
+
+### 2026-11-03 — FEAT-WFL-001 approved native receiver fault passed
+
+Executed the exact owner-approved receiver COMMIT-response-loss fixture once; all actual native transaction/inbox/WFL/AUD/MSG/result and closed-admission assertions passed. Sequential owned hosts stopped; removed only the disposable schema and independently verified absence. Preserved producer failure/pass receipts and frozen artifact boundaries. No production consumer activation/error-policy change, OS-process restart, provider/company/Clients operation or full D2 completion.
+
+### 2026-11-03 — FEAT-WFL-001 durable cancellation-intent owner increment
+
+Added immutable cancellation command binding, opt-in additive WFL revision3 intent history and caller-root-only staging. Current instance locking/CAS serializes intent with fresh transition/custody/waiting/wake decisions; terminal cancellation rejects unresolved owner facts. Pending/Reconciling retain their accepted graph state and Unknown remains unresolved. Added no-IO model/command/history tests and a guarded actual DB fixture proposal. No real migration, new dependency/ADR approval, public cancel API, production worker or provider/Clients change. Complete D2 recovery/successor/horizon/retention still pending.
+
+The isolated WFL recovery reader now verifies original transaction identity before correlating receipts. Incomplete receipts keep the outcome unresolved. Targeted checks pass and updated database assertions await qualification.
+
+WFL now prevents fresh creation from expired requests with missing receipts. The same change preserves original duplicate results and serializes transition receipt lookup with the instance lock.
+
+Added an isolated WFL custody lease on a dedicated PostgreSQL session and verified contention, owned child exit and lock release in one separately approved PostgreSQL fixture.
+
+Added read-only WFL/MSG/AUD observation for an exact disconnected aborted timer receiver, including cancellation-aware waiting state and explicit MSG exact-key absence. The observation does not stage a successor.
+
+Timer transaction provenance now binds the staged audit and published envelope, plus the consumed envelope for receiver roots. Recovery rejects substituted evidence before reading PostgreSQL state.
+
+Added an isolated MSG terminal metadata observer and prepared a 21-case UUID PostgreSQL fixture. Corrected the Host transport dependency found by architecture testing. The canonical run recorded missing fixture environment failures, and its original receipt is retained. Current local architecture tests pass; configured full Product validation remains outstanding.
+
+Corrected the expired-delivery SQL fixture destination seed after the first positive case exposed a URI normalization mismatch. Runtime reader behavior is unchanged by this repair. Cleanup was independently verified.
+
+The corrected v2 expired-delivery observation fixture passed all 21 PostgreSQL metadata cases. Schema removal was independently verified. The first failed seed attempt and its cleanup evidence remain preserved.
+
+Added bounded successor binding validation and native Expired diagnostic classification with retained-wire matching. Prepared native expiry qualification using the existing transport profile; live execution remains gated by its operation manifest.
+
+Qualified the actual native expired diagnostic path and added inactive successor owner/coordinator staging with current custody, terminal predecessor correlation, locked state revalidation and same-root history/publication. Prepared integrated PostgreSQL successor qualification.
+
+Fixed native destination normalization shared by ingress and expiry observation after the first successor fixture timed out. Added explicit fixture DLQ behavior and a bounded diagnostic wait. Namespace cleanup was independently verified; original failure evidence is preserved.
+
+Qualified integrated native-expiry timer successor v2, including root rollback/commit, cancellation/stale timer denial and duplicate/no-republication. Independent schema and advisory-key cleanup passed.
+
+Prepared four actual-process WFL crash/recovery cases using isolated fixed UUID schemas and native reassignment. Source builds and metadata validation pass; no process crash operation was run without its new manifest approval.
+
+Corrected the WF04 test-only recovery startup/polling cadence after a timeout at the original sixty-second case boundary. Added phase and count diagnostics for future recovery failures. Preserved the first failed batch and independent four-case cleanup evidence; actual v2 execution remains gated.
+
+Qualified all four WF04 actual-process crash/recovery boundaries with native recovery and original identities. Independently verified all four namespaces, custody keys and child database sessions removed. Extended generic terminal transition protection to reject unresolved custody, unknown steps or published timers for Failed/Expired/Succeeded as well as Cancelled; new direct PostgreSQL regression assertions await qualification.
+
+Added receiver-abort successor observation for exact expired Handled delivery evidence. Prepared a combined native successor, terminal guard and creation horizon fixture.
+
+Qualified native DLQ and receiver-abort successor guards. Added the scoped and bounded workflow metadata owner projection for T12.2e.
+
+### T12.2e workflow metadata and environment authority
+
+Tightened the workflow metadata projection to require the exact owner project/environment. Added the four environment-scoped workflow pairs and current IAM eligibility facts under ADR-0021. This increment provides no default grants or public routes. Host command and disclosure qualification remain pending.
+
+### T12.2e Host workflow disclosure
+
+Added inactive Host composition for audited, caller-bound workflow metadata reads and tests of exact response handoff. No route or default policy is registered. Database-backed disclosure qualification remains open.
+
+### T12.2e scoped cancellation owner transaction
+
+Added the inactive workflow cancellation root path under ADR-0021. It binds the locked project/environment, mutation audit and clock floor to the intent/CAS transaction and preserves the publication rule for other owner branches.
+
+### T12.2e cancellation transport isolation
+
+Moved scoped cancellation into a separate WFL/AUD transaction with no Wolverine context. Added current-authority rechecks and audit substitution guards. Live fixture execution remains separately gated.
+
+### T12.2e start eligibility
+
+Added inactive Host composition for T12.2e start eligibility, reusing exact release and approval checks under ADR-0021. Creation, delegation and runtime command registration remain open.
+
+### T12.2e scoped timer reconciliation evidence
+
+Added closed selection and exact owner evidence verification for timer receiver reconciliation in isolated custody. No decision writer or runtime registration is added.
+
+The isolated T12.2e cancellation transaction passed its separately approved PostgreSQL fixture. Cleanup was independently verified.
+
+Added the workflow start retry fingerprint before server ID and timestamp allocation. Durable start receipts and activation remain pending.
+
+Added the opt-in workflow start receipt owner model and staging store. This implements the approved retry identity at the persistence boundary. No runtime registration or migration was performed.
+
+### T12.2e start validation
+
+Qualified isolated start receipt persistence on PostgreSQL and added inactive Host request decoding. The first fixture attempt stopped before database access due to a runner variable mismatch. The approved corrected runner passed and cleanup was verified separately.
+
+Added inactive Host start receipt composition with current admission callback, exact start audit/floor and initial checkpoint validation. Positive runtime registration remains gated by policy and IAM delegation.
+
+Prepared the isolated paired WFL/AUD/MSG start root fixture with negative audit/publication and admission checks. Live execution awaits exact fixture operation approval.
+
+### T12.2e start root verified — 2026-11-07
+
+Qualified the isolated paired start root against PostgreSQL and a native producer with no listener. Verified exact negative cases, single committed owner/audit/publication result and independent cleanup.
+
+### ADR-0024 accepted and Contracts implementation — 2026-11-07
+
+Recorded exact owner acceptance and implemented workflow policy payload v2 parsing, canonical writing and action-qualified evaluation. Preserved v1 golden compatibility. Persistence and runtime wiring remain pending.
+
+Implemented action-qualified PRJ binding ports and pinned IAM policy action/schema on publication under ADR-0024. Kept offline v1 publication explicitly scoped until the v2 manifest and database migration are qualified.
+
+Implemented offline resource-policy manifest v2 with explicit action-qualified environment bindings and coordinator version/action matching. V1 canonical compatibility remains covered. Database adoption is pending.
+
+Generated IAM and PRJ workflow policy constraint migrations under ADR-0024 and exported review SQL offline. Added checks-only migration regressions. No database was modified.
+
+### ADR-0024 isolated owner upgrade fixture
+
+Prepared a fresh-namespace IAM/PRJ upgrade fixture with v1 retention, four action bindings and transactional rollback. Offline SQL generation is covered locally. Live execution requires exact operation approval.
+
+Qualified ADR-0024 IAM/PRJ owner upgrade and action-qualified binding on PostgreSQL in the approved disposable namespace. Verified cleanup independently.
+
+### ADR-0024 Host policy composition
+
+Implemented the concrete inactive action-specific workflow policy reader and bound its evidence into read audit/handoff. Added targeted owner/policy negative tests. Actual U/D transaction qualification and activation remain pending.
+
+### T12.2e isolated read/AUD fixture
+
+Prepared an operation-gated read/AUD fixture with real owner projection and audit transactions, synthetic current authority, independent pre-handoff audit observation and a policy-change denial. SQL export is offline; actual execution is pending approval.
+
+Qualified isolated workflow metadata/AUD disclosure on PostgreSQL with synthetic current authority and an independent pre-handoff oracle. Verified cleanup separately.
+
+Prepared persisted IAM/PRJ action policy invalidation for the workflow read/AUD fixture. No live operation or production writer mutation was performed during preparation.
+
+Qualified workflow read/AUD with persisted IAM/PRJ policy and binding on PostgreSQL. Policy-head change after U denied handoff. Verified namespace cleanup independently.
+
+Implemented combined local workflow command admission and connected it to the isolated cancellation transaction with session-bound actor and server-built audit. Runtime activation and worker delegation remain pending.
+
+Added the immutable WFL operator reconciliation command binding and moved its closed decision vocabulary into WFL Domain. Durable operator receipt and audited transaction are pending.
+
+## 2026-11-07 — T12.2e operator decision receipt preparation
+
+FEAT-WFL-001 / MOD-WFL: add opt-in revision 5 operator receipt metadata, scoped idempotency/conflict checks, exact owner CAS and append-only command validation. Export additive offline SQL and hash manifest; preserve revisions 1–4. Build and 33 targeted tests pass. Host custody/authorization/AUD integration and live fixture qualification remain open; no DB operation, runtime activation, technology decision or ADR approval added.
+
+### T12.2e operator receipt fixture qualification — 2026-11-07
+
+The maintainer-approved frozen fixture for revision 5 passed on local `kordra_test`: owner CAS and receipt roll back together; commit persists version +1 and one receipt; retry returns the original; changed actor/hash, wrong tenant/project, denied evidence, stale expected version and repeated operation under another request fail without extra durable mutation. One live case passed without skip; its new UUID namespace was independently verified absent after cleanup. No runtime host or provider was started. This is owner-store qualification, not paired Host AUD/custody or concurrent-operator proof. The stable full gate run passed docs/scope/tooling/clients/restore/build/mapping, but product-test failed on 553 missing isolated-fixture locator/manifest configurations. Full completion remains blocked; targeted and live evidence do not override that gate.
+
+### T12.2e paired operator reconciliation composition — 2026-11-07
+
+FEAT-WFL-001 / MOD-WFL adds inactive Host `WorkflowReconciliationTransaction`: exact server owner/session selection, workflow.reconcile admission/policy, retained fixture custody, receipt/CAS + AUD/floor on one root, final authority/evidence checks, duplicate rollback and existing Unknown-commit classification. `WorkflowReconciliationTransactionTests` proves audit substitutions and missing custody reject before DB access; targeted Host/recovery/classification/architecture tests passed 40 cases without skips. `WorkflowReconciliationDatabaseTests` prepares real owner/AUD/lease atomicity with synthetic authority/evidence callbacks; export passes offline, live execution awaits exact new fixture approval. No API registration, delegation protocol, provider operation, architecture/ADR change or distributed-fencing claim follows. Real admitted paths and original timer-evidence integration remain pending.
+
+The pre-commit guard checks admission/custody after asynchronous authority/evidence callbacks, and duplicate receipt return likewise checks after its authority callback. The unexecuted paired fixture proposal was superseded by v2 adding final-callback gate-closure rollback; target/SQL/key/budgets are unchanged. Current-source targeted checks passed 41 cases, no skips; live v2 remains pending operation approval.
+
+## T12.2e reconciliation qualification and closed operator DTOs — 2026-11-08
+
+FEAT-WFL-001 / MOD-WFL: approved frozen paired PostgreSQL v2 fixture passed WFL receipt/CAS + AUD/floor atomicity, late-revoke/evidence/gate-close rollback and duplicate without repeated AUD. Independent cleanup observed no namespace or custody lock. Synthetic callbacks do not establish actual session/grant or original timer-evidence integration. Subsequent inactive `WorkflowOperatorRequestParser` and `WorkflowOperatorRequestParserTests` add closed cancel/reconcile selections, trusted owner/actor binding and payload/precondition negative matrix; 56 targeted parser/admission/audit-guard/architecture cases pass without skips. No API activation, public ETag format, new dependency/ADR, provider operation or AI review. Historical v2 operation evidence is preserved and not reusable for a changed executable.
+
+### T12.2e persisted session/grant fixture preparation — 2026-11-08
+
+FEAT-WFL-001 / MOD-WFL adds `WorkflowPersistedAuthorityDatabaseTests` to qualify actual IAM current-session/principal, immutable role, TEN membership/grant and PRJ policy/scope reads for workflow admission, cancellation and audited read. It seeds synthetic persisted authority in one new UUID schema; invalidations are fixture updates, not proof of production writer-fence coverage. No login issuance/startup/real-account grant or runtime host is added. Offline build/export and current pure authority/policy regressions passed 49 cases; new live execution requires exact fixture operation approval. Actual timer-origin reconciliation, REL/APR start and T12.3/T12.4 remain open.
+
+### Persisted-authority fixture seed correction — 2026-11-08
+
+The first approved fixture attempt failed on the IAM required password_hash column while seeding the first synthetic principal, before current-authority assertions. Cleanup completed and an independent read-only connection verified namespace absence; failed evidence is preserved. The fixture now supplies an opaque synthetic password hash and explicit security/concurrency stamps required by the unchanged IAM model. An offline model-metadata regression checks every required principal field without database access. Fifty offline/export/authority/policy cases pass, zero skips. SQL/UUID/target/resource limits and scenarios remain unchanged; the changed executable awaits exact delta operation approval. This is a fixture correction, not a Product authentication change or evidence that the live authority test passed.
+
+### Persisted-authority fixture v2 qualified — 2026-11-08
+
+The exact owner-approved v2 executable passed one live test (5 seconds, no skips). It used real IAM current-session/principal and immutable-role readers, TEN current membership/grant resolution, PRJ owner/scope/binding and IAM policy readers. Each candidate initially admitted all four explicitly provisioned actions; current revoked/expired session, disabled principal, revoked/expired assignment and retired definition denied, and wrong tenant denied. An active session without membership/assignment could not acquire workflow.cancel. Actual admitted cancellation committed WFL intent with AUD/floor; actual persisted-authority read completed U/D, while a newer policy head published after U prevented disclosure. Final AUD counts matched the expected committed mutation and reads. Independent read-only cleanup confirmed the namespace absent. The failed v1 execution and its cleanup evidence are retained.
+
+This verifies seeded synthetic persisted sessions and grants, not login issuance, enrollment, boot startup or real-account permission changes. Fixture invalidation updates are not production writer/fence evidence. The run did not execute a native host, provider or original timer reconciliation; REL/APR start and original-evidence reconcile integration plus T12.3/T12.4 remain open. The latest stable full gates passed docs/scope/tooling/clients/restore/build/mapping but product-test still failed with 553 missing isolated-fixture configuration errors. This targeted qualification does not override that failure or mark T12 complete.
+
+### T12.2e original-evidence admitted reconciliation fixture preparation — 2026-11-08
+
+FEAT-WFL-001 / MOD-WFL prepares `WorkflowReconciliationOriginDatabaseTests` plus a test-only persisted-authority adapter. It combines the existing native receiver COMMIT-response-loss boundary and original typed WFL/MSG/AUD evidence with actual session/role/TEN-grant/PRJ-policy admission and a retained quiesced fixture custody lease. It checks rejected evidence/result/rollback substitutions, one metadata receipt/AUD without message replay or reopening the worker gate, duplicate idempotency and post-revocation receipt denial. Two fixture hosts run sequentially, then both stop before administrative reconciliation. No Product runtime registration or dependency changes. Forty-one offline/export/recovery/audit-guard/classification/architecture cases pass; real execution requires exact new SQL/binary/host/custody operation approval and is not yet qualified.
+
+### Admitted original committed-timer reconciliation qualified — 2026-11-08
+
+The frozen owner-approved origin fixture passed one live test in 3 seconds with zero skips. Native producer and receiver ran sequentially; the actual receiver COMMIT response was lost, the original root was independently observed committed with its backend disconnected, and both hosts stopped before administrative custody. Actual persisted-session/role/TEN-grant/PRJ-policy admission and the typed original WFL/MSG/AUD evidence authorized one metadata decision (owner version 6 to 7). Substituted evidence/result and a rollback claim against that committed origin rejected without mutation. Duplicate returned its original receipt without another audit or publication; revoking the persisted session then denied receipt retrieval. Original native handler count remained one, native publication receipts did not grow, and the original Unknown worker gate stayed closed. A separate read-only connection verified namespace absence and advisory-key release after cleanup.
+
+This qualifies the BindMatchingCommittedReceipt path with original evidence and current seeded persisted authority. A positive ConfirmKnownRollback decision, full current REL/APR start/root proof, remaining command recovery/concurrency acceptance and T12.3/T12.4 are not established by this case. Login issuance/startup, production invalidating writers/global fencing and provider operations remain outside its scope. Forty-one offline/export/recovery/guard/classification/architecture cases passed. Stable full gates still fail product-test on 553 missing fixture configurations; targeted qualification does not override that gate or complete T12.
+
+### Known-rollback original-evidence fixture preparation — 2026-11-08
+
+FEAT-WFL-001 / MOD-WFL adds a separately scoped rollback-origin integration case: fail receiver before actual COMMIT, deny a rollback inference while backend is unresolved, then require Aborted/disconnected origin plus exact absent completion effects before actual admitted ConfirmKnownRollback metadata. It preserves no replay/new publication, one metadata/AUD decision on duplicate, and denial after persisted-session revocation. Shared test authority uses closed case identities and separate EF schema models; both original-evidence classes serialize through the existing nonparallel Product collection. Forty-two offline/export/guard/recovery/classification/architecture tests pass, zero skips. The new live case remains pending exact schema/executable/native-host/custody approval; prior committed proof remains historical and is not replayed. Full start/recovery/concurrency/T12.3/T12.4 and global product gate requirements remain open.
+
+### Actual admitted known-rollback original evidence qualified — 2026-11-08
+
+The exact owner-approved rollback fixture passed one live test in 3 seconds with no skips. A synthetic receiver exception occurred after staging but before actual COMMIT; no receiver commit outcome was emitted. While the original backend was unresolved, the reader rejected an aborted-outcome claim. After both fixture hosts stopped, an independent reader confirmed Aborted/disconnected origin and exact absence of WFL/MSG/AUD completion effects. Actual persisted-session/role/TEN-grant/PRJ-policy admission plus dedicated custody then recorded ConfirmKnownRollback metadata once (parent version 5 to 6), without adding a completion transition, result publication or handler execution. A false committed claim and substituted evidence/result rejected; duplicate added no AUD/publication and persisted-session revocation denied receipt access. Independent read-only cleanup confirmed exact namespace absence and advisory-key release.
+
+The 42 current offline/export/recovery/guard/classification/architecture cases also pass. This is metadata reconciliation of a known rolled-back owner root; it is not proof of native settlement, successor execution permission, OS-process crash handling or Product runtime activation. Full current REL/APR start, remaining command recovery/concurrency evidence, T12.3/T12.4 and applicable global gates remain required. No company/provider/Clients/Website operations, new dependency or ADR changes were introduced.
+
+### Current start admission before allocation — 2026-11-08
+
+FEAT-WFL-001 / MOD-WFL adds inactive `WorkflowStartAdmissionReader`/opaque evidence and trusted Host `IWorkflowStartEligibilityReader`. The real adapter binds installation plus exact selection; old/unbound eligibility cannot authorize start. Environment workflow.start policy now has a typed preallocation request scope and shares the existing policy evaluator, preserving the scoped-key-before-instance-allocation rule. The join matches workflow.start + release.read current subjects/grants, owner revisions/classification, approval/release/app/target and policy/binding digest. Stable command binding and original expiry caps survive refreshed observations; substituted or expired facts deny. Existing instance-based read/cancel/reconcile callers retain their scope behavior.
+
+The start root admission guard checks closed state before and after awaiting authority both at staging and before COMMIT; actual gate-close-during-callback transaction proof remains to be added to the full start fixture. Seventy-seven targeted synthetic-eligibility/join/expiry/negative/parser/policy/architecture/classification/offline-export cases pass, no skips. This is composition evidence, not actual REL/APR/root/delegation or Product activation proof. No wire/persistence-schema/technology/ADR changes, migration, infrastructure effect, reviewer dispatch or Clients/Website changes.
+
+### Retained admitted-start root binding — 2026-11-08
+
+FEAT-WFL-001 / MOD-WFL implements inactive `WorkflowRootTransaction.StageAdmittedStartAsync`. One root operation guard spans current snapshot revalidation, lazy allocation and retaining the typed admission. It checks root installation/current session, derives the stable command, and binds a fresh spec to exact selected project/environment/release revision/hash plus admitted application/target/classification and creation window. The owner store also validates the canonical original against current owner binding on key retry without allocating a new spec or applying the fresh-creation clock window to historical data. It does not append a new mutation audit on duplicate.
+
+`WorkflowStartAdmission.CreateMutationAudit` produces exact actor/resource/request/invocation/policy/assignment fields; the root rejects substituted invocation or policy/assignment revisions in addition to its existing command/spec audit checks. The existing generic isolated start seam remains for prior fixtures, with shared core logic and the same serial/root/Unknown semantics. No default WaitUntil schedule, delegation, API, consumer or new wire/persistence schema is introduced.
+
+Current synthetic join/owner-binding/creation-window/audit-factory/parser/eligibility/policy/architecture/classification/offline-export tests pass 87 cases, no skips; owner-store/command regressions are run separately. These do not prove the new typed root against actual REL/APR/WFL/AUD/MSG on PostgreSQL. That integrated fixture, audit-substitution/late gate-close/duplicate concurrency and Unknown recovery qualification remain required. Existing frozen live receipts are historical and have not been replayed after source changes. ADR-0021/0024 remain unchanged.
+
+
+### T12.2e integrated start fixture preparation — 2026-11-08
+
+FEAT-WFL-001 / MOD-WFL: prepared isolated full-owner start fixture (IAM/TEN/PRJ/INV/ART/REL/APR plus WFL/AUD/MSG). Real captured approval evidence and current owner readers replace synthetic eligibility in this new live case. Export/policy tests perform no IO; operation approval and live evidence remain required. No architecture/contract change.
+
+
+### T12.2e start fixture seed correction — 2026-11-08
+
+FEAT-WFL-001 / MOD-WFL: first integrated start fixture failed at missing enlisted policy-owner transaction; exact schema cleanup independently verified. The test helper now enlists the initial IAM/TEN/PRJ seed and commits before independent authority reads. No Product source/contract/ADR/SQL changes; revised executable remains pending exact delta operation approval, with historical failure preserved.
+
+
+### T12.2e live start evidence and fault preparation — 2026-11-08
+
+FEAT-WFL-001 / MOD-WFL: approved start fixture v2 passed one live case (6s, no skips), including concrete persisted owner eligibility, typed owner/audit binding and nonallocating duplicate; independent namespace cleanup verified. Prepared a separate five-cycle test-only fault batch for late gate closure, same-key uniqueness contention with explicit retry, and actual Unknown COMMIT-response loss. Historical failed attempt01 and successful attempt02 remain immutable. No Product runtime/contract/ADR changes; fault batch has no operation authority yet.
+
+
+### T12.2e start fault evidence and metadata command preparation — 2026-11-08
+
+FEAT-WFL-001 / MOD-WFL: the approved five-cycle real-owner start-fault batch passed in 7s, no skips; each lifecycle cleaned and independent final namespace absence verified. Added pending two-schema cancel/reconcile metadata-root COMMIT-loss fixture with actual persisted authority and independent receipt/AUD/floor observations. Reconcile evidence callback is explicitly synthetic; original-evidence qualification remains separate. Shared test authority helper now accepts only cancel/reconcile action selections, preserving reconcile as default. No Product runtime/contract schema/dependency/ADR changes.
+
+
+### T12.2e metadata evidence and disposable regression preparation — 2026-11-08
+
+FEAT-WFL-001: approved two-schema cancel/reconcile metadata COMMIT-loss batch passed (2s, no skips), including actual current authority, Unknown/null result, closed gates, independent exact receipts/AUD/floor and cleanup/key release. Read-only regression catalog/history preflight found existing app data and two pending migrations; owner chose a separate disposable target. Added test-only manifest-bound profile/parser negatives and offline pending-policy SQL export. ADR-0025 proposes explicit test-target threading; no runtime guard expansion or DB creation/migration/reset is performed or approved.
+
+
+### ADR-0025 core test-target integration — 2026-11-08
+
+ADR-0025 exact scoped design accepted by NukeGeng. Added explicit disposable-test string/enlisted entries in nine owner factories, AUD shared/isolated/offline test enlistment, opt-in IAM/TEN/offline-policy adapters and catalog floor writer, plus WFL/MSG contexts, root creation, opaque origin/probe and dedicated custody/recovery selections. Default/runtime selection remains fixed; no environment/AppContext activation. Custody/origin selection retains exact profile to prevent cross-database same-case reuse. 131 targeted offline/guard/model/classification tests passed; actual new-DB root/native qualification is pending. No database/role/HBA/merge operations performed or authorized.
+
+### ADR-0025 integration — metadata and owner compositions (2026-11-08)
+
+Added explicit disposable cancel/reconcile admitted and metadata seams using shared existing implementations, exact custody realm, and WFL/AUD root selection. Added explicit ART/REL/APR and catalog owner transaction selections plus actual AUD factory selections. Default constructors and targets remain distinct; no global opt-in. Targeted profile/default/expiry/audit-substitution tests pass; current disposable DB/host qualification and full regression remain pending. No DB creation or old app writes were performed.
+
+### ADR-0025 offline regression integration — 2026-11-08
+
+Added explicit disposable policy/credential/artifact-recovery coordinator paths and custody-bound AUD receipt/read/write factories. Kept default parser/canonical vectors; new test-only policy manifests hash actual target/role. Prepared a test-only all-or-none runner descriptor loader, not yet full-suite wiring. Targeted offline tests only; no existing app writes or new database operations.
+
+### ADR-0025 actual suite composition — 2026-11-08
+
+Wired captured test selection into AUD regression/options/transactions; IAM HTTP and tenant/catalog composition; REL/APR persistence; credential commands; ART persistence/registration/recovery and REL transaction/HTTP fixtures. Added explicit profile variants for REL/APR U/D/read transaction boundaries while preserving default constructors. Pool-exhaustion tests retain an explicitly bounded one-connection pool, and fault wrappers retain their injected native adapter. No DB operation or complete-suite acceptance is claimed; native/isolated fixtures remain to integrate.
+
+### ADR-0025 native/isolated regression composition — 2026-11-08
+
+Added test-only bridges to actual WFL/AUD/MSG implementations, including revisions 1–5, native receive roots, receipts/journals, probes, custody/recovery and isolated IAM audit reads. Added exact role/case disposable selection to the durability fixture while preserving default guards. Kept offline SQL exports independent and restored pure guard tests to direct default entry points. No DB, HBA/role, host or process-crash operations were performed; offline selection tests are not live conformance or final gate acceptance.
+
+ADR-0025 fixture integration now includes catalog and policy fault paths, REL/APR persistence races and stopped receipt recovery. The changes are verified offline. Disposable DB execution remains pending.
+
+### T12.2 disposable live validation findings — 2026-11-10
+
+FEAT-AUD-001 and FEAT-MSG-001 propagate the selected disposable target through standalone AUD append/lookup and the MSG capacity check for a new caller-owned publication. The approved v2 owner batch recorded 33 passed and 6 failed AUD cases. The native batch recorded one wake-root failure. Both cleaned up their exact disposable databases. Later cases did not run. Revised binaries require their own operation manifest before live validation.
+
+The T12.2 disposable v3 batch passed AUD 39/39, TEN 48/48 and PRJ 77/77. APR passed 27/28 before the batch stopped. Native wake root and redelivery passed; the producer fault case stopped at the test-only COMMIT injector. Both exact databases were removed and independently observed absent. The remaining-case follow-up selects disposable APR/REL enlisted test options and applies the exact profile to the fault injector.
+
+The approved v4 follow-up passed 54 live tests across APR, REL and the three remaining WFL/MSG native methods. Both disposable databases and the three native case namespaces were independently verified absent after cleanup. The final combined T12.2 gate remains open.
+
+T12.2 baseline preparation aligns MSG process and IAM HTTP test composition with the explicit disposable target and prepares the full-solution fixture inputs offline. No regression operation was run under the new manifest.
+
+The first configured T12.2 full regression exposed disposable ART/SEC/IAM target and fixture setup errors, seven missing MSG purpose declarations and stale OpenAPI source hashes. The revised source and local runner address those identified paths. Release build, focused offline checks and both operation cleanup observations are recorded in checkpoint 60. Revised live outcomes remain pending.
+
+The approved targeted follow-up passed all 102 cases across ART, SEC, IAM and MSG, including the seven native MSG methods. Cleanup verified the disposable database was absent and no new Keychain fixture file remained.
+
+The T12.2 opt-in follow-up corrected five fixture and test-selection failures. All five now have targeted PostgreSQL passes and verified disposable cleanup. The full AMR gate from checkpoint 62 predates these fixes.

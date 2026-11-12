@@ -1,0 +1,11 @@
+{
+  "revision": 2,
+  "fromRevision": 1,
+  "scope": "additive wake_operations only; offline artifact, not migration authorization",
+  "baselineSha256": "52a9884d04203229f9b0b2b989db1e32de9c0c25e06f6f58404568c76ba9ef24",
+  "sha256": "618993ba4dba804c30561308a12bb6390a379f36660866946c34e09867070604",
+  "tablesAdded": [
+    "wake_operations"
+  ],
+  "destructiveOperations": false
+}

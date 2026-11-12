@@ -36,6 +36,31 @@ public sealed class ResourcePolicyManifestTests
         Assert.NotEqual(selected.HashDisposableTest(profile), changed.HashDisposableTest(profile));
     }
 
+    [Theory]
+    [InlineData("workflow.start")]
+    [InlineData("workflow.read")]
+    [InlineData("workflow.cancel")]
+    [InlineData("workflow.reconcile")]
+    public void V2ManifestPinsBindingActionAndDoesNotAcceptLegacyShape(string action)
+    {
+        var original = Example();
+        var manifest = original with
+        {
+            SchemaVersion = 2,
+            Payload = original.Payload! with { SchemaVersion = 2, Action = action },
+            Bindings = [original.Bindings[0] with { Action = action }]
+        };
+        var bytes = manifest.CanonicalBytes();
+        var parsed = ResourcePolicyManifest.Parse(Encoding.UTF8.GetString(bytes));
+        Assert.NotNull(parsed);
+        Assert.Equal(bytes, parsed.CanonicalBytes());
+        Assert.Equal(action, parsed.Bindings[0].Action);
+        Assert.False((manifest with { SchemaVersion = 1 }).IsValid());
+        Assert.False((manifest with { Bindings = [original.Bindings[0]] }).IsValid());
+        Assert.Null(ResourcePolicyManifest.Parse(Encoding.UTF8.GetString(bytes).Replace(
+            ",\"action\":\"" + action + "\"}", "}", StringComparison.Ordinal)));
+    }
+
     [Fact]
     public void Canonical_manifest_round_trip_binds_all_approved_inputs_and_keeps_explicit_nulls()
     {

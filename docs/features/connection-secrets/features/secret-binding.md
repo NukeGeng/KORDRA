@@ -7,7 +7,7 @@ module_id: MOD-SEC
 feature_id: FEAT-SEC-001
 phase: MVP
 source_paths: ["Kordra.slnx", "src/Modules/ConnectionManagement/", "src/Host/Kordra.Api/Kordra.Api.csproj", "src/Host/Kordra.Api/packages.lock.json", "src/Host/Kordra.Api/Program.cs", "src/Host/Kordra.Api/OfflineAdministration/Credentials/", "src/Host/Kordra.Api/Authorization/CurrentCredentialDependencyReader.cs", "src/Host/Kordra.Api/Authorization/CredentialTargetRead.cs", "src/Host/Kordra.Api/Endpoints/CredentialReadHttpHandler.cs", "src/Host/Kordra.Api/Authorization/AuthorityWriterRegistry.cs", "src/Host/Kordra.Api/Composition/ResourceAuthorityServices.cs", "src/Host/Kordra.DbMigrator/Program.cs", "src/Host/Kordra.DbMigrator/Kordra.DbMigrator.csproj", "src/Host/Kordra.DbMigrator/packages.lock.json", "src/Host/Kordra.DbMigrator/ConnectionManagementMigrationCommand.cs", "src/Modules/IdentityAccess/Contracts/AuthorityAdmission.cs", "src/Modules/IdentityAccess/Authorization/ProtectedReadAdmission.cs", "src/Modules/IdentityAccess/Authentication/LocalAuthorityFacts.cs"]
-test_paths: ["tests/ConnectionManagement.Tests/", "tests/IdentityAccess.Tests/T08CredentialHttpTests.cs", "tests/IdentityAccess.Tests/CurrentAuthorityHttpTests.cs", "tests/IdentityAccess.Tests/T07BoundedReadHttpTests.cs", "tests/IdentityAccess.Tests/LocalAuthenticationTestHost.cs", "tests/InfrastructureInventory.Bootstrap.Tests/ArchitectureTests.cs"]
+test_paths: ["tests/ConnectionManagement.Tests/ConnectionManagement.Tests.csproj", "tests/InfrastructureInventory.Bootstrap.Tests/ProductPostgreSqlFixtureSelectionTests.cs", "tests/Shared/ProductPostgreSqlFixtureSelection.cs", "tests/InfrastructureInventory.Bootstrap.Tests/DisposableDatabaseFactoryTests.cs", "tests/ConnectionManagement.Tests/", "tests/IdentityAccess.Tests/T08CredentialHttpTests.cs", "tests/IdentityAccess.Tests/CurrentAuthorityHttpTests.cs", "tests/IdentityAccess.Tests/T07BoundedReadHttpTests.cs", "tests/IdentityAccess.Tests/LocalAuthenticationTestHost.cs", "tests/InfrastructureInventory.Bootstrap.Tests/ArchitectureTests.cs"]
 ---
 
 # FEAT-SEC-001 — Bind credentials safely to deployment targets
@@ -235,3 +235,14 @@ The co-owned solution/architecture test now includes WFL Infrastructure → its 
 ## T12.2c shared composition registration — 2026-11-01
 
 Accepted ADR-0021/0022 covers the inactive Host composition dependency on existing WFL and MSG owner adapters. Shared XML/package-lock tests now include those edges and the WFL commit/codec tests. No route, consumer, current-authority bypass or behavior of this owner feature was activated; actual WFL/AUD/MSG transaction qualification remains FEAT-WFL-001 work in progress.
+
+
+### ADR-0025 explicit disposable test selection — 2026-11-08
+
+Exact scoped ADR-0025 is owner-accepted. The owning factory adds separate disposable-test options/enlisted-connection entry points receiving explicit run/source/manifest/expiry projection from the validated test profile. Fixed loopback/test-role/name validation and connection/session safeguards apply. Selection is not operation authority; caller loader/runner verifies expected hashes and separate approval. Existing runtime/offline/default methods are preserved. Cross-owner negative/default/no-connection tests are added; actual adapter/root/test-host threading and disposable DB operation qualification remain pending. No database creation/migration/reset or existing app data operations are authorized by this code.
+
+ADR-0025 offline test selection: explicit coordinator/factory paths retain owner authorization, custody and atomic audit behavior for a separately selected disposable database. Test-specific manifest parsing/canonicalization where applicable pins the actual database/role; default/runtime paths are unchanged. Qualification so far is offline target/hash/default regression only; no new DB operations or live selected-target qualification occurred.
+
+ADR-0025 fixture wiring continuation: shared test-only composition captures the explicit profile and supplies actual owner factories/adapters. Initializer, HTTP and injected-fault paths are being retargeted without changing business assertions or default/runtime target rules. No database operations were performed; full native/isolated fixture wiring and selected-target integration evidence remain pending.
+
+The registry credential broker's disposable test read view now enlists on the same selected caller connection and transaction as its setup. The guard still validates the exact test target. The full run exposed the previous legacy-target mismatch in three broker tests.

@@ -253,7 +253,7 @@ public sealed class WorkflowTimerDatabaseTests
                     Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), 1, new string('a', 64), WorkflowEnvironment.Test, start.AddTicks(createdTicks),
                     start.AddHours(origin.HasValue ? 23 : 24).AddTicks(deadlineTicks), start.AddHours(1).AddTicks(dueTicks));
                 canonicalSpecifications.Add(spec.InstanceId, spec.WriteCanonical());
-                var store = new WorkflowStore(context); await store.StageCreationAsync(spec, ct);
+                var store = new WorkflowStore(context); await store.StageCreationAsync(spec, spec.CreatedAtUtc, ct);
                 var identity = new WorkflowIdentity(Case, Case, spec.InstanceId); var worker = Guid.NewGuid(); var boot = Guid.NewGuid();
                 var step0 = await context.Set<WorkflowStepRecord>().SingleAsync(x => x.InstanceId == spec.InstanceId && x.Ordinal == 0, ct);
                 await store.StageTransitionAsync(identity, step0.StepId, Guid.NewGuid(), spec.SpecificationHash, 1, WorkflowState.Running, spec.CreatedAtUtc, ct);

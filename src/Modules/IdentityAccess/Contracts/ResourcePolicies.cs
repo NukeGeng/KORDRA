@@ -11,7 +11,7 @@ public sealed record ResourcePolicyPayload(int SchemaVersion, string Action, str
 public sealed record ResourcePolicySnapshot(Guid PolicyId, Guid TenantId, Guid ProjectId, long Revision,
     ResourcePolicyPayload Payload, string ContentHash);
 public sealed record ResourcePolicySelection(Guid BindingId, long BindingRevision, Guid TenantId, Guid ProjectId,
-    Guid? EnvironmentId, string ScopeKind, Guid PolicyId, long PolicyRevision, string? Classification);
+    Guid? EnvironmentId, string ScopeKind, Guid PolicyId, long PolicyRevision, string? Classification, string Action = "target.read");
 public enum ResourceEligibility { Allow, Deny, Unavailable }
 public interface ICurrentResourcePolicyReader
 {
@@ -27,15 +27,19 @@ public interface IPolicyTenantAuthority
 /// <summary>Fixed resource eligibility vocabulary; it never grants a TEN permission.</summary>
 public static class ResourcePolicies
 {
+    public static bool IsWorkflowAction(string? action) =>
+        action is "workflow.start" or "workflow.read" or "workflow.cancel" or "workflow.reconcile";
+
     public static bool IsClassification(string? value) => value is "Development" or "Test" or "Staging" or "Production";
     public static bool IsPreciseUtc(DateTimeOffset value) => value.Offset == TimeSpan.Zero && value.Ticks % 10 == 0 &&
         value != DateTimeOffset.MinValue && value != DateTimeOffset.MaxValue;
-    public static bool IsValid(ResourcePolicyPayload? p) => p is not null && p.SchemaVersion == 1 && p.Action == "target.read" &&
+    public static bool IsValid(ResourcePolicyPayload? p) => p is not null && (p.SchemaVersion == 1 && p.Action == "target.read" ||
+            p.SchemaVersion == 2 && IsWorkflowAction(p.Action) && p.ScopeKind == "environment") &&
         p.ScopeKind is "environment" or "project_without_environment" && p.Status is "active" or "inactive" &&
         IsPreciseUtc(p.EffectiveFromUtc) && (p.ExpiresAtUtc is null || IsPreciseUtc(p.ExpiresAtUtc.Value) && p.ExpiresAtUtc > p.EffectiveFromUtc) &&
         p.Rules is { Count: > 0 and <= 8 } && (p.ScopeKind != "project_without_environment" || p.Rules.Count <= 2) &&
         p.Rules.All(r => r is not null && r.Effect is "allow" or "deny" &&
-            (p.ScopeKind == "environment" ? IsClassification(r.Case) : r.Case == "NoEnvironment")) &&
+            (p.ScopeKind == "environment" ? p.SchemaVersion == 2 ? r.Case is "Development" or "Test" : IsClassification(r.Case) : r.Case == "NoEnvironment")) &&
         p.Rules.Distinct().Count() == p.Rules.Count;
 
     public static byte[] CanonicalBytes(ResourcePolicyPayload p)
@@ -98,7 +102,7 @@ public static class ResourcePolicies
             policy.PolicyId != s.PolicyId || policy.Revision != s.PolicyRevision || policy.TenantId != s.TenantId || policy.ProjectId != s.ProjectId ||
             !IsValid(policy.Payload) || policy.ContentHash != Hash(policy.Payload)) return ResourceEligibility.Deny;
         var p = policy.Payload;
-        if (p.Status != "active" || p.EffectiveFromUtc > now || p.ExpiresAtUtc <= now || p.ScopeKind != s.ScopeKind ||
+        if (p.Action != s.Action || p.Status != "active" || p.EffectiveFromUtc > now || p.ExpiresAtUtc <= now || p.ScopeKind != s.ScopeKind ||
             (s.EnvironmentId is null ? s.ScopeKind != "project_without_environment" || s.Classification is not null :
                 s.EnvironmentId == Guid.Empty || s.ScopeKind != "environment" || !IsClassification(s.Classification))) return ResourceEligibility.Deny;
         var ruleCase = s.EnvironmentId is null ? "NoEnvironment" : s.Classification;
