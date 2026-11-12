@@ -860,4 +860,4 @@ FEAT-WFL-001 / FEAT-IAM-001 / FEAT-PRJ-001: fixed the three Codex P2 findings on
 
 ## FEAT-WFL-001 — 12.2f WF01 reauthorization, WFL part — 2026-11-12
 
-Implements the approved option B: reauthorization command/rules, schema revision 6 for `authority_bindings`, owner binding store, closure of the generic `BlockedAuthority → Running` path, and an inactive Host transaction behind an IAM-owned delegation port with no production implementation. No route, consumer or permission activation; no ADR change. IAM delegation/epoch and end-to-end reauthorization remain T12.3.
+Implements the approved option B: reauthorization command/rules, schema revision 6 for `authority_bindings`, owner binding store, closure of the generic `BlockedAuthority → Running` path, and an inactive Host transaction behind an IAM-owned delegation port with no production implementation. No route, consumer or permission activation; no ADR change. Disposable PostgreSQL case and full AMR gate passed on `0b3abd3`. IAM delegation/epoch and end-to-end reauthorization remain T12.3.
