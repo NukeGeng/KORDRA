@@ -207,3 +207,7 @@ ADR-0025 native fixture wiring is now present in the working tree: WFL isolated/
 ## PR29 precision and fixture-floor regressions — PR29-WFL-TIMESTAMP-002 / PR29-IAM-FLOOR-001
 
 The successor fixture seeds canonical creation/deadline/due values with a seventh fractional digit, stages a valid successor, and rejects an adjacent persisted microsecond on each scalar inside a rolled-back root. The read/audit fixture reads a fractional-deadline workflow, rejects a 1µs persisted deadline change with a durable Use and no Disclosure, and requires the IAM floor in the case schema with any pre-existing `app` floor unchanged. Disposable ADR-0025 execution: fail on regression-only `4e604d6`, pass on `6e69670`, namespaces and databases verified absent; the legacy no-profile floor branch is not yet executed. They grant no clock grace or deadline extension and do not change WF04–WF08 status.
+
+## WF01 split — owner decision D1/D2, 2026-11-12
+
+Per the [accepted WF01 scope](t12-wf01-reauthorization-scope.vi.md) (option B), the T12.2 exit for WF01 covers start plus the WFL part of reauthorization (slice 12.2f: BlockedAuthority-only eligibility, unchanged spec/deadline/counters, append-only generation, idempotency/If-Match, no generic BlockedAuthority → Running). IAM delegation issuance, old-generation invalidation with epoch, worker entry/resume and end-to-end AU05/WF01 reauthorization cases are T12.3 exit criteria. 12.2f has offline evidence; its PostgreSQL case awaits operation approval.

@@ -340,3 +340,7 @@ ADR-0025 regression composition also retains connection-pool saturation coverage
 Native fixture selection under ADR-0025 preserves the real root/probe/custody/reconciliation paths and source schemas. Independent connection creation validates the selected target before opening it; SQL helpers shared with exports use explicit offline metadata selection. This changes neither workflow state transitions nor current-authority/evidence requirements and does not grant native host, process-kill or database-operation rights.
 
 The disposable regression profile also covers offline release and approval receipt recovery in fixtures. The selected DB is validated before opening, and the existing custody and receipt evidence rules apply.
+
+## Reauthorization clarifications — 12.2f (owner decisions D3/D4/D6, 2026-11-12)
+
+No shape change. `delegationId` is authority history stored in `authority_bindings`, not in the instance record or specificationHash (D6). A successful reauthorization only appends the next binding generation and keeps `BlockedAuthority`; `Running` follows only a later admission under the current binding (D3). If-Match is the workflow version; idempotency is `requestId` + command hash recorded on the binding row, schema revision 6 (D4). Generation 1 is written with the IAM delegation at start (12.3b).

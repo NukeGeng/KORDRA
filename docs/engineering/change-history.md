@@ -857,3 +857,7 @@ The T12.2 opt-in follow-up corrected five fixture and test-selection failures. A
 ## PR29 round-1 review fixes — 2026-11-12
 
 FEAT-WFL-001 / FEAT-IAM-001 / FEAT-PRJ-001: fixed the three Codex P2 findings on `fd56a6e`. Workflow metadata and successor staging now compare persisted timestamps through PostgreSQL parameters (PR29-WFL-TIMESTAMP-002). The legacy isolated read coordinator writes its IAM floor to the case schema (PR29-IAM-FLOOR-001). Environment creation accepts only schema-1 `target.read` policies at admission and precommit (PR29-PRJ-POLICY-001). No schema, wire, permission or ADR change; no new technical debt. Approved disposable DB batches show fail-before on `4e604d6` and pass-after on `6e69670` with verified cleanup; a misplaced new oracle was corrected in `6e69670`. The legacy no-profile floor branch and current-head CI remain pending.
+
+## FEAT-WFL-001 — 12.2f WF01 reauthorization, WFL part — 2026-11-12
+
+Implements the approved option B: reauthorization command/rules, schema revision 6 for `authority_bindings`, owner binding store, closure of the generic `BlockedAuthority → Running` path, and an inactive Host transaction behind an IAM-owned delegation port with no production implementation. No route, consumer or permission activation; no ADR change. IAM delegation/epoch and end-to-end reauthorization remain T12.3.
