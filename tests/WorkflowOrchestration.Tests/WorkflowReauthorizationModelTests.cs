@@ -73,6 +73,28 @@ public sealed class WorkflowReauthorizationModelTests
     }
 
     [Fact]
+    public async Task StoreRequiresRevisionSixCallerRootAndNeverOpensTheDatabaseOtherwise()
+    {
+        var command = new Kordra.Modules.WorkflowOrchestration.Domain.WorkflowReauthorizationCommand(Guid.NewGuid(), Guid.NewGuid(),
+            Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), 2, new string('a', 64));
+        var delegation = new Kordra.Modules.WorkflowOrchestration.Contracts.WorkflowDelegationReference(Guid.NewGuid(), DateTimeOffset.UtcNow.AddMinutes(5));
+        foreach (var context in new[] { WorkflowDbContext.CreateOfflineReconciliationModel(), WorkflowDbContext.CreateOfflineAuthorizationModel() })
+        await using (context)
+        {
+            var error = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+                new WorkflowAuthorityBindingStore(context).StageReauthorizationAsync(command, delegation, DateTimeOffset.UtcNow));
+            Assert.Contains("caller root", error.Message);
+            Assert.Equal(ConnectionState.Closed, context.Database.GetDbConnection().State);
+            Assert.Empty(context.ChangeTracker.Entries());
+        }
+        await using var current = WorkflowDbContext.CreateOfflineAuthorizationModel();
+        using var cancelled = new CancellationTokenSource(); cancelled.Cancel();
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+            new WorkflowAuthorityBindingStore(current).StageReauthorizationAsync(command, delegation, DateTimeOffset.UtcNow, cancelled.Token));
+        Assert.Equal(ConnectionState.Closed, current.Database.GetDbConnection().State);
+    }
+
+    [Fact]
     public void AuthorityBindingCannotBeInsertedBeforeRevisionSixOrWithoutTrackedOwnerAndIsAppendOnly()
     {
         foreach (var context in new[] { WorkflowDbContext.CreateOfflineReconciliationModel(), WorkflowDbContext.CreateOfflineAuthorizationModel() })

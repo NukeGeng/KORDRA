@@ -96,6 +96,10 @@ public sealed class WorkflowStore(WorkflowDbContext context)
             throw new DbUpdateConcurrencyException("Workflow version changed before staging.");
         if (!WorkflowStateRules.CanChangeState((WorkflowState)instance.State, nextState))
             throw new InvalidOperationException("Workflow state conflict.");
+        // 12.2f: leaving BlockedAuthority for Running needs current admission under the current authority binding
+        // (worker permit, 12.3e). This generic path must never resume work; cancel/expiry edges remain allowed.
+        if ((WorkflowState)instance.State == WorkflowState.BlockedAuthority && nextState == WorkflowState.Running)
+            throw new InvalidOperationException("BlockedAuthority resumes only through authority-bound admission.");
         instance.Version = WorkflowStateRules.NextVersion(instance.Version, expectedVersion);
         instance.State = (int)nextState;
         // Establish the CAS before history insertion; both saves remain uncommitted in the same caller root.
