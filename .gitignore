@@ -7,3 +7,4 @@ __pycache__/
 **/.temp
 /docs/secret/accountpostgre.md
 /docs/secret/accountnomad.md
+.DS_Store
