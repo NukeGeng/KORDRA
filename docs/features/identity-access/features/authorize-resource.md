@@ -647,4 +647,4 @@ The disposable HTTP authority and credential fixtures now construct the AUD port
 
 **PR29-IAM-FLOOR-001 — explicit legacy isolated floor.** `AuthorityClockFloorStore.StageIsolatedTestAsync` and `IdentityAccessDbContextFactory.ValidateIsolatedTestTarget` add the legacy `kordra_test` counterpart to the disposable case-schema floor path. The case schema derives only from the trusted installation GUID; runtime `StageAsync` and its `app` target are unchanged. See FEAT-WFL-001 for the read-coordinator selection.
 
-Status: Implemented in source with offline build/test evidence. The HTTP regression needs the CI `kordra_test` fixture and the read-audit case needs separate operation approval; neither has run on this revision yet.
+Status: Implemented. The approved disposable batch showed the HTTP regression failing on regression-only `4e604d6` (reader returned true for the schema-2 policy) and passing on `6e69670`, with verified cleanup. The read-audit case passed on `6e69670` under the disposable profile; the legacy no-profile floor branch is not yet executed. CI on the pushed head remains a separate gate.
