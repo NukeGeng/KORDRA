@@ -226,13 +226,19 @@ public sealed class WorkflowWakeDatabaseTests
         }
     }
 
-    internal static async Task<(WorkflowSpecification, (Guid StepId, Guid TimerId))> SeedWaitingTimer(NpgsqlConnection connection, CancellationToken ct, Guid? caseId = null)
+    /// <param name="subMicrosecondTicks">0, or 1–9 canonical 100ns ticks that PostgreSQL timestamp columns cannot store.</param>
+    internal static async Task<(WorkflowSpecification, (Guid StepId, Guid TimerId))> SeedWaitingTimer(NpgsqlConnection connection,
+        CancellationToken ct, Guid? caseId = null, int subMicrosecondTicks = 0)
     {
+        ArgumentOutOfRangeException.ThrowIfNegative(subMicrosecondTicks);
+        ArgumentOutOfRangeException.ThrowIfGreaterThan(subMicrosecondTicks, 9);
         var fixtureCase = caseId ?? CaseId;
         await using var transaction = await connection.BeginTransactionAsync(ct);
         await using var context = IsolatedWorkflowFixture.CreateFixture(connection, fixtureCase);
         await context.Database.UseTransactionAsync(transaction, ct);
         var start = DateTimeOffset.UtcNow.AddMinutes(-10);
+        // Created, deadline and due inherit the same seven-digit fraction from this origin.
+        if (subMicrosecondTicks != 0) start = new(start.UtcTicks - start.UtcTicks % 10 + subMicrosecondTicks, TimeSpan.Zero);
         var spec = new WorkflowSpecification(fixtureCase, fixtureCase, Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(),
             Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), 1, new string('a', 64), WorkflowEnvironment.Test,
             start, start.AddHours(1), start.AddMinutes(1));

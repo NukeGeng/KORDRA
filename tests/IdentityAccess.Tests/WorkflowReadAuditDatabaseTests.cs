@@ -73,7 +73,9 @@ public sealed class WorkflowReadAuditDatabaseTests
                 await ddl.CommitAsync(ct);
                 created = true;
             }
-            var now = DateTimeOffset.UtcNow;
+            // PR29-WFL-TIMESTAMP-002: a canonical seven-digit deadline PostgreSQL cannot store must still read.
+            var clockNow = DateTimeOffset.UtcNow;
+            var now = new DateTimeOffset(clockNow.UtcTicks - clockNow.UtcTicks % 10 - 3, TimeSpan.Zero);
             var spec = new WorkflowSpecification(CaseId, CaseId, Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(),
                 Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), 1, new string('a', 64),
                 WorkflowEnvironment.Test, now, now.AddHours(1), now.AddMinutes(3));
@@ -112,6 +114,8 @@ public sealed class WorkflowReadAuditDatabaseTests
                 await root.CommitAsync(ct);
             }
 
+            // The legacy kordra_test database may already hold a runtime-shaped app schema; it must not change.
+            var appFloorBefore = await AppFloor();
             foreach (var change in new[] { false, true })
             {
                 var facts = new Facts(spec);
@@ -144,6 +148,35 @@ public sealed class WorkflowReadAuditDatabaseTests
                 Assert.Equal(change ? 0 : 1, response.Commits);
             }
             Assert.Equal(3L, await Scalar($"SELECT count(*) FROM {Schema}.aud_intents"));
+            Assert.NotEqual(0, spec.DeadlineUtc.UtcTicks % 10);
+
+            // PR29-IAM-FLOOR-001: in both legacy and disposable fixtures the IAM floor is case-owned, never runtime app.
+            Assert.Equal(1L, await Scalar($"SELECT count(*) FROM {Schema}.iam_authority_clock_floors WHERE installation_id='{CaseId:D}'"));
+            Assert.Equal(appFloorBefore, await AppFloor());
+
+            // A real persisted deadline change, even <1us from canonical, still fails closed with no disclosure.
+            await using (var damage = new NpgsqlCommand($"UPDATE {Schema}.instances SET deadline_utc=deadline_utc+interval '1 microsecond' " +
+                "WHERE instance_id=@instance", setup) { CommandTimeout = 3 })
+            {
+                damage.Parameters.AddWithValue("instance", spec.InstanceId);
+                Assert.Equal(1, await damage.ExecuteNonQueryAsync(ct));
+            }
+            {
+                var facts = new Facts(spec);
+                var damagedRead = CreateReadCoordinator(CaseId,
+                    new Factory<KordraIdentityDbContext>(() => Identity(NewOwnedConnection())),
+                    new Factory<WorkflowDbContext>(() => StartFixture(NewOwnedConnection())),
+                    new WorkflowEnvironmentAuthorityReader(facts, facts, facts, facts, facts, facts),
+                    new WorkflowActionPolicyReader(owners, owners, owners, facts), new AuditFactory(() => Task.CompletedTask),
+                    new FairAsyncReaderWriterAdmissionGate(), facts);
+                var response = new Response((_, _) => Task.CompletedTask);
+                Assert.Equal(WorkflowReadOutcome.Unavailable, await damagedRead.ReadAsync(facts.Selection,
+                    new(CaseId, spec.ProjectId, spec.EnvironmentId, spec.InstanceId), null, Guid.NewGuid(), response, ct));
+                Assert.Equal(0, response.Commits);
+                // Only the durable Use intent precedes the failed projection; no Disclosure is recorded for it.
+                Assert.Equal(4L, await Scalar($"SELECT count(*) FROM {Schema}.aud_intents"));
+                Assert.Equal(1L, await Scalar($"SELECT count(*) FROM {Schema}.aud_intents WHERE stage='D'"));
+            }
         }
         finally
         {
@@ -161,6 +194,16 @@ public sealed class WorkflowReadAuditDatabaseTests
             var connection = new NpgsqlConnection(target.ConnectionString);
             ownedConnections.Add(connection);
             return connection;
+        }
+
+        async Task<string?> AppFloor()
+        {
+            await using var exists = new NpgsqlCommand("SELECT to_regclass('app.iam_authority_clock_floors') IS NOT NULL", setup) { CommandTimeout = 3 };
+            if (!(bool)(await exists.ExecuteScalarAsync(ct))!) return null;
+            await using var read = new NpgsqlCommand("SELECT admitted_utc::text FROM app.iam_authority_clock_floors WHERE installation_id=@id", setup)
+                { CommandTimeout = 3 };
+            read.Parameters.AddWithValue("id", CaseId);
+            return (string?)await read.ExecuteScalarAsync(ct);
         }
 
         async Task<long> Scalar(string sql)

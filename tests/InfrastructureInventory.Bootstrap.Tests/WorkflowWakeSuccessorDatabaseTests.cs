@@ -100,7 +100,11 @@ public sealed class WorkflowWakeSuccessorDatabaseTests
             {
                 await Sql(creation, ddl, ct); await ddl.CommitAsync(ct); created = true;
             }
-            var (spec, timer) = await WorkflowWakeDatabaseTests.SeedWaitingTimer(writer, ct, CaseId);
+            // PR29-WFL-TIMESTAMP-002: sub-microsecond canonical created/deadline/due values must still bind a valid successor.
+            var (spec, timer) = await WorkflowWakeDatabaseTests.SeedWaitingTimer(writer, ct, CaseId, subMicrosecondTicks: 7);
+            Assert.NotEqual(0, spec.CreatedAtUtc.UtcTicks % 10);
+            Assert.NotEqual(0, spec.DeadlineUtc.UtcTicks % 10);
+            Assert.NotEqual(0, spec.DueAtUtc.UtcTicks % 10);
             await using (var historyConnection = state.NewOwnedConnection())
             {
                 await historyConnection.OpenAsync(ct);
@@ -232,10 +236,23 @@ public sealed class WorkflowWakeSuccessorDatabaseTests
             var successor = new WorkflowWakeOperation(spec, previous.StepId, previous.TimerId, 2, 2, 2,
                 Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), 6, 3, at, at.AddSeconds(120));
             var worker = Guid.NewGuid(); var boot = Guid.NewGuid(); var decision = Guid.NewGuid();
-            foreach (var failure in new[] { "stale-timer", "cancellation" })
+            // Adjacent persisted microseconds are real binding changes, even when <1us from canonical; each rolls back.
+            foreach (var failure in new[] { "stale-timer", "cancellation", "created-microsecond", "deadline-microsecond", "due-microsecond" })
             {
                 await using var connection = state.NewOwnedConnection(); await connection.OpenAsync(ct);
                 await using var transaction = await connection.BeginTransactionAsync(ct);
+                if (failure.EndsWith("-microsecond", StringComparison.Ordinal))
+                {
+                    var (table, column, key) = failure switch {
+                        "created-microsecond" => ("instances", "created_at_utc", "instance_id"),
+                        "deadline-microsecond" => ("instances", "deadline_utc", "instance_id"),
+                        _ => ("timers", "due_at_utc", "timer_id")
+                    };
+                    await using var damage = new NpgsqlCommand($"UPDATE {Schema}.{table} SET {column}={column}+interval '1 microsecond' " +
+                        $"WHERE {key}=@id", connection, transaction) { CommandTimeout = 3 };
+                    damage.Parameters.AddWithValue("id", key == "timer_id" ? previous.TimerId : spec.InstanceId);
+                    Assert.Equal(1, await damage.ExecuteNonQueryAsync(ct));
+                }
                 if (failure == "cancellation")
                 {
                     await using var cancelling = IsolatedWorkflowFixture.CreateCancellationFixture(connection, CaseId);
