@@ -108,6 +108,12 @@ public sealed class WorkflowAuthorityBindingRecord
     public Guid ActorId { get; set; }
     public long Generation { get; set; }
     public DateTimeOffset RecordedAtUtc { get; set; }
+    // Revision 6 (12.2f) reauthorization receipt; ignored by revisions 1–5.
+    public Guid RequestId { get; set; }
+    public string CommandHash { get; set; } = "";
+    public string SpecificationHash { get; set; } = "";
+    public long ExpectedVersion { get; set; }
+    public long ResultingVersion { get; set; }
 }
 
 public sealed class WorkflowClockFloorRecord

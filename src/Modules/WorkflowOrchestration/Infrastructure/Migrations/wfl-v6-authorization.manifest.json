@@ -1,0 +1,11 @@
+{
+  "revision": 6,
+  "fromRevision": 5,
+  "scope": "additive reauthorization receipt columns, unique request index and checks on authority_bindings (12.2f); offline artifact only; NOT NULL without defaults so PostgreSQL refuses a non-empty table",
+  "baselineSha256": "c7cf35f11f8ecc82a7d78ca4ec3a27f9d7d48986ec93aa382e62ae9c4e87b742",
+  "sha256": "9f2b5c70b6b90855f048b8f515537e1126f8fc8d86798d990f9a82e8ffce67b5",
+  "tablesAltered": [
+    "authority_bindings"
+  ],
+  "destructiveOperations": false
+}

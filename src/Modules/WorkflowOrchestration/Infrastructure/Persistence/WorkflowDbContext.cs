@@ -15,14 +15,17 @@ public sealed class WorkflowDbContext : DbContext
     public const int CancellationSchemaRevision = 3;
     public const int StartSchemaRevision = 4;
     public const int ReconciliationSchemaRevision = 5;
+    /// <summary>12.2f: additive reauthorization receipt columns on authority_bindings.</summary>
+    public const int AuthorizationSchemaRevision = 6;
+    public bool IncludesAuthorizationReceipts { get; }
     public bool IncludesOperatorReconciliation { get; }
     public bool IncludesStartReceipts { get; }
     public string SchemaName { get; }
     public bool IncludesWakeOperations { get; }
     public bool IncludesCancellationIntents { get; }
 
-    private WorkflowDbContext(DbContextOptions<WorkflowDbContext> options, string schema, bool wakeOperations, bool cancellationIntents, bool startReceipts, bool operatorReconciliation) : base(options)
-    { SchemaName = schema; IncludesWakeOperations = wakeOperations; IncludesCancellationIntents = cancellationIntents; IncludesStartReceipts = startReceipts; IncludesOperatorReconciliation = operatorReconciliation; }
+    private WorkflowDbContext(DbContextOptions<WorkflowDbContext> options, string schema, bool wakeOperations, bool cancellationIntents, bool startReceipts, bool operatorReconciliation, bool authorizationReceipts) : base(options)
+    { SchemaName = schema; IncludesWakeOperations = wakeOperations; IncludesCancellationIntents = cancellationIntents; IncludesStartReceipts = startReceipts; IncludesOperatorReconciliation = operatorReconciliation; IncludesAuthorizationReceipts = authorizationReceipts; }
 
     /// <summary>Offline artifact generation only. Does not connect or provision.</summary>
     public static WorkflowDbContext CreateOfflineModel() => Create(new NpgsqlConnection(
@@ -71,24 +74,33 @@ public sealed class WorkflowDbContext : DbContext
         return Create(connection, target.SchemaName, true, true, true, true);
     }
 
+    public static WorkflowDbContext CreateOfflineAuthorizationModel() => Create(new NpgsqlConnection(
+        "Host=127.0.0.1;Database=kordra_design_time;Username=kordra_design_time;Timeout=1"), "wfl", true, true, true, true, true);
+
+    public static WorkflowDbContext CreateAuthorizationFixture(NpgsqlConnection connection, Guid caseId)
+    {
+        var target = WorkflowFixtureTarget.Validate(connection, caseId);
+        return Create(connection, target.SchemaName, true, true, true, true, true);
+    }
+
     /// <summary>Explicit disposable database/case/revision selection only; never provisions or opens a connection.</summary>
     public static WorkflowDbContext CreateDisposableTestFixture(NpgsqlConnection connection, Guid caseId,
         int schemaRevision, DisposableTestBinding profile)
     {
-        if (schemaRevision is < SchemaRevision or > ReconciliationSchemaRevision)
+        if (schemaRevision is < SchemaRevision or > AuthorizationSchemaRevision)
             throw new InvalidOperationException("Unsupported disposable WFL fixture revision.");
         var target = WorkflowFixtureTarget.ValidateDisposableTest(connection, caseId, profile);
         return Create(connection, target.SchemaName, schemaRevision >= WakeSchemaRevision,
             schemaRevision >= CancellationSchemaRevision, schemaRevision >= StartSchemaRevision,
-            schemaRevision >= ReconciliationSchemaRevision);
+            schemaRevision >= ReconciliationSchemaRevision, schemaRevision >= AuthorizationSchemaRevision);
     }
 
-    private static WorkflowDbContext Create(NpgsqlConnection connection, string schema, bool wakeOperations = false, bool cancellationIntents = false, bool startReceipts = false, bool operatorReconciliation = false)
+    private static WorkflowDbContext Create(NpgsqlConnection connection, string schema, bool wakeOperations = false, bool cancellationIntents = false, bool startReceipts = false, bool operatorReconciliation = false, bool authorizationReceipts = false)
     {
         var options = new DbContextOptionsBuilder<WorkflowDbContext>()
             .UseNpgsql(connection, p => p.CommandTimeout(2))
             .ReplaceService<IModelCacheKeyFactory, WorkflowModelCacheKeyFactory>().Options;
-        return new(options, schema, wakeOperations, cancellationIntents, startReceipts, operatorReconciliation);
+        return new(options, schema, wakeOperations, cancellationIntents, startReceipts, operatorReconciliation, authorizationReceipts);
     }
 
     protected override void OnModelCreating(ModelBuilder model)
@@ -201,10 +213,25 @@ public sealed class WorkflowDbContext : DbContext
             });
         }
 
+        if (!IncludesAuthorizationReceipts)
+        {
+            // Revisions 1–5 keep the original nine-column table: ignore receipt columns before Scoped derives constraints.
+            var original = model.Entity<WorkflowAuthorityBindingRecord>();
+            original.Ignore(x => x.RequestId); original.Ignore(x => x.CommandHash); original.Ignore(x => x.SpecificationHash);
+            original.Ignore(x => x.ExpectedVersion); original.Ignore(x => x.ResultingVersion);
+        }
         var binding = Scoped<WorkflowAuthorityBindingRecord>(model, "authority_bindings");
         binding.HasKey(x => new { x.InstallationId, x.TenantId, x.InstanceId, x.BindingId });
         binding.HasIndex(x => new { x.InstallationId, x.TenantId, x.InstanceId, x.Generation }).IsUnique();
         InstanceForeignKey(binding);
+        if (IncludesAuthorizationReceipts)
+        {
+            // Revision 6 (12.2f): reauthorization idempotency and If-Match receipt on a table that had no writer.
+            // Scoped already adds non-empty GUID, lowercase SHA-256 and positive version/generation checks.
+            binding.HasIndex(x => new { x.InstallationId, x.TenantId, x.InstanceId, x.RequestId }).IsUnique();
+            binding.ToTable(t => t.HasCheckConstraint("ck_authority_bindings_versions",
+                "expected_version > 0 AND expected_version < 9223372036854775807 AND resulting_version = expected_version + 1"));
+        }
 
         var floor = Scoped<WorkflowClockFloorRecord>(model, "clock_floor");
         floor.HasKey(x => new { x.InstallationId, x.TenantId });
@@ -269,6 +296,27 @@ public sealed class WorkflowDbContext : DbContext
                     cancellation.RecordedAtUtc.ToUniversalTime() < canonical.CreatedAtUtc ||
                     !Enum.IsDefined((WorkflowState)owner.State) || WorkflowStateRules.IsTerminal((WorkflowState)owner.State))
                     throw new InvalidOperationException("Cancellation row must match its exact immutable command binding.");
+            }
+            if (entry.State == EntityState.Added && entry.Entity is WorkflowAuthorityBindingRecord binding)
+            {
+                // Only revision 6 has an owner writer; earlier revisions keep the table without a staging path.
+                if (!IncludesAuthorizationReceipts)
+                    throw new InvalidOperationException("Authority binding history requires schema revision 6.");
+                var command = new WorkflowReauthorizationCommand(binding.InstallationId, binding.TenantId, binding.InstanceId,
+                    binding.RequestId, binding.ActorId, binding.ExpectedVersion, binding.SpecificationHash);
+                var owner = ChangeTracker.Entries<WorkflowInstanceRecord>().SingleOrDefault(x =>
+                    x.Entity.InstallationId == command.InstallationId && x.Entity.TenantId == command.TenantId &&
+                    x.Entity.InstanceId == command.InstanceId)?.Entity
+                    ?? throw new InvalidOperationException("Authority binding requires its tracked owner.");
+                var canonical = WorkflowSpecification.ReadCanonical(owner.Specification);
+                if (binding.CommandHash != command.CommandHash || binding.BindingId == Guid.Empty || binding.DelegationId == Guid.Empty ||
+                    binding.Generation < 2 || binding.RecordedAtUtc == default || binding.RecordedAtUtc.Offset != TimeSpan.Zero ||
+                    binding.ResultingVersion != binding.ExpectedVersion + 1 || owner.Version != binding.ResultingVersion ||
+                    owner.SpecificationHash != command.SpecificationHash || canonical.SpecificationHash != command.SpecificationHash ||
+                    canonical.InstallationId != command.InstallationId || canonical.TenantId != command.TenantId ||
+                    canonical.InstanceId != command.InstanceId || owner.State != (int)WorkflowState.BlockedAuthority ||
+                    binding.RecordedAtUtc < canonical.CreatedAtUtc || binding.RecordedAtUtc >= canonical.DeadlineUtc)
+                    throw new InvalidOperationException("Authority binding must match its exact reauthorization command and blocked owner.");
             }
             if (entry.State == EntityState.Added && entry.Entity is WorkflowWakeOperationRecord wake)
             {
@@ -378,5 +426,5 @@ public sealed class WorkflowDbContext : DbContext
 internal sealed class WorkflowModelCacheKeyFactory : IModelCacheKeyFactory
 {
     public object Create(DbContext context, bool designTime) =>
-        (context.GetType(), ((WorkflowDbContext)context).SchemaName, ((WorkflowDbContext)context).IncludesWakeOperations, ((WorkflowDbContext)context).IncludesCancellationIntents, ((WorkflowDbContext)context).IncludesStartReceipts, ((WorkflowDbContext)context).IncludesOperatorReconciliation, designTime);
+        (context.GetType(), ((WorkflowDbContext)context).SchemaName, ((WorkflowDbContext)context).IncludesWakeOperations, ((WorkflowDbContext)context).IncludesCancellationIntents, ((WorkflowDbContext)context).IncludesStartReceipts, ((WorkflowDbContext)context).IncludesOperatorReconciliation, ((WorkflowDbContext)context).IncludesAuthorizationReceipts, designTime);
 }

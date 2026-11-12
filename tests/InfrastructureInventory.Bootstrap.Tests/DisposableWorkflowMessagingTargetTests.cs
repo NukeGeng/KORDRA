@@ -15,7 +15,7 @@ public sealed class DisposableWorkflowMessagingTargetTests
     private static string Locator() => $"Host=127.0.0.1;Database=kordra_test_{Run:N};Username=kordra_test;Password=synthetic-do-not-echo;Pooling=false";
 
     [Theory]
-    [InlineData(1)][InlineData(2)][InlineData(3)][InlineData(4)][InlineData(5)]
+    [InlineData(1)][InlineData(2)][InlineData(3)][InlineData(4)][InlineData(5)][InlineData(6)]
     public void ExactWflCaseRevisionAndMessageInspectorNeedNoConnectionOpen(int revision)
     {
         using var connection = new NpgsqlConnection(Locator()); var caseId = Guid.NewGuid(); var profile = Profile();
@@ -27,6 +27,7 @@ public sealed class DisposableWorkflowMessagingTargetTests
         Assert.Equal(revision >= 3, context.IncludesCancellationIntents);
         Assert.Equal(revision >= 4, context.IncludesStartReceipts);
         Assert.Equal(revision >= 5, context.IncludesOperatorReconciliation);
+        Assert.Equal(revision >= 6, context.IncludesAuthorizationReceipts);
         Assert.NotNull(MessageReceiptInspector.CreateDisposableTestInspector(connection, caseId, profile));
         Assert.Equal(System.Data.ConnectionState.Closed, connection.State);
         Assert.Throws<InvalidOperationException>(() => WorkflowFixtureTarget.Validate(connection, caseId));
@@ -54,7 +55,7 @@ public sealed class DisposableWorkflowMessagingTargetTests
         Assert.Throws<InvalidOperationException>(() => WorkflowFixtureTarget.ValidateDisposableTest(connection, Guid.Empty, profile));
         Assert.Throws<InvalidOperationException>(() => MessageReceiptInspector.CreateDisposableTestInspector(connection, Guid.Empty, profile));
         Assert.Throws<InvalidOperationException>(() => WorkflowDbContext.CreateDisposableTestFixture(connection, caseId, 0, profile));
-        Assert.Throws<InvalidOperationException>(() => WorkflowDbContext.CreateDisposableTestFixture(connection, caseId, 6, profile));
+        Assert.Throws<InvalidOperationException>(() => WorkflowDbContext.CreateDisposableTestFixture(connection, caseId, 7, profile));
         profile.ExpiresAtUtc = DateTimeOffset.UtcNow.AddMinutes(-1);
         Assert.Throws<InvalidOperationException>(() => WorkflowFixtureTarget.ValidateDisposableTest(connection, caseId, profile));
         Assert.Throws<InvalidOperationException>(() => MessageReceiptInspector.CreateDisposableTestInspector(connection, caseId, profile));
