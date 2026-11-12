@@ -1,0 +1,11 @@
+{
+  "revision": 3,
+  "fromRevision": 2,
+  "scope": "additive append-only cancellation_intents only; offline artifact, not migration authorization",
+  "baselineSha256": "618993ba4dba804c30561308a12bb6390a379f36660866946c34e09867070604",
+  "sha256": "3949d62d4e1f20cc8d38eae6c4160a0fedc009638b6b3aa6c33c980c6cd93c64",
+  "tablesAdded": [
+    "cancellation_intents"
+  ],
+  "destructiveOperations": false
+}

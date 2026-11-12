@@ -11,13 +11,25 @@ namespace Kordra.Modules.WorkflowOrchestration.Infrastructure.Persistence;
 public sealed class WorkflowDbContext : DbContext
 {
     public const int SchemaRevision = 1;
+    public const int WakeSchemaRevision = 2;
+    public const int CancellationSchemaRevision = 3;
+    public const int StartSchemaRevision = 4;
+    public const int ReconciliationSchemaRevision = 5;
+    public bool IncludesOperatorReconciliation { get; }
+    public bool IncludesStartReceipts { get; }
     public string SchemaName { get; }
+    public bool IncludesWakeOperations { get; }
+    public bool IncludesCancellationIntents { get; }
 
-    private WorkflowDbContext(DbContextOptions<WorkflowDbContext> options, string schema) : base(options) => SchemaName = schema;
+    private WorkflowDbContext(DbContextOptions<WorkflowDbContext> options, string schema, bool wakeOperations, bool cancellationIntents, bool startReceipts, bool operatorReconciliation) : base(options)
+    { SchemaName = schema; IncludesWakeOperations = wakeOperations; IncludesCancellationIntents = cancellationIntents; IncludesStartReceipts = startReceipts; IncludesOperatorReconciliation = operatorReconciliation; }
 
     /// <summary>Offline artifact generation only. Does not connect or provision.</summary>
     public static WorkflowDbContext CreateOfflineModel() => Create(new NpgsqlConnection(
         "Host=127.0.0.1;Database=kordra_design_time;Username=kordra_design_time;Timeout=1"), "wfl");
+
+    public static WorkflowDbContext CreateOfflineWakeModel() => Create(new NpgsqlConnection(
+        "Host=127.0.0.1;Database=kordra_design_time;Username=kordra_design_time;Timeout=1"), "wfl", true);
 
     /// <summary>Does not authorize operations; fixture approval must name the exact case/schema.</summary>
     public static WorkflowDbContext CreateFixture(NpgsqlConnection connection, Guid caseId)
@@ -26,18 +38,57 @@ public sealed class WorkflowDbContext : DbContext
         return Create(connection, target.SchemaName);
     }
 
-    public static WorkflowDbContext CreateDisposableTestFixture(NpgsqlConnection connection, Guid caseId, DisposableTestBinding profile)
+    public static WorkflowDbContext CreateWakeFixture(NpgsqlConnection connection, Guid caseId)
     {
-        var target = WorkflowFixtureTarget.ValidateDisposableTest(connection, caseId, profile);
-        return Create(connection, target.SchemaName);
+        var target = WorkflowFixtureTarget.Validate(connection, caseId);
+        return Create(connection, target.SchemaName, true);
     }
 
-    private static WorkflowDbContext Create(NpgsqlConnection connection, string schema)
+    public static WorkflowDbContext CreateOfflineCancellationModel() => Create(new NpgsqlConnection(
+        "Host=127.0.0.1;Database=kordra_design_time;Username=kordra_design_time;Timeout=1"), "wfl", true, true);
+
+    public static WorkflowDbContext CreateCancellationFixture(NpgsqlConnection connection, Guid caseId)
+    {
+        var target = WorkflowFixtureTarget.Validate(connection, caseId);
+        return Create(connection, target.SchemaName, true, true);
+    }
+
+    public static WorkflowDbContext CreateOfflineStartModel() => Create(new NpgsqlConnection(
+        "Host=127.0.0.1;Database=kordra_design_time;Username=kordra_design_time;Timeout=1"), "wfl", true, true, true);
+
+    public static WorkflowDbContext CreateStartFixture(NpgsqlConnection connection, Guid caseId)
+    {
+        var target = WorkflowFixtureTarget.Validate(connection, caseId);
+        return Create(connection, target.SchemaName, true, true, true);
+    }
+
+    public static WorkflowDbContext CreateOfflineReconciliationModel() => Create(new NpgsqlConnection(
+        "Host=127.0.0.1;Database=kordra_design_time;Username=kordra_design_time;Timeout=1"), "wfl", true, true, true, true);
+
+    public static WorkflowDbContext CreateReconciliationFixture(NpgsqlConnection connection, Guid caseId)
+    {
+        var target = WorkflowFixtureTarget.Validate(connection, caseId);
+        return Create(connection, target.SchemaName, true, true, true, true);
+    }
+
+    /// <summary>Explicit disposable database/case/revision selection only; never provisions or opens a connection.</summary>
+    public static WorkflowDbContext CreateDisposableTestFixture(NpgsqlConnection connection, Guid caseId,
+        int schemaRevision, DisposableTestBinding profile)
+    {
+        if (schemaRevision is < SchemaRevision or > ReconciliationSchemaRevision)
+            throw new InvalidOperationException("Unsupported disposable WFL fixture revision.");
+        var target = WorkflowFixtureTarget.ValidateDisposableTest(connection, caseId, profile);
+        return Create(connection, target.SchemaName, schemaRevision >= WakeSchemaRevision,
+            schemaRevision >= CancellationSchemaRevision, schemaRevision >= StartSchemaRevision,
+            schemaRevision >= ReconciliationSchemaRevision);
+    }
+
+    private static WorkflowDbContext Create(NpgsqlConnection connection, string schema, bool wakeOperations = false, bool cancellationIntents = false, bool startReceipts = false, bool operatorReconciliation = false)
     {
         var options = new DbContextOptionsBuilder<WorkflowDbContext>()
             .UseNpgsql(connection, p => p.CommandTimeout(2))
             .ReplaceService<IModelCacheKeyFactory, WorkflowModelCacheKeyFactory>().Options;
-        return new(options, schema);
+        return new(options, schema, wakeOperations, cancellationIntents, startReceipts, operatorReconciliation);
     }
 
     protected override void OnModelCreating(ModelBuilder model)
@@ -78,6 +129,34 @@ public sealed class WorkflowDbContext : DbContext
             t.HasCheckConstraint("ck_timers_budget", "scheduler_attempts BETWEEN 0 AND 10");
         });
 
+        if (IncludesWakeOperations)
+        {
+            var wake = Scoped<WorkflowWakeOperationRecord>(model, "wake_operations");
+            wake.HasKey(x => new { x.InstallationId, x.TenantId, x.InstanceId, x.StepId, x.TimerId, x.Generation });
+            wake.HasOne<WorkflowTimerRecord>().WithMany().HasForeignKey(x =>
+                new { x.InstallationId, x.TenantId, x.InstanceId, x.StepId, x.TimerId, x.Generation }).OnDelete(DeleteBehavior.Restrict);
+            wake.HasIndex(x => new { x.InstallationId, x.TenantId, x.SchedulerOperationId }).IsUnique();
+            wake.HasIndex(x => new { x.InstallationId, x.TenantId, x.WakeOperationId }).IsUnique();
+            wake.HasIndex(x => new { x.InstallationId, x.TenantId, x.MessageId }).IsUnique();
+            wake.Property(x => x.Descriptor).HasColumnType("bytea").IsRequired();
+            wake.ToTable(t => {
+                t.HasCheckConstraint("ck_wake_operations_descriptor", "octet_length(descriptor) BETWEEN 2 AND 16384");
+                t.HasCheckConstraint("ck_wake_operations_budget", "scheduler_attempt BETWEEN 1 AND 10");
+                t.HasCheckConstraint("ck_wake_operations_epoch", "custody_epoch > 0");
+                t.HasCheckConstraint("ck_wake_operations_operations", "scheduler_operation_id <> wake_operation_id");
+            });
+        }
+
+        if (IncludesCancellationIntents)
+        {
+            var cancellation = Scoped<WorkflowCancellationIntentRecord>(model, "cancellation_intents");
+            cancellation.HasKey(x => new { x.InstallationId, x.TenantId, x.RequestId });
+            cancellation.HasIndex(x => new { x.InstallationId, x.TenantId, x.InstanceId }).IsUnique();
+            InstanceForeignKey(cancellation);
+            cancellation.ToTable(t => t.HasCheckConstraint("ck_cancellation_versions",
+                "expected_version > 0 AND expected_version < 9223372036854775807 AND resulting_version = expected_version + 1"));
+        }
+
         var custody = Scoped<WorkflowCustodyRecord>(model, "operation_custody");
         custody.HasKey(x => new { x.InstallationId, x.TenantId, x.InstanceId, x.StepId, x.OperationId });
         StepForeignKey(custody);
@@ -98,6 +177,29 @@ public sealed class WorkflowDbContext : DbContext
             .HasPrincipalKey(x => new { x.InstallationId, x.TenantId, x.InstanceId, x.RequestId }).OnDelete(DeleteBehavior.Restrict);
         receipt.Property(x => x.ResultJson).HasColumnType("jsonb").IsRequired();
         receipt.ToTable(t => t.HasCheckConstraint("ck_receipt_size", "octet_length(result_json::text) <= 16384"));
+
+        if (IncludesStartReceipts)
+        {
+            var start = Scoped<WorkflowStartReceiptRecord>(model, "start_receipts");
+            start.HasKey(x => new { x.InstallationId, x.TenantId, x.ActorId, x.ScopedKeyHash });
+            start.HasIndex(x => new { x.InstallationId, x.TenantId, x.RequestId }).IsUnique();
+            start.HasOne<WorkflowRequestReceiptRecord>().WithMany()
+                .HasForeignKey(x => new { x.InstallationId, x.TenantId, x.RequestId }).OnDelete(DeleteBehavior.Restrict);
+        }
+
+        if (IncludesOperatorReconciliation)
+        {
+            var decision = Scoped<WorkflowOperatorDecisionRecord>(model, "operator_decisions");
+            decision.HasKey(x => new { x.InstallationId, x.TenantId, x.RequestId });
+            decision.HasIndex(x => new { x.InstallationId, x.TenantId, x.InstanceId, x.OperationId, x.Kind }).IsUnique();
+            InstanceForeignKey(decision);
+            decision.ToTable(t =>
+            {
+                t.HasCheckConstraint("ck_operator_decision_kind", "kind IN (1,2)");
+                t.HasCheckConstraint("ck_operator_decision_versions",
+                    "expected_version > 0 AND expected_version < 9223372036854775807 AND resulting_version = expected_version + 1");
+            });
+        }
 
         var binding = Scoped<WorkflowAuthorityBindingRecord>(model, "authority_bindings");
         binding.HasKey(x => new { x.InstallationId, x.TenantId, x.InstanceId, x.BindingId });
@@ -130,6 +232,59 @@ public sealed class WorkflowDbContext : DbContext
         ChangeTracker.DetectChanges();
         foreach (var entry in ChangeTracker.Entries())
         {
+            if (entry.State == EntityState.Added && entry.Entity is WorkflowOperatorDecisionRecord decision)
+            {
+                var command = new WorkflowReconciliationCommand(decision.InstallationId, decision.TenantId,
+                    decision.InstanceId, decision.RequestId, decision.ActorId, decision.OperationId,
+                    decision.ExpectedVersion, (WorkflowReconciliationKind)decision.Kind,
+                    decision.EvidenceHash, decision.SpecificationHash);
+                var owner = ChangeTracker.Entries<WorkflowInstanceRecord>().SingleOrDefault(x =>
+                    x.Entity.InstallationId == command.InstallationId && x.Entity.TenantId == command.TenantId &&
+                    x.Entity.InstanceId == command.InstanceId)?.Entity
+                    ?? throw new InvalidOperationException("Operator decision requires its tracked owner.");
+                var canonical = WorkflowSpecification.ReadCanonical(owner.Specification);
+                if (decision.CommandHash != command.CommandHash || decision.RecordedAtUtc == default ||
+                    decision.RecordedAtUtc.Offset != TimeSpan.Zero || decision.RecordedAtUtc == DateTimeOffset.MaxValue ||
+                    decision.ResultingVersion != command.ExpectedVersion + 1 || owner.Version != decision.ResultingVersion ||
+                    owner.SpecificationHash != command.SpecificationHash || canonical.SpecificationHash != command.SpecificationHash ||
+                    canonical.InstallationId != command.InstallationId || canonical.TenantId != command.TenantId ||
+                    canonical.InstanceId != command.InstanceId || decision.RecordedAtUtc < canonical.CreatedAtUtc ||
+                    !Enum.IsDefined((WorkflowState)owner.State) || WorkflowStateRules.IsTerminal((WorkflowState)owner.State))
+                    throw new InvalidOperationException("Operator decision must match its immutable command and current owner.");
+            }
+            if (entry.State == EntityState.Added && entry.Entity is WorkflowCancellationIntentRecord cancellation)
+            {
+                var intent = new WorkflowCancellationIntent(cancellation.InstallationId, cancellation.TenantId,
+                    cancellation.InstanceId, cancellation.RequestId, cancellation.ActorId, cancellation.ExpectedVersion, cancellation.SpecificationHash);
+                var owner = ChangeTracker.Entries<WorkflowInstanceRecord>().SingleOrDefault(x =>
+                    x.Entity.InstallationId == intent.InstallationId && x.Entity.TenantId == intent.TenantId &&
+                    x.Entity.InstanceId == intent.InstanceId)?.Entity
+                    ?? throw new InvalidOperationException("Cancellation binding requires its tracked owner.");
+                var canonical = WorkflowSpecification.ReadCanonical(owner.Specification);
+                if (cancellation.CommandHash != intent.CommandHash || cancellation.RecordedAtUtc == default ||
+                    cancellation.ResultingVersion != cancellation.ExpectedVersion + 1 ||
+                    owner.Version != cancellation.ResultingVersion || owner.SpecificationHash != intent.SpecificationHash ||
+                    canonical.InstallationId != intent.InstallationId || canonical.TenantId != intent.TenantId ||
+                    canonical.InstanceId != intent.InstanceId || canonical.SpecificationHash != intent.SpecificationHash ||
+                    cancellation.RecordedAtUtc.ToUniversalTime() < canonical.CreatedAtUtc ||
+                    !Enum.IsDefined((WorkflowState)owner.State) || WorkflowStateRules.IsTerminal((WorkflowState)owner.State))
+                    throw new InvalidOperationException("Cancellation row must match its exact immutable command binding.");
+            }
+            if (entry.State == EntityState.Added && entry.Entity is WorkflowWakeOperationRecord wake)
+            {
+                var instance = ChangeTracker.Entries<WorkflowInstanceRecord>().SingleOrDefault(x =>
+                    x.Entity.InstallationId == wake.InstallationId && x.Entity.TenantId == wake.TenantId &&
+                    x.Entity.InstanceId == wake.InstanceId)?.Entity
+                    ?? throw new InvalidOperationException("Wake binding requires its tracked owner specification.");
+                var operation = WorkflowWakeOperation.ReadCanonical(wake.Descriptor,
+                    WorkflowSpecification.ReadCanonical(instance.Specification));
+                if (wake.DescriptorHash != operation.DescriptorHash || wake.StepId != operation.StepId ||
+                    wake.TimerId != operation.TimerId || wake.Generation != operation.Generation ||
+                    wake.SchedulerAttempt != operation.SchedulerAttempt || wake.CustodyEpoch != operation.CustodyEpoch ||
+                    wake.SchedulerOperationId != operation.SchedulerOperationId || wake.WakeOperationId != operation.WakeOperationId ||
+                    wake.MessageId != operation.MessageId)
+                    throw new InvalidOperationException("Wake row must match its exact canonical descriptor.");
+            }
             if (entry.State == EntityState.Added && entry.Entity is WorkflowInstanceRecord added)
             {
                 var spec = WorkflowSpecification.ReadCanonical(added.Specification);
@@ -144,7 +299,7 @@ public sealed class WorkflowDbContext : DbContext
                 throw new InvalidOperationException("Workflow retention forbids deletion through the owner context.");
             if (entry.State != EntityState.Modified) continue;
             if (entry.Entity is WorkflowTransitionRecord or WorkflowRecoveryDecisionRecord or
-                WorkflowRequestReceiptRecord or WorkflowAuthorityBindingRecord)
+                WorkflowRequestReceiptRecord or WorkflowAuthorityBindingRecord or WorkflowWakeOperationRecord or WorkflowCancellationIntentRecord or WorkflowStartReceiptRecord or WorkflowOperatorDecisionRecord)
                 throw new InvalidOperationException("Workflow history is append-only.");
             if (entry.Entity is WorkflowInstanceRecord)
             {
@@ -223,5 +378,5 @@ public sealed class WorkflowDbContext : DbContext
 internal sealed class WorkflowModelCacheKeyFactory : IModelCacheKeyFactory
 {
     public object Create(DbContext context, bool designTime) =>
-        (context.GetType(), ((WorkflowDbContext)context).SchemaName, designTime);
+        (context.GetType(), ((WorkflowDbContext)context).SchemaName, ((WorkflowDbContext)context).IncludesWakeOperations, ((WorkflowDbContext)context).IncludesCancellationIntents, ((WorkflowDbContext)context).IncludesStartReceipts, ((WorkflowDbContext)context).IncludesOperatorReconciliation, designTime);
 }

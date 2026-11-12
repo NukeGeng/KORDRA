@@ -410,7 +410,7 @@ namespace Kordra.Modules.IdentityAccess.Infrastructure.Migrations
 
                     b.ToTable("iam_resource_policy_revisions", "app", t =>
                         {
-                            t.HasCheckConstraint("ck_iam_resource_policy_payload", "revision > 0 AND schema_version = 1 AND action = 'target.read' AND scope_kind IN ('environment','project_without_environment') AND status IN ('active','inactive') AND octet_length(content_hash) = 32 AND isfinite(effective_from_utc) AND isfinite(published_at_utc) AND (expires_at_utc IS NULL OR (isfinite(expires_at_utc) AND expires_at_utc > effective_from_utc))");
+                            t.HasCheckConstraint("ck_iam_resource_policy_payload", "revision > 0 AND ((schema_version = 1 AND action = 'target.read' AND scope_kind IN ('environment','project_without_environment')) OR (schema_version = 2 AND action IN ('workflow.start','workflow.read','workflow.cancel','workflow.reconcile') AND scope_kind = 'environment')) AND status IN ('active','inactive') AND octet_length(content_hash) = 32 AND isfinite(effective_from_utc) AND isfinite(published_at_utc) AND (expires_at_utc IS NULL OR (isfinite(expires_at_utc) AND expires_at_utc > effective_from_utc))");
                         });
                 });
 

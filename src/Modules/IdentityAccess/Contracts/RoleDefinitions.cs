@@ -34,7 +34,8 @@ public static class FoundationPermissions
             "target.read" or "target.manage" => rule.ScopeKind is "project" or "environment",
             "artifact.read" or "artifact.register" => rule.ScopeKind == "project",
             "release.create" or "release.read" or "release.retire" => rule.ScopeKind == "project",
-            "release.request-approval" or "release.approval.read" or "release.approve" or "release.approval.revoke" =>
+            "release.request-approval" or "release.approval.read" or "release.approve" or "release.approval.revoke" or
+            "workflow.start" or "workflow.read" or "workflow.cancel" or "workflow.reconcile" =>
                 rule.ScopeKind == "environment",
             _ => false
         };

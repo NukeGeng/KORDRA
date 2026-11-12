@@ -3,12 +3,56 @@ using Kordra.Modules.Messaging.Contracts;
 using Kordra.Modules.Messaging.Infrastructure.Serialization;
 using Wolverine;
 using Wolverine.Runtime.Serialization;
+using Wolverine.Postgresql.Transport;
 using Xunit;
 
 namespace Kordra.Messaging.Tests;
 
 public sealed class NativeMessageIngressRuleTests
 {
+    [Theory]
+    [InlineData(0)][InlineData(120)]
+    public void NativeSanitizedRouteMatchesPublisherAndPreservesExpiryClassification(int elapsed)
+    {
+        var registry = NativeWireFixture.Registry("native-compatibility");
+        var installation = Guid.NewGuid(); var created = DateTimeOffset.UtcNow;
+        var message = NativeWireFixture.Create(installation, Guid.NewGuid(), created);
+        var wire = new MessageEnvelopeCodec(registry).Write(message.Binding, message.Delivery, message.CopyPayload());
+        var transport = new WolverineOptions().Transports.GetOrCreate<PostgresqlTransport>();
+        var destination = new Uri("postgresql://" + transport.SanitizeIdentifier("native-compatibility"));
+        var native = new Envelope { Id = message.Delivery.MessageId, Data = wire, Destination = destination,
+            ContentType = MessageEnvelopeCodec.ContentType, MessageType = NativeWireFixture.TypeId };
+        new NativeMessageIngressRule(registry, installation, message.Binding.Identity.Scope, destination,
+            new FixedTime(created.AddSeconds(elapsed)), transport).Modify(native);
+        Assert.Equal(elapsed == 0 ? NativeWireFixture.TypeId : RejectedEnvelopeDiagnostic.TypeId, native.MessageType);
+        if (elapsed != 0)
+            Assert.True(RejectedEnvelopeDiagnostic.MatchesExpired(native, wire, installation, message.Delivery.MessageId, destination));
+    }
+
+    [Theory]
+    [InlineData("route")][InlineData("identity")][InlineData("wire")][InlineData("future")]
+    public void HistoricalInspectionCannotTurnMalformedOrFutureInputIntoExpiryEvidence(string changed)
+    {
+        var at = new DateTimeOffset(2026, 11, 1, 0, 0, 0, TimeSpan.Zero);
+        var installation = Guid.NewGuid();
+        var original = NativeWireFixture.Create(installation, Guid.NewGuid(), at);
+        var codec = new MessageEnvelopeCodec(NativeWireFixture.Registry());
+        var wire = codec.Write(original.Binding, original.Delivery, original.CopyPayload());
+        var destination = new Uri("postgresql://nativecompatibility");
+        var envelope = new Envelope {
+            Id = changed == "identity" ? Guid.NewGuid() : original.Delivery.MessageId,
+            Destination = changed == "route" ? new Uri("postgresql://elsewhere") : destination,
+            MessageType = NativeWireFixture.TypeId, ContentType = MessageEnvelopeCodec.ContentType,
+            Data = changed == "wire" ? "{}"u8.ToArray() : wire
+        };
+        new NativeMessageIngressRule(NativeWireFixture.Registry(), installation, original.Binding.Identity.Scope,
+            destination, new FixedTime(changed == "future" ? at.AddTicks(-1) : at.AddMinutes(3))).Modify(envelope);
+        Assert.Equal(RejectedEnvelopeDiagnostic.TypeId, envelope.MessageType);
+        Assert.False(RejectedEnvelopeDiagnostic.MatchesExpired(envelope, wire, installation, original.Delivery.MessageId, destination));
+        Assert.Throws<InvalidOperationException>(() => codec.Read(wire, MessageEnvelopeCodec.ContentType, installation,
+            original.Binding.Identity.Scope, at.AddMinutes(3)));
+    }
+
     [Theory]
     [InlineData(119, false)]
     [InlineData(120, true)]
@@ -34,6 +78,13 @@ public sealed class NativeMessageIngressRuleTests
         if (rejected)
         {
             Assert.Equal(RejectedEnvelopeDiagnostic.ContentType, roundTrip.ContentType);
+            var original = codec.Write(message.Binding, message.Delivery, message.CopyPayload());
+            Assert.True(RejectedEnvelopeDiagnostic.MatchesExpired(roundTrip, original, installation, message.Delivery.MessageId, destination));
+            Assert.False(RejectedEnvelopeDiagnostic.MatchesExpired(roundTrip, original, Guid.NewGuid(), message.Delivery.MessageId, destination));
+            Assert.False(RejectedEnvelopeDiagnostic.MatchesExpired(roundTrip, "{}"u8, installation, message.Delivery.MessageId, destination));
+            var inspected = codec.ReadForInspection(original, MessageEnvelopeCodec.ContentType, installation, message.Binding.Identity.Scope);
+            Assert.Equal(message.Binding, inspected.Binding);
+            Assert.Equal(message.Delivery, inspected.Delivery);
             Assert.Throws<InvalidOperationException>(() => codec.Read(roundTrip.Data!, roundTrip.ContentType!,
                 installation, message.Binding.Identity.Scope, created.AddSeconds(elapsedSeconds)));
         }

@@ -144,12 +144,14 @@ public sealed partial class CurrentAuthorityHttpTests : IAsyncLifetime
         using var legacy = await _client.GetAsync("/inventory"); Assert.Equal(HttpStatusCode.Forbidden, legacy.StatusCode);
     }
 
-    private async Task<Guid> PublishEnvironmentPolicy(bool allowRead = false)
+    private async Task<Guid> PublishEnvironmentPolicy(bool allowRead = false, bool workflowRead = false)
     {
         var installation = _host.Services.GetRequiredService<LocalAuthenticationConfiguration>().InstallationId;
-        var payload = new ResourcePolicyPayload(1, "target.read", "environment", "active",
-            DateTimeOffset.FromUnixTimeMilliseconds(_host.Clock.GetUtcNow().AddMinutes(-1).ToUnixTimeMilliseconds()), null, [new("Production", allowRead ? "allow" : "deny")]);
-        var manifest = new ResourcePolicyManifest(1, Guid.NewGuid(), installation, new(_host.Selection.Database, "kordra_test"),
+        var effective = DateTimeOffset.FromUnixTimeMilliseconds(_host.Clock.GetUtcNow().AddMinutes(-1).ToUnixTimeMilliseconds());
+        var payload = workflowRead
+            ? new ResourcePolicyPayload(2, "workflow.read", "environment", "active", effective, null, [new("Test", "allow")])
+            : new ResourcePolicyPayload(1, "target.read", "environment", "active", effective, null, [new("Production", allowRead ? "allow" : "deny")]);
+        var manifest = new ResourcePolicyManifest(payload.SchemaVersion, Guid.NewGuid(), installation, new(_host.Selection.Database, "kordra_test"),
             _tenant, _project, "create", null, 0, payload, []);
         var coordinator = _host.Selection.PolicyCoordinator(installation, Identity, _host.Services.GetRequiredService<TenantMembershipService>(),
             _host.Selection.AuditStore(new PooledDbContextFactory<AuditDbContext>(_host.Selection.Audit())),
@@ -193,6 +195,40 @@ public sealed partial class CurrentAuthorityHttpTests : IAsyncLifetime
         using var denied = await CreateEnvironment(Guid.NewGuid().ToString("N"), json); Assert.Equal(HttpStatusCode.Forbidden, denied.StatusCode);
         await using var audit = await _host.CreateAuditContextAsync();
         Assert.Single(await audit.Entries.Where(x => x.ResourceRef == environmentId && x.Stage == "mutation").ToArrayAsync());
+    }
+
+    [Fact]
+    public async Task V2_environment_creation_rejects_workflow_policy_before_binding_and_keeps_target_read_policy()
+    {
+        // PR29-PRJ-POLICY-001: owner admission and the precommit recheck share this exact reader. Only an active
+        // schema-1 target.read environment policy can back creation; an active schema-2 workflow policy cannot.
+        var workflowPolicy = await PublishEnvironmentPolicy(workflowRead: true);
+        var targetPolicy = await PublishEnvironmentPolicy();
+        var reader = _host.Services.GetRequiredService<IExactEnvironmentPolicyReader>();
+        await using (var admission = await _host.Services.GetRequiredService<FairAsyncReaderWriterAdmissionGate>().AcquireReadAsync())
+        {
+            Assert.False(await reader.IsApplicableUnderAdmissionAsync(_tenant, _project, "Test", new(workflowPolicy, 1)));
+            Assert.True(await reader.IsApplicableUnderAdmissionAsync(_tenant, _project, "Production", new(targetPolicy, 1)));
+        }
+        var workflowJson = JsonSerializer.Serialize(new { schemaVersion = 2, correlationId = Guid.NewGuid(), name = "Synthetic Test",
+            classification = "Test", resourcePolicy = new { policyId = workflowPolicy, revision = 1 } });
+        using (var denied = await CreateEnvironment(Guid.NewGuid().ToString("N"), workflowJson))
+            Assert.Equal(HttpStatusCode.Forbidden, denied.StatusCode);
+        await using (var db = await Projects.CreateDbContextAsync())
+        {
+            Assert.False(await db.Environments.AnyAsync(x => x.ProjectId == _project));
+            Assert.False(await db.Set<PolicyBindingRecord>().AnyAsync(x => x.ProjectId == _project && x.PolicyId == workflowPolicy));
+        }
+        var targetJson = JsonSerializer.Serialize(new { schemaVersion = 2, correlationId = Guid.NewGuid(), name = "Synthetic Production",
+            classification = "Production", resourcePolicy = new { policyId = targetPolicy, revision = 1 } });
+        using var created = await CreateEnvironment(Guid.NewGuid().ToString("N"), targetJson);
+        Assert.Equal(HttpStatusCode.Created, created.StatusCode);
+        using var parsed = JsonDocument.Parse(await created.Content.ReadAsStringAsync());
+        var environmentId = parsed.RootElement.GetProperty("environment").GetProperty("id").GetGuid();
+        Assert.Equal(targetPolicy, parsed.RootElement.GetProperty("policyBinding").GetProperty("policyId").GetGuid());
+        await using var project = await Projects.CreateDbContextAsync();
+        var binding = await project.Set<PolicyBindingRecord>().SingleAsync(x => x.EnvironmentId == environmentId);
+        Assert.Equal(("target.read", targetPolicy), (binding.Action, binding.PolicyId));
     }
 
     [Theory]

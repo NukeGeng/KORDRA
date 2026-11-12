@@ -9,7 +9,7 @@ namespace Internal.Generated.WolverineHandlers
     {
         public override System.Type[] HandlerTypes()
         {
-            return new System.Type[] { typeof(Kordra.InfrastructureInventory.Bootstrap.Tests.WorkflowFixtureIncomingHandler) };
+            return new System.Type[] { typeof(Kordra.InfrastructureInventory.Bootstrap.Tests.WorkflowFixtureIncomingHandler), typeof(Kordra.InfrastructureInventory.Bootstrap.Tests.WorkflowWakeFixtureHandler) };
         }
 
         public override System.Type[] MessageTypes()
@@ -29,8 +29,11 @@ namespace Internal.Generated.WolverineHandlers
         [global::System.Runtime.CompilerServices.ModuleInitializer]
         [global::System.Diagnostics.CodeAnalysis.DynamicDependency(global::System.Diagnostics.CodeAnalysis.DynamicallyAccessedMemberTypes.All, typeof(global::Internal.Generated.WolverineHandlers.GeneratedHandlerRegistry))]
         [global::System.Diagnostics.CodeAnalysis.DynamicDependency(global::System.Diagnostics.CodeAnalysis.DynamicallyAccessedMemberTypes.All, typeof(global::Internal.Generated.WolverineHandlers.WorkflowFixtureIncomingHandler1548062815))]
+        [global::System.Diagnostics.CodeAnalysis.DynamicDependency(global::System.Diagnostics.CodeAnalysis.DynamicallyAccessedMemberTypes.All, typeof(global::Internal.Generated.WolverineHandlers.WorkflowWakeFixtureInputHandler611404697))]
         [global::System.Diagnostics.CodeAnalysis.DynamicDependency(global::System.Diagnostics.CodeAnalysis.DynamicallyAccessedMemberTypes.All, typeof(global::Kordra.InfrastructureInventory.Bootstrap.Tests.WorkflowFixtureIncomingHandler))]
+        [global::System.Diagnostics.CodeAnalysis.DynamicDependency(global::System.Diagnostics.CodeAnalysis.DynamicallyAccessedMemberTypes.All, typeof(global::Kordra.InfrastructureInventory.Bootstrap.Tests.WorkflowWakeFixtureHandler))]
         [global::System.Diagnostics.CodeAnalysis.DynamicDependency(global::System.Diagnostics.CodeAnalysis.DynamicallyAccessedMemberTypes.All, typeof(global::Kordra.InfrastructureInventory.Bootstrap.Tests.WorkflowFixtureIncoming))]
+        [global::System.Diagnostics.CodeAnalysis.DynamicDependency(global::System.Diagnostics.CodeAnalysis.DynamicallyAccessedMemberTypes.All, typeof(global::Kordra.InfrastructureInventory.Bootstrap.Tests.WorkflowWakeFixtureInput))]
         public static void Pin()
         {
             // Intentionally empty. The [DynamicDependency] attributes above are the payload: they root the generated types for Native AOT, and [ModuleInitializer] guarantees this method is itself an ILC root.

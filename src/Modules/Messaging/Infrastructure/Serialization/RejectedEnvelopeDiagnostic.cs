@@ -17,6 +17,36 @@ public static class RejectedEnvelopeDiagnostic
     public const string TypeId = "kordra.message.rejected.v1";
     public const string ContentType = "application/vnd.kordra.message-rejection.v1+json";
 
+    /// <summary>Matches retained original bytes to a bounded expiry diagnostic, without attesting settlement.</summary>
+    public static bool MatchesExpired(Envelope diagnostic, ReadOnlySpan<byte> originalWire, Guid installationId,
+        Guid messageId, Uri destination)
+    {
+        ArgumentNullException.ThrowIfNull(diagnostic);
+        ArgumentNullException.ThrowIfNull(destination);
+        if (installationId == Guid.Empty || messageId == Guid.Empty || originalWire.Length is < 2 or > 32 * 1024 ||
+            diagnostic.Id != messageId || diagnostic.Destination != destination || diagnostic.Message is not null ||
+            diagnostic.Serializer is not null || diagnostic.ContentType != ContentType || diagnostic.MessageType != TypeId)
+            return false;
+        try
+        {
+            if (diagnostic.Data is not { Length: > 0 and <= 512 } data) return false;
+            using var document = JsonDocument.Parse(data, new JsonDocumentOptions { MaxDepth = 2 });
+            var root = document.RootElement;
+            string[] fields = ["schemaVersion", "installationId", "messageId", "reason", "observedHash", "bodyWithinLimit"];
+            var names = root.EnumerateObject().Select(p => p.Name).ToArray();
+            return names.Length == fields.Length && names.Distinct(StringComparer.Ordinal).Count() == fields.Length &&
+                names.All(name => fields.Contains(name, StringComparer.Ordinal)) &&
+                root.GetProperty("schemaVersion").GetInt32() == 1 &&
+                root.GetProperty("installationId").GetString() == installationId.ToString("D") &&
+                root.GetProperty("messageId").GetString() == messageId.ToString("D") &&
+                root.GetProperty("reason").GetString() == "Expired" &&
+                root.GetProperty("bodyWithinLimit").GetBoolean() &&
+                root.GetProperty("observedHash").GetString() == Convert.ToHexStringLower(SHA256.HashData(originalWire));
+        }
+        catch (Exception error) when (error is JsonException or InvalidOperationException or FormatException)
+        { return false; }
+    }
+
     /// <summary>
     /// Replaces untrusted diagnostic content on the transport-owned instance without changing its
     /// settlement identity. Does not settle, commit, log, acknowledge or retry the delivery.

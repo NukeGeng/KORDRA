@@ -97,12 +97,12 @@ public sealed class OfflineResourcePolicyCoordinator(Guid installationId, IDbCon
                 policy = await iam.ReadCurrentUnderAdmissionAsync(manifest.TenantId, manifest.ProjectId, manifest.PolicyId!.Value, manifest.ExpectedCurrentRevision, ct);
             else policy = await iam.StagePublicationAsync(custody, manifest.TenantId, manifest.ProjectId, manifest.PolicyId,
                 manifest.ExpectedCurrentRevision, manifest.Payload!, now, ct);
-            if (policy is null) return new("conflict");
+            if (policy is null || policy.Payload.SchemaVersion != manifest.SchemaVersion) return new("conflict");
             if (!PolicyReadyForCommit(policy.Payload, manifest.Operation, now)) return new("denied");
             var bindings = new List<PolicyBinding>();
             foreach (var b in manifest.Bindings)
             {
-                if (b.ScopeKind != policy.Payload.ScopeKind) return new("denied");
+                if (b.ScopeKind != policy.Payload.ScopeKind || b.Action != policy.Payload.Action) return new("denied");
                 var binding = await projects.StageAsync(manifest.TenantId, manifest.ProjectId, b,
                     new(policy.PolicyId, policy.Revision), manifest.ManifestId, allowReplacement: true, ct);
                 if (binding is null) return new("conflict");

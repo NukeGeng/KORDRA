@@ -2,7 +2,7 @@
 id: CTR-RESOURCE-POLICY-V1
 status: accepted
 owner: NukeGeng
-last_reviewed: 2026-10-22
+last_reviewed: 2026-11-12
 ---
 
 # Resource Policy v1 — accepted bounded T06 design
@@ -205,3 +205,19 @@ The maintainer accepted ADR-0014 and this contract on 2026-10-22. The Developer 
 4. T06 integration: exact current owner facts and policy/binding in U/D, writer registry, actual caller-bound HTTP proof, updated versioned Product fixtures, then applicable gates. Keep positive ingress closed until evidence passes; T07 fake provider remains test-only.
 
 This is the end of the bounded design task. The recorded approval adopts the design and synthetic-test implementation scope, not completed code, native model selection, test execution, provider access, production readiness, PR review or merge. Preserve existing completed checkpoints and historical approval hashes; no replay or new continuous Sol GOAL loop.
+
+## Approved workflow payload extension — ADR-0024, 2026-11-07
+
+[ADR-0024](../decisions/0024-workflow-action-policy.md) accepts payload schemaVersion 2 for the four exact workflow actions. The payload field set and canonical writer order remain the same. Version 2 requires environment scope and only Development/Test rules. Each selection carries its expected action, with target.read as the existing caller default. Evaluation requires the policy action to equal the selected action. A v2 allow cannot authorize a target.read caller or another workflow action. Explicit deny, missing/stale binding and expiry rules apply as before. Consumer conformance (PR29-PRJ-POLICY-001): environment creation v2 is a `target.read` association, so its exact owner admission and precommit recheck accept only an active schema-1 `target.read` environment policy; a schema-2 workflow policy is denied before any binding. No payload, wire or OpenAPI shape changes.
+
+The Contracts validator, canonical parser/writer and evaluator support both versions. Persistence constraints, policy identity action immutability, offline publication and PRJ action-qualified bindings still require their implementation and migration evidence. Existing database constraints continue to reject v2. Runtime workflow policy registration remains pending those gates.
+
+The owner publication method pins action and payload version for an existing policy identity. The PRJ action-qualified reader requires a real environment for workflow actions, and staging selects only the same action's binding. Existing offline manifest v1 stays target.read-only and verifies action agreement with the policy before staging bindings. Schema constraint expansion and offline manifest v2 remain pending.
+
+## Offline manifest v2 — implemented decoder, pending database adoption
+
+Manifest v2 retains the v1 root fields and adds the required action field to every binding item. It accepts payload v2 only, requires environment bindings and pins all selected bindings to one exact workflow action. Bind-only operations carry null payload and the coordinator verifies the selected policy's payload version and action before staging. V1 canonical bytes retain their original shape and target.read behavior. The upgraded decoder does not grant operational permission or bypass existing database constraints.
+
+## Constraint migrations prepared — ADR-0024
+
+IAM and PRJ now include generated constraint migrations for workflow payload/actions. Upgrade replaces existing checks and accepts legacy target.read data. Existing unique indexes and foreign keys are preserved. Workflow rules still require complete owner validation, including Development/Test classification and exact current action binding. Downgrade reinstates v1 checks and fails if workflow data is present. SQL export is preparation, and runtime adoption requires actual upgrade/publication compatibility fixtures.

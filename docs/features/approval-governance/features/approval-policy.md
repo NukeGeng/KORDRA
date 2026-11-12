@@ -134,3 +134,7 @@ The first hosted PR #21 docs check exposed this missing owner update after squas
 ## T12.2c shared composition registration — 2026-11-01
 
 Accepted ADR-0021/0022 covers the inactive Host composition dependency on existing WFL and MSG owner adapters. Shared XML/package-lock tests now include those edges and the WFL commit/codec tests. No route, consumer, current-authority bypass or behavior of this owner feature was activated; actual WFL/AUD/MSG transaction qualification remains FEAT-WFL-001 work in progress.
+
+## T12 integration: disposable regression selection
+
+ADR-0025 adds an explicit test-only disposable database profile for approval policy manifest tests. Existing runtime and default target selection remain unchanged. Live qualification on the integrated T12.2 tree remains pending.

@@ -86,3 +86,23 @@ Không bao gồm activation API/business worker, T12.2–T12.4, thay đổi auth
 The accepted limits apply cumulatively to the caller's root DbTransaction, across batches, outgoing/incoming calls and all stager instances. Native publication persistence passes through the same budget; duplicate publication receipts do not stage a new envelope. Byte accounting uses the full serialized native envelope Data, including wire overhead, so untrusted payload-length metadata cannot reduce admission cost. Reservations precede native writes and remain consumed on an unresolved staging failure; the caller must roll back the root. This clarifies enforcement of the existing limits, without introducing authority, a new wire version or a commit-capable MSG path.
 
 Budget identity additionally verifies the server full transaction ID via `SELECT pg_current_xact_id()::text` on the exact caller transaction (five-second command bound). Npgsql can recycle a transaction object after completion; a genuinely new server root gets a fresh budget, while a previously staged old stager rejects a changed root. Missing identity fails before native staging. This metadata query neither commits nor opens another connection. A fifth regression covers reused provider identity; the existing real PostgreSQL lifecycle/watermark loops cover successive roots. See [PostgreSQL transaction ID functions](https://www.postgresql.org/docs/15/functions-info.html).
+
+An exact-key receipt observation may record that the SELECT returned no row while preserving StillUnknown. This fact applies only to the queried key and does not prove delivery settlement, a terminal root or eligibility to publish again.
+
+The isolated expired-delivery observer checks exact journal identity/hash and original deadline against a single nonreplayable native terminal record, rejects ambiguous or active copies, and uses the compiled transport inventory. Its boolean is a read observation under custodian quiescence. The native settlement writer and WFL successor admission retain separate qualification requirements.
+
+The isolated metadata observer passed its approved 21-case PostgreSQL fixture, including independent precommit visibility and cleanup. The test used seeded metadata. Qualification of the native terminal settlement writer remains required.
+
+Historical envelope inspection validates original scope, hash, schema and immutable times without admitting execution. The ingress rule continues to reject future messages and converts a valid expired envelope into an Expired diagnostic. Diagnostic matching verifies the original wire digest and exact delivery binding. Native settlement and committed journal observation must be qualified before WFL successor admission.
+
+The isolated native expiry path has actual passing transport evidence for Expired diagnostic persistence, original-wire matching, nonreplayable DLQ and journal rollback/commit observation. WFL successor root integration and process crash qualification are separate remaining cases.
+
+Native PostgreSQL destinations use the pinned transport sanitizer consistently across publication, ingress and terminal observation. The ingress constructor can accept the trusted transport to snapshot compiled route destinations. The original constructor remains available for profiles whose routes already match native names.
+
+The isolated reader can also inspect a single Handled inbox row for the exact expired delivery and compiled destination. This path requires the exact Expired journal entry, no DLQ conflict and no pending copies. The workflow coordinator must separately prove the receiver transaction aborted and produced no durable effect.
+
+### ADR-0025 isolated/native regression compatibility
+
+Test-only fixture composition can explicitly select a disposable DB while retaining actual native inbox/outbox, AUD, MSG receipt/journal, WFL root and recovery implementations. Default factories/guards and wire schemas are unchanged. A separate exact case-derived transport-role validator does not widen the owner profile and grants no role/HBA rights. Offline metadata selection is explicit, and tests preserve hash/tenant/scope/duplicate/unknown-outcome/crash assertions. Closed-connection/SQL-export checks are not evidence of current-binary native execution; the reviewed operation manifest and physical cleanup evidence remain required.
+
+ADR-0025 fixture composition applies the same explicit disposable binding to the provisional publication receipt and its capacity guard. It keeps the caller root and schema throughout the capacity check. This test-target wiring changes no wire fields, logical keys or capacity thresholds.

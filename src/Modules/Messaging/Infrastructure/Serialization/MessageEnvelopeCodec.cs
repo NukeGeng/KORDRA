@@ -59,8 +59,18 @@ public sealed class MessageEnvelopeCodec(CompiledMessageRegistry registry)
 
     public VerifiedMessageEnvelope Read(ReadOnlySpan<byte> wire, string contentType, Guid expectedInstallation,
         MessageScope expectedScope, DateTimeOffset effectiveNow)
+        => ReadCore(wire, contentType, expectedInstallation, expectedScope, effectiveNow, requireFresh: true);
+
+    /// <summary>Validates immutable historical data for inspection. Does not establish execution eligibility.</summary>
+    public VerifiedMessageEnvelope ReadForInspection(ReadOnlySpan<byte> wire, string contentType, Guid expectedInstallation,
+        MessageScope expectedScope)
+        => ReadCore(wire, contentType, expectedInstallation, expectedScope, DateTimeOffset.MinValue, requireFresh: false);
+
+    private VerifiedMessageEnvelope ReadCore(ReadOnlySpan<byte> wire, string contentType, Guid expectedInstallation,
+        MessageScope expectedScope, DateTimeOffset effectiveNow, bool requireFresh)
     {
-        if (wire.Length is < 2 or > 32 * 1024 || contentType != ContentType || expectedInstallation == Guid.Empty || expectedScope is null || effectiveNow == default)
+        if (wire.Length is < 2 or > 32 * 1024 || contentType != ContentType || expectedInstallation == Guid.Empty ||
+            expectedScope is null || (requireFresh && effectiveNow == default))
             throw new InvalidOperationException("Invalid bounded message envelope.");
         try
         {
@@ -82,7 +92,8 @@ public sealed class MessageEnvelopeCodec(CompiledMessageRegistry registry)
             { RequireFields(rawResource, ["kind", "id"]); resource = new(String(rawResource, "kind"), Id(rawResource, "id")); }
             var binding = new MessageBinding(identity, root.GetProperty("typeSchemaVersion").GetInt32(), resource,
                 Time(root, "occurredAtUtc"), Time(root, "deadlineUtc"));
-            if (binding.OccurredAtUtc > effectiveNow || binding.DeadlineUtc <= effectiveNow) throw new InvalidOperationException();
+            if (requireFresh && (binding.OccurredAtUtc > effectiveNow || binding.DeadlineUtc <= effectiveNow))
+                throw new InvalidOperationException();
             var delivery = new DeliveryIdentity(Id(root, "messageId"), Id(root, "correlationId"), Id(root, "causationId")); RequireDelivery(delivery);
             var rawPayload = Encoding.UTF8.GetBytes(root.GetProperty("payload").GetRawText());
             var computed = _registry.ComputeHash(binding, rawPayload); var hash = String(root, "payloadHash");

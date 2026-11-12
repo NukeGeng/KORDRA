@@ -13,6 +13,11 @@ public sealed class FairAsyncReaderWriterAdmissionGate
     private bool _closed;
     public const int MaximumReaders = 16;
 
+    public bool IsClosed
+    {
+        get { lock (_sync) return _closed; }
+    }
+
     /// <summary>Irreversibly closes this process gate when a commit outcome is unresolved.</summary>
     public void Close()
     {

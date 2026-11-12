@@ -1,0 +1,11 @@
+{
+  "revision": 4,
+  "fromRevision": 3,
+  "scope": "additive append-only start_receipts; offline artifact only",
+  "baselineSha256": "3949d62d4e1f20cc8d38eae6c4160a0fedc009638b6b3aa6c33c980c6cd93c64",
+  "sha256": "1f62467f231e5a0c990aaa933f5a867639a4a525962cd0f3ed36a0ce9589abb4",
+  "tablesAdded": [
+    "start_receipts"
+  ],
+  "destructiveOperations": false
+}

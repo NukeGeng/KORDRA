@@ -21,8 +21,8 @@ public sealed class WorkflowReceiptInspector : IWorkflowReceiptInspector, IAsync
     public static WorkflowReceiptInspector CreateIsolatedTestInspector(NpgsqlConnection independent, Guid caseId)
         => new(WorkflowDbContext.CreateFixture(independent, caseId));
 
-    public static WorkflowReceiptInspector CreateDisposableTestInspector(NpgsqlConnection independent, Guid caseId, DisposableTestBinding profile)
-        => new(WorkflowDbContext.CreateDisposableTestFixture(independent, caseId, profile));
+    public static WorkflowReceiptInspector CreateDisposableTestInspector(NpgsqlConnection independent, Guid caseId,
+        DisposableTestBinding profile) => new(WorkflowDbContext.CreateDisposableTestFixture(independent, caseId, 1, profile));
 
     public async Task<WorkflowReceiptInspectionStatus> InspectAsync(WorkflowReceiptExpectation expected, CancellationToken ct = default)
     {
@@ -40,7 +40,7 @@ public sealed class WorkflowReceiptInspector : IWorkflowReceiptInspector, IAsync
             var canonical = WorkflowSpecification.ReadCanonical(row.Specification);
             if (canonical.InstallationId != identity.InstallationId || canonical.TenantId != identity.TenantId ||
                 canonical.InstanceId != identity.InstanceId || canonical.RequestId != expected.RequestId ||
-                !SameHash(canonical.SpecificationHash, expected.SpecificationHash) || row.Version < expected.ResultingVersion)
+                !SameHash(canonical.SpecificationHash, expected.SpecificationHash))
                 return WorkflowReceiptInspectionStatus.Conflict;
             if (expected.OperationId is { } operation)
             {
@@ -48,6 +48,16 @@ public sealed class WorkflowReceiptInspector : IWorkflowReceiptInspector, IAsync
                     x.InstallationId == identity.InstallationId && x.TenantId == identity.TenantId &&
                     x.InstanceId == identity.InstanceId && x.OperationId == operation, ct);
                 if (transition is null) return WorkflowReceiptInspectionStatus.StillUnknown;
+                // An older parent with no operation receipt is an unresolved observation, not a binding conflict.
+                // If a commit became visible between READ COMMITTED statements, refresh only the parent version.
+                if (row.Version < expected.ResultingVersion)
+                {
+                    var currentVersion = await _context.Set<WorkflowInstanceRecord>().AsNoTracking().Where(x =>
+                        x.InstallationId == identity.InstallationId && x.TenantId == identity.TenantId && x.InstanceId == identity.InstanceId)
+                        .Select(x => (long?)x.Version).SingleOrDefaultAsync(ct);
+                    if (currentVersion is null || currentVersion < expected.ResultingVersion)
+                        return WorkflowReceiptInspectionStatus.Conflict;
+                }
                 return transition.StepId == expected.StepId && transition.ResultingVersion == expected.ResultingVersion &&
                     SameHash(transition.SpecificationHash, expected.SpecificationHash)
                     ? WorkflowReceiptInspectionStatus.MatchingObserved : WorkflowReceiptInspectionStatus.Conflict;
