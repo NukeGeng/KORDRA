@@ -10,6 +10,31 @@ namespace Kordra.Modules.WorkflowOrchestration.Infrastructure.Persistence;
 /// </summary>
 public sealed class WorkflowAuthorityBindingStore(WorkflowDbContext context)
 {
+    /// <summary>
+    /// The original result for an already recorded request, or null. Lets the caller avoid reissuing delegation for a retry.
+    /// A changed command for the same request identity conflicts.
+    /// </summary>
+    public Task<WorkflowAuthorityBindingResult?> ReadRecordedAsync(WorkflowReauthorizationCommand command, CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(command);
+        if (!context.IncludesAuthorizationReceipts)
+            throw new InvalidOperationException("Reauthorization receipts require the revision 6 owner context.");
+        return ReadRecordedCoreAsync(command, ct);
+    }
+
+    private async Task<WorkflowAuthorityBindingResult?> ReadRecordedCoreAsync(WorkflowReauthorizationCommand command, CancellationToken ct)
+    {
+        var prior = await context.Set<WorkflowAuthorityBindingRecord>().AsNoTracking().SingleOrDefaultAsync(x =>
+            x.InstallationId == command.InstallationId && x.TenantId == command.TenantId && x.InstanceId == command.InstanceId &&
+            x.RequestId == command.RequestId, ct);
+        if (prior is null) return null;
+        if (prior.ActorId != command.ActorId || prior.CommandHash != command.CommandHash ||
+            prior.SpecificationHash != command.SpecificationHash || prior.ExpectedVersion != command.ExpectedVersion ||
+            prior.ResultingVersion != command.ExpectedVersion + 1)
+            throw new InvalidOperationException("Reauthorization request identity/hash conflict.");
+        return new(prior.BindingId, prior.Generation, prior.ResultingVersion, true);
+    }
+
     public async Task<WorkflowAuthorityBindingResult> StageReauthorizationAsync(WorkflowReauthorizationCommand command,
         WorkflowDelegationReference delegation, DateTimeOffset effectiveUtc, CancellationToken ct = default)
     {
@@ -40,15 +65,7 @@ public sealed class WorkflowAuthorityBindingStore(WorkflowDbContext context)
 
         var bindings = context.Set<WorkflowAuthorityBindingRecord>().AsNoTracking().Where(x =>
             x.InstallationId == identity.InstallationId && x.TenantId == identity.TenantId && x.InstanceId == identity.InstanceId);
-        var prior = await bindings.SingleOrDefaultAsync(x => x.RequestId == command.RequestId, ct);
-        if (prior is not null)
-        {
-            if (prior.ActorId != command.ActorId || prior.CommandHash != command.CommandHash ||
-                prior.SpecificationHash != command.SpecificationHash || prior.ExpectedVersion != command.ExpectedVersion ||
-                prior.ResultingVersion != command.ExpectedVersion + 1)
-                throw new InvalidOperationException("Reauthorization request identity/hash conflict.");
-            return new(prior.BindingId, prior.Generation, prior.ResultingVersion, true);
-        }
+        if (await ReadRecordedCoreAsync(command, ct) is { } recorded) return recorded;
 
         var current = await bindings.OrderByDescending(x => x.Generation).Select(x => new { x.Generation, x.ActorId }).FirstOrDefaultAsync(ct);
         var scope = context.Set<WorkflowStepRecord>().AsNoTracking().Where(x =>
