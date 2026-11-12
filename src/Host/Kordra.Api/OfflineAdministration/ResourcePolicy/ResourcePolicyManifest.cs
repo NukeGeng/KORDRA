@@ -26,11 +26,16 @@ public sealed record ResourcePolicyManifest(int SchemaVersion, Guid ManifestId, 
             var database = e.GetProperty("databaseIdentity");
             if (!ResourcePolicies.Exact(database, "databaseName", "provisioningRole")) return null;
             var bindings = e.GetProperty("bindings"); if (bindings.ValueKind != JsonValueKind.Array || bindings.GetArrayLength() > 50) return null;
+            var version = e.GetProperty("schemaVersion").GetInt32();
+            if (version is not (1 or 2)) return null;
             var items = new List<PolicyBindingChange>();
             foreach (var b in bindings.EnumerateArray())
             {
-                if (!ResourcePolicies.Exact(b, "bindingId", "scopeKind", "environmentId", "expectedBindingRevision")) return null;
-                items.Add(new(OptionalGuid(b.GetProperty("bindingId")), b.GetProperty("scopeKind").GetString()!, OptionalGuid(b.GetProperty("environmentId")), b.GetProperty("expectedBindingRevision").GetInt64()));
+                var fields = version == 1
+                    ? new[] { "bindingId", "scopeKind", "environmentId", "expectedBindingRevision" }
+                    : new[] { "bindingId", "scopeKind", "environmentId", "expectedBindingRevision", "action" };
+                if (!ResourcePolicies.Exact(b, fields)) return null;
+                items.Add(new(OptionalGuid(b.GetProperty("bindingId")), b.GetProperty("scopeKind").GetString()!, OptionalGuid(b.GetProperty("environmentId")), b.GetProperty("expectedBindingRevision").GetInt64(), version == 1 ? "target.read" : b.GetProperty("action").GetString()!));
             }
             var raw = e.GetProperty("payload");
             var payload = raw.ValueKind == JsonValueKind.Null ? null : ResourcePolicies.Parse(raw.GetRawText());
@@ -45,16 +50,17 @@ public sealed record ResourcePolicyManifest(int SchemaVersion, Guid ManifestId, 
     private static Guid? OptionalGuid(JsonElement e) => e.ValueKind == JsonValueKind.Null ? null : e.GetGuid();
     public bool IsValid() => IsValidCore(null);
     public bool IsValidDisposableTest(DisposableTestBinding profile) => IsValidCore(profile);
-    private bool IsValidCore(DisposableTestBinding? profile) => SchemaVersion == 1 && ManifestId != Guid.Empty && InstallationId != Guid.Empty && TenantId != Guid.Empty && ProjectId != Guid.Empty &&
-        DatabaseIdentity is not null && (profile is { } selected ? MatchesDisposableTarget(selected) : DatabaseIdentity.DatabaseName == "kordra" && DatabaseIdentity.ProvisioningRole == "kordra_admin" ||
+    private bool IsValidCore(DisposableTestBinding? profile) => SchemaVersion is 1 or 2 && ManifestId != Guid.Empty && InstallationId != Guid.Empty && TenantId != Guid.Empty && ProjectId != Guid.Empty &&
+        DatabaseIdentity is not null && (profile is { } selected ? MatchesDisposableTarget(selected) :
+            DatabaseIdentity.DatabaseName == "kordra" && DatabaseIdentity.ProvisioningRole == "kordra_admin" ||
             DatabaseIdentity.DatabaseName == "kordra_test" && DatabaseIdentity.ProvisioningRole == "kordra_test") &&
         Operation is "create" or "publish" or "bind" && ExpectedCurrentRevision >= 0 && ExpectedCurrentRevision < long.MaxValue &&
         (Operation == "create" ? PolicyId is null && ExpectedCurrentRevision == 0 : PolicyId is { } id && id != Guid.Empty && ExpectedCurrentRevision > 0) &&
-        (Operation == "bind" ? Payload is null : ResourcePolicies.IsValid(Payload)) &&
+        (Operation == "bind" ? Payload is null : Payload?.SchemaVersion == SchemaVersion && ResourcePolicies.IsValid(Payload)) &&
         Bindings is { Count: <= 50 } && (Operation != "bind" || Bindings.Count > 0) &&
-        Bindings.All(b => b is not null && (b.BindingId is null ? b.ExpectedBindingRevision == 0 : b.BindingId != Guid.Empty && b.ExpectedBindingRevision > 0) &&
+        Bindings.All(b => b is not null && ValidBindingAction(b) && (b.BindingId is null ? b.ExpectedBindingRevision == 0 : b.BindingId != Guid.Empty && b.ExpectedBindingRevision > 0) &&
             b.ExpectedBindingRevision < long.MaxValue && (b.EnvironmentId is null ? b.ScopeKind == "project_without_environment" : b.EnvironmentId != Guid.Empty && b.ScopeKind == "environment")) &&
-        Bindings.Select(b => (b.ScopeKind, b.EnvironmentId)).Distinct().Count() == Bindings.Count &&
+        Bindings.Select(b => (b.ScopeKind, b.EnvironmentId, b.Action)).Distinct().Count() == Bindings.Count &&
         Bindings.Where(b => b.BindingId is not null).Select(b => b.BindingId).Distinct().Count() == Bindings.Count(b => b.BindingId is not null);
 
     private bool MatchesDisposableTarget(DisposableTestBinding profile)
@@ -68,6 +74,13 @@ public sealed record ResourcePolicyManifest(int SchemaVersion, Guid ManifestId, 
         }
         catch (Exception e) when (e is ArgumentException or InvalidOperationException) { return false; }
     }
+
+    private bool ValidBindingAction(PolicyBindingChange binding) =>
+        SchemaVersion == 1 ? binding.Action == "target.read" :
+        ResourcePolicies.IsWorkflowAction(binding.Action) && binding.ScopeKind == "environment" &&
+        binding.EnvironmentId is { } id && id != Guid.Empty &&
+        (Payload is null || Payload.Action == binding.Action) &&
+        Bindings.All(other => other is not null && other.Action == binding.Action);
 
     public byte[] CanonicalBytes() => CanonicalBytesCore(null);
     public byte[] CanonicalDisposableTestBytes(DisposableTestBinding profile) => CanonicalBytesCore(profile);
@@ -88,7 +101,9 @@ public sealed record ResourcePolicyManifest(int SchemaVersion, Guid ManifestId, 
             {
                 w.WriteStartObject(); if (b.BindingId is { } binding) w.WriteString("bindingId", binding); else w.WriteNull("bindingId");
                 w.WriteString("scopeKind", b.ScopeKind); if (b.EnvironmentId is { } environment) w.WriteString("environmentId", environment); else w.WriteNull("environmentId");
-                w.WriteNumber("expectedBindingRevision", b.ExpectedBindingRevision); w.WriteEndObject();
+                w.WriteNumber("expectedBindingRevision", b.ExpectedBindingRevision);
+                if (SchemaVersion == 2) w.WriteString("action", b.Action);
+                w.WriteEndObject();
             }
             w.WriteEndArray(); w.WriteEndObject();
         }

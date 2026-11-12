@@ -16,6 +16,19 @@ public sealed class WorkflowTimingRulesTests
     }
 
     [Fact]
+    public void FreshCreationUsesTheOriginalHalfOpenWindow()
+    {
+        var spec = Spec();
+        WorkflowTimingRules.RequireCreationWindow(spec, spec.CreatedAtUtc);
+        WorkflowTimingRules.RequireCreationWindow(spec, spec.DeadlineUtc.AddTicks(-1).ToOffset(TimeSpan.FromHours(7)));
+        Assert.Throws<InvalidOperationException>(() =>
+            WorkflowTimingRules.RequireCreationWindow(spec, spec.CreatedAtUtc.AddTicks(-1)));
+        foreach (var at in new[] { spec.DeadlineUtc, spec.DeadlineUtc.AddDays(90) })
+            Assert.Equal("RecoveryHorizonExceeded", Assert.Throws<InvalidOperationException>(() =>
+                WorkflowTimingRules.RequireCreationWindow(spec, at)).Message);
+    }
+
+    [Fact]
     public void HourLongTimerGetsOnly120SecondsWhenDueWithoutChangingBusinessHashOrDeadline()
     {
         var spec = Spec(); var hash = spec.SpecificationHash;
@@ -70,4 +83,46 @@ public sealed class WorkflowTimingRulesTests
     [InlineData(-1)][InlineData(10)][InlineData(11)][InlineData(int.MaxValue)]
     public void InvalidOrExhaustedCounterCannotBecomeAnotherAttempt(int attempts)
         => Assert.Throws<InvalidOperationException>(() => WorkflowTimingRules.NextSchedulerAttempt(attempts));
+
+    [Theory]
+    [InlineData("valid")][InlineData("early")][InlineData("generation")][InlineData("attempt")][InlineData("epoch")]
+    [InlineData("version")][InlineData("step-version")][InlineData("step")][InlineData("timer")]
+    [InlineData("scheduler-id")][InlineData("wake-id")][InlineData("delivery-id")][InlineData("time")]
+    public void SuccessorAdvancesOnlyTheExpiredBindingWithFreshIdentities(string change)
+    {
+        var spec = Spec();
+        var previous = new WorkflowWakeOperation(spec, Guid.NewGuid(), Guid.NewGuid(), 1, 1, 1,
+            Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), 5, 3, spec.DueAtUtc, spec.DueAtUtc.AddSeconds(120));
+        var now = previous.DeadlineUtc;
+        var at = change == "time" ? now.AddTicks(1) : now;
+        var next = new WorkflowWakeOperation(spec, change == "step" ? Guid.NewGuid() : previous.StepId,
+            change == "timer" ? Guid.NewGuid() : previous.TimerId,
+            change == "generation" ? 3 : 2, change == "attempt" ? 3 : 2, change == "epoch" ? 3 : 2,
+            change == "scheduler-id" ? previous.SchedulerOperationId : Guid.NewGuid(),
+            change == "wake-id" ? previous.WakeOperationId : Guid.NewGuid(),
+            change == "delivery-id" ? previous.MessageId : Guid.NewGuid(),
+            change == "version" ? 7 : 6, change == "step-version" ? 4 : 3, at, at.AddSeconds(120));
+        if (change == "valid")
+            WorkflowTimingRules.RequireSuccessorBinding(spec, previous, next, now.ToOffset(TimeSpan.FromHours(7)));
+        else
+            Assert.Throws<InvalidOperationException>(() => WorkflowTimingRules.RequireSuccessorBinding(
+                spec, previous, next, change == "early" ? now.AddTicks(-1) : now));
+        Assert.Equal(spec.DueAtUtc.AddSeconds(120), previous.DeadlineUtc);
+        Assert.Equal(1, previous.Generation);
+    }
+
+    [Theory]
+    [InlineData("generation")][InlineData("epoch")][InlineData("version")][InlineData("budget")]
+    public void SuccessorCannotWrapCountersOrResetTheAttemptBudget(string exhausted)
+    {
+        var spec = Spec();
+        var prior = new WorkflowWakeOperation(spec, Guid.NewGuid(), Guid.NewGuid(),
+            exhausted == "generation" ? long.MaxValue : 1, exhausted == "budget" ? 10 : 1,
+            exhausted == "epoch" ? long.MaxValue : 1, Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(),
+            exhausted == "version" ? long.MaxValue : 5, 3, spec.DueAtUtc, spec.DueAtUtc.AddSeconds(120));
+        var at = prior.DeadlineUtc;
+        var next = new WorkflowWakeOperation(spec, prior.StepId, prior.TimerId, 2, 2, 2,
+            Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), 6, 3, at, at.AddSeconds(120));
+        Assert.Throws<InvalidOperationException>(() => WorkflowTimingRules.RequireSuccessorBinding(spec, prior, next, at));
+    }
 }

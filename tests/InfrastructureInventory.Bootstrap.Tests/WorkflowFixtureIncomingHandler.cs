@@ -54,7 +54,7 @@ public sealed class WorkflowFixtureState(Guid caseId, string locator)
         if (!WorkflowTransactionSchemaTests.ProposedCases.Contains(CaseId.ToString("D"), StringComparer.Ordinal))
             throw new InvalidOperationException("Only the declared proposed fixture cases may construct an owned connection.");
         var connection = new NpgsqlConnection(new NpgsqlConnectionStringBuilder(_locator) { Pooling = false, Multiplexing = false }.ConnectionString);
-        IsolatedWorkflowFixture.Validate(connection, CaseId);
+        _ = IsolatedWorkflowFixture.Validate(connection, CaseId);
         return connection;
     }
     public override string ToString() => "WorkflowFixtureState [private]";
@@ -73,10 +73,10 @@ public sealed class WorkflowFixtureIncomingHandler
             await using var connection = state.NewOwnedConnection(); await connection.OpenAsync(ct);
             await using var transaction = await connection.BeginTransactionAsync(ct);
             var native = (MessageContext)context;
-            await using var root = await IsolatedWorkflowFixture.CreateRoot(connection, transaction, state.CaseId, native, state.Gate, ct);
+            await using var root = await IsolatedWorkflowFixture.CreateIsolatedTestAsync(connection, transaction, state.CaseId, native, state.Gate, ct);
             var logical = await root.StageConsumptionAsync(WorkflowFixtureWire.Registry(), verified, DateTimeOffset.UtcNow, ct);
             if (logical.Disposition != ReceiptStageDisposition.Staged) throw new InvalidOperationException("Fresh fixture delivery required.");
-            await root.StageCreationAsync(invocation.Specification, ct);
+            await root.StageCreationAsync(invocation.Specification, DateTimeOffset.UtcNow, ct);
             await root.StageAuditAsync(invocation.Audit, ct);
             await root.StageClockFloorAsync(DateTimeOffset.UtcNow, ct);
             await root.StagePublicationAsync(WorkflowFixtureWire.Registry(), invocation.Output, DateTimeOffset.UtcNow, ct);

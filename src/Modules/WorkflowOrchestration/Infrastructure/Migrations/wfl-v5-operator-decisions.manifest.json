@@ -1,0 +1,11 @@
+{
+  "revision": 5,
+  "fromRevision": 4,
+  "scope": "additive append-only operator_decisions; offline artifact only",
+  "baselineSha256": "1f62467f231e5a0c990aaa933f5a867639a4a525962cd0f3ed36a0ce9589abb4",
+  "sha256": "c7cf35f11f8ecc82a7d78ca4ec3a27f9d7d48986ec93aa382e62ae9c4e87b742",
+  "tablesAdded": [
+    "operator_decisions"
+  ],
+  "destructiveOperations": false
+}

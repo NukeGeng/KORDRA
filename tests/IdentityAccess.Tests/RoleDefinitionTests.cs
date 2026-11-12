@@ -30,7 +30,11 @@ public sealed class DefinitionRuleTests
     [InlineData("release.approval.read", "environment")]
     [InlineData("release.approve", "environment")]
     [InlineData("release.approval.revoke", "environment")]
-    public void Release_permissions_are_exact_scope_and_deny_wins(string permission, string scope)
+    [InlineData("workflow.start", "environment")]
+    [InlineData("workflow.read", "environment")]
+    [InlineData("workflow.cancel", "environment")]
+    [InlineData("workflow.reconcile", "environment")]
+    public void Release_and_workflow_permissions_are_exact_scope_and_deny_wins(string permission, string scope)
     {
         Assert.True(FoundationPermissions.IsValid(new(permission, scope)));
         Assert.True(FoundationPermissions.IsValid(new(permission, scope, "deny")));

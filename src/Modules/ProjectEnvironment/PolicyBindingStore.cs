@@ -7,7 +7,7 @@ using Microsoft.EntityFrameworkCore;
 namespace Kordra.Modules.ProjectEnvironment;
 
 /// <summary>PRJ facts and staged binding writes only; caller supplies trusted validated IAM references.</summary>
-public sealed class PolicyBindingStore(ProjectDbContext db) : IPolicyBindingReader
+public sealed class PolicyBindingStore(ProjectDbContext db) : IPolicyBindingReader, IActionPolicyBindingReader
 {
     public async Task<Guid?> ReadProjectTenantSelectionAsync(Guid projectId, CancellationToken ct = default)
     {
@@ -36,28 +36,33 @@ public sealed class PolicyBindingStore(ProjectDbContext db) : IPolicyBindingRead
         var e = await db.Environments.AsNoTracking().SingleOrDefaultAsync(x => x.TenantId == tenant && x.ProjectId == project && x.Id == environment && x.Status == "active", ct);
         return e is null ? null : new(tenant, project, p.Revision, EnvironmentSelection.ResolvedPresent, e.Id, e.Revision, e.Classification, null);
     }
-    public async Task<PolicyBinding?> ReadCurrentUnderAdmissionAsync(Guid tenantId, Guid projectId, Guid? environmentId, CancellationToken ct = default)
+    public Task<PolicyBinding?> ReadCurrentUnderAdmissionAsync(Guid tenantId, Guid projectId, Guid? environmentId, CancellationToken ct = default) =>
+        ReadCurrentForActionUnderAdmissionAsync(tenantId, projectId, environmentId, "target.read", ct);
+
+    public async Task<PolicyBinding?> ReadCurrentForActionUnderAdmissionAsync(Guid tenantId, Guid projectId,
+        Guid? environmentId, string action, CancellationToken ct = default)
     {
+        if (!ValidActionScope(action, environmentId)) return null;
         if (await ReadOwnershipUnderAdmissionAsync(tenantId, projectId, environmentId, ct) is null) return null;
         var scope = environmentId is null ? "project_without_environment" : "environment";
         var rows = await db.Set<PolicyBindingRecord>().AsNoTracking().Where(x => x.TenantId == tenantId && x.ProjectId == projectId &&
-            x.EnvironmentId == environmentId && x.ScopeKind == scope && x.Action == "target.read").Take(2).ToArrayAsync(ct);
+            x.EnvironmentId == environmentId && x.ScopeKind == scope && x.Action == action).Take(2).ToArrayAsync(ct);
         return rows.Length == 1 ? Fact(rows[0]) : null;
     }
     public async Task<PolicyBinding?> StageAsync(Guid tenant, Guid project, PolicyBindingChange change, ResourcePolicyReference policy,
         Guid manifest, bool allowReplacement, CancellationToken ct = default)
     {
         if (db.Database.CurrentTransaction is null) throw new InvalidOperationException("Binding writes require an enlisted owner transaction.");
-        if (change is null || policy is null || policy.PolicyId == Guid.Empty || policy.Revision <= 0 || manifest == Guid.Empty ||
+        if (change is null || !ValidActionScope(change.Action, change.EnvironmentId) || policy is null || policy.PolicyId == Guid.Empty || policy.Revision <= 0 || manifest == Guid.Empty ||
             change.ExpectedBindingRevision < 0 || change.ExpectedBindingRevision == long.MaxValue ||
             (change.EnvironmentId is null ? change.ScopeKind != "project_without_environment" : change.EnvironmentId == Guid.Empty || change.ScopeKind != "environment") ||
             await ReadOwnershipUnderAdmissionAsync(tenant, project, change.EnvironmentId, ct) is null) return null;
-        var current = await db.Set<PolicyBindingRecord>().SingleOrDefaultAsync(x => x.TenantId == tenant && x.ProjectId == project && x.EnvironmentId == change.EnvironmentId && x.Action == "target.read", ct);
+        var current = await db.Set<PolicyBindingRecord>().SingleOrDefaultAsync(x => x.TenantId == tenant && x.ProjectId == project && x.EnvironmentId == change.EnvironmentId && x.Action == change.Action, ct);
         if (current is null ? change.BindingId is not null || change.ExpectedBindingRevision != 0 :
             !allowReplacement || current.BindingId != change.BindingId || current.BindingRevision != change.ExpectedBindingRevision || current.ScopeKind != change.ScopeKind) return null;
         if (current is null)
         {
-            current = new() { BindingId = Guid.NewGuid(), TenantId = tenant, ProjectId = project, EnvironmentId = change.EnvironmentId, ScopeKind = change.ScopeKind, ScopeId = change.EnvironmentId ?? project };
+            current = new() { BindingId = Guid.NewGuid(), TenantId = tenant, ProjectId = project, EnvironmentId = change.EnvironmentId, ScopeKind = change.ScopeKind, ScopeId = change.EnvironmentId ?? project, Action = change.Action };
             db.Add(current);
         }
         current.PolicyId = policy.PolicyId; current.PolicyRevision = policy.Revision; current.BindingRevision = checked(change.ExpectedBindingRevision + 1);
@@ -67,6 +72,10 @@ public sealed class PolicyBindingStore(ProjectDbContext db) : IPolicyBindingRead
             ManifestId = manifest, ContentHash = SHA256.HashData(JsonSerializer.SerializeToUtf8Bytes(fact)) });
         return fact;
     }
+    private static bool ValidActionScope(string action, Guid? environment) =>
+        action == "target.read" || environment is { } id && id != Guid.Empty &&
+        action is "workflow.start" or "workflow.read" or "workflow.cancel" or "workflow.reconcile";
+
     private static PolicyBinding Fact(PolicyBindingRecord b) => new(b.BindingId, b.TenantId, b.ProjectId, b.EnvironmentId,
         b.ScopeKind, b.Action, b.PolicyId, b.PolicyRevision, b.BindingRevision);
 

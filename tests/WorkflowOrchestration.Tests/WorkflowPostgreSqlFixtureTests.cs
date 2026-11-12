@@ -19,7 +19,7 @@ public sealed class WorkflowPostgreSqlFixtureTests
         using var budget = new CancellationTokenSource(TimeSpan.FromSeconds(45)); var ct = budget.Token;
         var locator = Environment.GetEnvironmentVariable("KORDRA_WFL_FIXTURE_CONNECTION_STRING")
             ?? throw new InvalidOperationException("Approved private WFL fixture locator required.");
-        await using var connection = new NpgsqlConnection(locator);
+        await using var connection = WorkflowModelFixture.Connection(locator, Guid.Parse(CaseId));
         await using var model = WorkflowModelFixture.CreateFixture(connection, Guid.Parse(CaseId));
         var ddl = model.Database.GenerateCreateScript();
         var expectedHash = Environment.GetEnvironmentVariable("KORDRA_WFL_FIXTURE_SQL_SHA256");
@@ -44,7 +44,7 @@ public sealed class WorkflowPostgreSqlFixtureTests
             }
             var spec = NewSpecification();
             await WithRoot(connection, async (context, root) => {
-                await new WorkflowStore(context).StageCreationAsync(spec, ct);
+                await new WorkflowStore(context).StageCreationAsync(spec, spec.CreatedAtUtc, ct);
                 // Independent reader must not see staged rows; caller rollback discards instance/steps/receipt together.
                 Assert.Equal(0L, await Count(locator, "instances", ct));
                 await root.RollbackAsync(ct);
@@ -52,18 +52,27 @@ public sealed class WorkflowPostgreSqlFixtureTests
             Assert.Equal(0L, await Count(locator, "instances", ct));
             Assert.Equal(0L, await Count(locator, "request_receipts", ct));
             await WithRoot(connection, async (context, root) => {
-                var result = await new WorkflowStore(context).StageCreationAsync(spec, ct);
+                var denial = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+                    new WorkflowStore(context).StageCreationAsync(spec, spec.DeadlineUtc, ct));
+                Assert.Equal("RecoveryHorizonExceeded", denial.Message);
+                Assert.False(context.ChangeTracker.HasChanges());
+                await root.RollbackAsync(ct);
+            });
+            await WithRoot(connection, async (context, root) => {
+                var result = await new WorkflowStore(context).StageCreationAsync(spec, spec.CreatedAtUtc, ct);
                 Assert.False(result.Duplicate); await root.CommitAsync(ct);
             });
             Assert.Equal(1L, await Count(locator, "instances", ct));
             Assert.Equal(4L, await Count(locator, "steps", ct));
             await WithRoot(connection, async (context, root) => {
-                var result = await new WorkflowStore(context).StageCreationAsync(spec, ct);
-                Assert.True(result.Duplicate); await root.CommitAsync(ct);
+                var result = await new WorkflowStore(context).StageCreationAsync(spec, spec.DeadlineUtc.AddDays(90), ct);
+                Assert.True(result.Duplicate);
+                Assert.Equal(spec.InstanceId, result.InstanceId);
+                Assert.Equal(1L, result.Version); await root.CommitAsync(ct);
             });
             var altered = NewSpecification(spec, new string('b', 64));
             await WithRoot(connection, async (context, root) => {
-                await Assert.ThrowsAsync<InvalidOperationException>(() => new WorkflowStore(context).StageCreationAsync(altered, ct));
+                await Assert.ThrowsAsync<InvalidOperationException>(() => new WorkflowStore(context).StageCreationAsync(altered, altered.CreatedAtUtc, ct));
                 await root.RollbackAsync(ct);
             });
             await WithRoot(connection, async (context, root) => {
@@ -73,7 +82,7 @@ public sealed class WorkflowPostgreSqlFixtureTests
                 await root.RollbackAsync(ct);
             });
             // Both real roots read version 1. First commits, second must lose the database CAS, with no second history row.
-            await using var second = new NpgsqlConnection(locator); await second.OpenAsync(ct);
+            await using var second = WorkflowModelFixture.Connection(locator, Guid.Parse(CaseId)); await second.OpenAsync(ct);
             await using var a = WorkflowModelFixture.CreateFixture(connection, Guid.Parse(CaseId));
             await using var b = WorkflowModelFixture.CreateFixture(second, Guid.Parse(CaseId));
             await using var txA = await connection.BeginTransactionAsync(ct); await a.Database.UseTransactionAsync(txA, ct);
@@ -153,11 +162,10 @@ public sealed class WorkflowPostgreSqlFixtureTests
                 await WithRoot(second, async (context, root) => {
                     await using var limit = new NpgsqlCommand("SET LOCAL lock_timeout = '200ms'", second, root);
                     await limit.ExecuteNonQueryAsync(ct);
-                    var failure = await Assert.ThrowsAsync<InvalidOperationException>(() => new WorkflowStore(context).StageTransitionAsync(
+                    var failure = await Assert.ThrowsAsync<PostgresException>(() => new WorkflowStore(context).StageTransitionAsync(
                         claimed.Identity, claimed.Step, Guid.NewGuid(), claimed.Spec.SpecificationHash, 2,
                         WorkflowState.CancelRequested, claimed.Spec.CreatedAtUtc, ct));
-                    var databaseFailure = Assert.IsType<DbUpdateException>(failure.InnerException);
-                    Assert.Equal(PostgresErrorCodes.LockNotAvailable, Assert.IsType<PostgresException>(databaseFailure.InnerException).SqlState);
+                    Assert.Equal(PostgresErrorCodes.LockNotAvailable, failure.SqlState);
                     await root.RollbackAsync(ct);
                 });
                 await claimRoot.CommitAsync(ct);
@@ -169,7 +177,7 @@ public sealed class WorkflowPostgreSqlFixtureTests
             async Task VerifyCancellationCustody((WorkflowSpecification Spec, WorkflowIdentity Identity, Guid Step) workflow,
                 WorkflowState state, long custodyCount)
             {
-                await using var observer = new NpgsqlConnection(locator); await observer.OpenAsync(ct);
+                await using var observer = WorkflowModelFixture.Connection(locator, Guid.Parse(CaseId)); await observer.OpenAsync(ct);
                 await using var query = new NpgsqlCommand("SELECT i.state, (SELECT count(*) FROM " + Schema +
                     ".operation_custody c WHERE c.installation_id=i.installation_id AND c.tenant_id=i.tenant_id AND c.instance_id=i.instance_id) FROM " +
                     Schema + ".instances i WHERE i.installation_id=@installation AND i.tenant_id=@tenant AND i.instance_id=@instance", observer);
@@ -183,7 +191,7 @@ public sealed class WorkflowPostgreSqlFixtureTests
                 var fresh = NewSpecification(); var scope = new WorkflowIdentity(fresh.InstallationId, fresh.TenantId, fresh.InstanceId);
                 Guid step = Guid.Empty;
                 await WithRoot(connection, async (context, root) => {
-                    var store = new WorkflowStore(context); await store.StageCreationAsync(fresh, ct);
+                    var store = new WorkflowStore(context); await store.StageCreationAsync(fresh, fresh.CreatedAtUtc, ct);
                     step = await context.Set<WorkflowStepRecord>().Where(x => x.InstanceId == fresh.InstanceId && x.Ordinal == 0)
                         .Select(x => x.StepId).SingleAsync(ct);
                     await store.StageTransitionAsync(scope, step, Guid.NewGuid(), fresh.SpecificationHash, 1,
@@ -198,7 +206,7 @@ public sealed class WorkflowPostgreSqlFixtureTests
             {
                 using var cleanupBudget = new CancellationTokenSource(TimeSpan.FromSeconds(10));
                 // Fresh connection; all failed transaction roots have been disposed before cleanup.
-                await using var cleanup = new NpgsqlConnection(locator); await cleanup.OpenAsync(cleanupBudget.Token);
+                await using var cleanup = WorkflowModelFixture.Connection(locator, Guid.Parse(CaseId)); await cleanup.OpenAsync(cleanupBudget.Token);
                 await using var drop = new NpgsqlCommand("DROP SCHEMA " + Schema + " CASCADE", cleanup);
                 await drop.ExecuteNonQueryAsync(cleanupBudget.Token);
                 await using var verify = new NpgsqlCommand("SELECT count(*) FROM pg_namespace WHERE nspname = @schema", cleanup);
@@ -217,7 +225,7 @@ public sealed class WorkflowPostgreSqlFixtureTests
     private static async Task<long> Count(string locator, string table, CancellationToken ct)
     {
         Assert.Contains(table, new[] { "instances", "steps", "transitions", "request_receipts", "operation_custody" });
-        await using var connection = new NpgsqlConnection(locator); await connection.OpenAsync(ct);
+        await using var connection = WorkflowModelFixture.Connection(locator, Guid.Parse(CaseId)); await connection.OpenAsync(ct);
         await using var query = new NpgsqlCommand("SELECT count(*) FROM " + Schema + "." + table, connection);
         return (long)(await query.ExecuteScalarAsync(ct))!;
     }

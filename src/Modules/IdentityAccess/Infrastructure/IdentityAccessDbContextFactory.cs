@@ -69,6 +69,15 @@ public sealed class IdentityAccessDbContextFactory : IDesignTimeDbContextFactory
     public static void ValidateOfflineMigrationTarget(string connectionString) =>
         ValidateTarget(connectionString, "kordra", "kordra_admin");
 
+    /// <summary>Legacy isolated synthetic fixture only: exact loopback kordra_test without session overrides.</summary>
+    public static void ValidateIsolatedTestTarget(string connectionString)
+    {
+        ValidateTarget(connectionString, "kordra_test", "kordra_test");
+        var parsed = new NpgsqlConnectionStringBuilder(connectionString);
+        if (!string.IsNullOrEmpty(parsed.SearchPath) || !string.IsNullOrEmpty(parsed.Options))
+            throw new InvalidOperationException("Isolated IAM test target does not permit session overrides; values omitted.");
+    }
+
     public static void ValidateRuntimeOrTestTransactionTarget(string connectionString)
     {
         var parsed = new NpgsqlConnectionStringBuilder(connectionString);

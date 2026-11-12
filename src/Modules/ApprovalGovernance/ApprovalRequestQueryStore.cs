@@ -22,6 +22,16 @@ public sealed class ApprovalRequestQueryStore(ApprovalDbContext db)
         return new(row, Array.AsReadOnly(decisions));
     }
 
+    /// <summary>Exact owner selection for a frozen release revision. The caller evaluates current approval eligibility.</summary>
+    public Task<ApprovalRequestRecord?> ReadForRevisionUnderAdmissionAsync(Guid installation, Guid tenant,
+        Guid project, Guid environment, Guid releaseRevisionId, CancellationToken ct = default)
+    {
+        if (!Scope(installation, tenant, project, environment) || releaseRevisionId == Guid.Empty)
+            return Task.FromResult<ApprovalRequestRecord?>(null);
+        return Query(installation, tenant, project, environment)
+            .SingleOrDefaultAsync(x => x.ReleaseRevisionId == releaseRevisionId, ct);
+    }
+
     public async Task<ApprovalRequestOwnerPage?> ReadPageUnderAdmissionAsync(Guid installation, Guid tenant,
         Guid project, Guid environment, int limit, Guid? afterId, CancellationToken ct = default)
     {

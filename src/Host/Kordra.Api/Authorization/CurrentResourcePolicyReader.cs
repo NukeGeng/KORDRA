@@ -36,7 +36,10 @@ public sealed class CurrentResourcePolicyReader(IDbContextFactory<KordraIdentity
         if (policy is null) return false;
         var now = clock.GetTrustedUtcNow(); var p = policy.Payload;
         // Catalog association is not a target.read permission. A deny-only policy remains a valid explicit constraint.
-        return p.Status == "active" && p.ScopeKind == "environment" && p.EffectiveFromUtc <= now && !(p.ExpiresAtUtc <= now);
+        // Environment creation binds only target.read; a schema-2 workflow policy belongs to its own action consumer.
+        // Owner admission and the precommit recheck share this method, so both reject it before any binding is staged.
+        return p.SchemaVersion == 1 && p.Action == "target.read" &&
+            p.Status == "active" && p.ScopeKind == "environment" && p.EffectiveFromUtc <= now && !(p.ExpiresAtUtc <= now);
     }
 
     // Integer-only legacy references cannot establish a current resource policy identity.

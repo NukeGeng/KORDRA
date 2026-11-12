@@ -12,7 +12,8 @@ public sealed record WorkflowStoredResult(Guid InstanceId, long Version, bool Du
 /// <summary>Owner persistence only. Caller supplies trusted scope and current admission; never commits the root.</summary>
 public sealed class WorkflowStore(WorkflowDbContext context)
 {
-    public async Task<WorkflowStoredResult> StageCreationAsync(WorkflowSpecification specification, CancellationToken cancellationToken = default)
+    public async Task<WorkflowStoredResult> StageCreationAsync(WorkflowSpecification specification, DateTimeOffset effectiveUtc,
+        CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(specification);
         RequireRoot();
@@ -25,6 +26,7 @@ public sealed class WorkflowStore(WorkflowDbContext context)
                 throw new InvalidOperationException("Workflow request identity/hash conflict.");
             return new(receipt.InstanceId, 1, true);
         }
+        WorkflowTimingRules.RequireCreationWindow(specification, effectiveUtc);
         context.Add(new WorkflowInstanceRecord {
             InstallationId = specification.InstallationId, TenantId = specification.TenantId,
             InstanceId = specification.InstanceId, RequestId = specification.RequestId,
@@ -59,7 +61,9 @@ public sealed class WorkflowStore(WorkflowDbContext context)
             specificationHash.Any(c => c is not (>= '0' and <= '9' or >= 'a' and <= 'f')))
             throw new ArgumentException("Invalid workflow transition identity.");
         RequireRoot();
-        var prior = await context.Set<WorkflowTransitionRecord>().SingleOrDefaultAsync(x =>
+        if (await ReadLockedInstanceAsync(identity, cancellationToken) is null)
+            throw new InvalidOperationException("Workflow unavailable in the trusted scope.");
+        var prior = await context.Set<WorkflowTransitionRecord>().AsNoTracking().SingleOrDefaultAsync(x =>
             x.InstallationId == identity.InstallationId && x.TenantId == identity.TenantId &&
             x.InstanceId == identity.InstanceId && x.OperationId == operationId, cancellationToken);
         if (prior is not null)
@@ -74,9 +78,24 @@ public sealed class WorkflowStore(WorkflowDbContext context)
             x.InstallationId == identity.InstallationId && x.TenantId == identity.TenantId &&
             x.InstanceId == identity.InstanceId, cancellationToken)
             ?? throw new InvalidOperationException("Workflow unavailable in the trusted scope.");
-        if (instance.SpecificationHash != specificationHash ||
-            !WorkflowStateRules.CanChangeState((WorkflowState)instance.State, nextState))
-            throw new InvalidOperationException("Workflow binding/state conflict.");
+        await context.Entry(instance).ReloadAsync(cancellationToken);
+        if (await WorkflowCancellationStore.HasIntentAsync(context, identity, cancellationToken) &&
+            nextState is not (WorkflowState.CancelRequested or WorkflowState.Cancelled or WorkflowState.Reconciling))
+            throw new InvalidOperationException("Cancellation intent forbids a fresh workflow effect.");
+        if (WorkflowStateRules.IsTerminal(nextState) && (
+            await context.Set<WorkflowCustodyRecord>().AsNoTracking().AnyAsync(x => x.InstallationId == identity.InstallationId &&
+                x.TenantId == identity.TenantId && x.InstanceId == identity.InstanceId && x.Phase != 3, cancellationToken) ||
+            await context.Set<WorkflowStepRecord>().AsNoTracking().AnyAsync(x => x.InstallationId == identity.InstallationId &&
+                x.TenantId == identity.TenantId && x.InstanceId == identity.InstanceId && x.State == (int)WorkflowStepState.Unknown, cancellationToken) ||
+            await context.Set<WorkflowTimerRecord>().AsNoTracking().AnyAsync(x => x.InstallationId == identity.InstallationId &&
+                x.TenantId == identity.TenantId && x.InstanceId == identity.InstanceId && x.Status == 2, cancellationToken)))
+            throw new InvalidOperationException("Unsettled/unknown operations require reconciliation before a terminal workflow state.");
+        if (instance.SpecificationHash != specificationHash)
+            throw new InvalidOperationException("Workflow binding conflict.");
+        if (expectedVersion > 0 && instance.Version != expectedVersion)
+            throw new DbUpdateConcurrencyException("Workflow version changed before staging.");
+        if (!WorkflowStateRules.CanChangeState((WorkflowState)instance.State, nextState))
+            throw new InvalidOperationException("Workflow state conflict.");
         instance.Version = WorkflowStateRules.NextVersion(instance.Version, expectedVersion);
         instance.State = (int)nextState;
         // Establish the CAS before history insertion; both saves remain uncommitted in the same caller root.
@@ -105,6 +124,8 @@ public sealed class WorkflowStore(WorkflowDbContext context)
         var instance = await ReadLockedInstanceAsync(identity, cancellationToken);
         if (instance is null || instance.Value.Hash != specificationHash || instance.Value.State != WorkflowState.Running)
             throw new InvalidOperationException("Workflow custody binding/state conflict.");
+        if (await WorkflowCancellationStore.HasIntentAsync(context, identity, cancellationToken))
+            throw new InvalidOperationException("Cancellation intent forbids new step custody.");
         var previous = await context.Set<WorkflowCustodyRecord>().SingleOrDefaultAsync(x =>
             x.InstallationId == identity.InstallationId && x.TenantId == identity.TenantId &&
             x.InstanceId == identity.InstanceId && x.StepId == stepId && x.OperationId == operationId, cancellationToken);

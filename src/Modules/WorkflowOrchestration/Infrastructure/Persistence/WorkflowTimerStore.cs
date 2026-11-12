@@ -65,6 +65,8 @@ public sealed class WorkflowTimerStore(WorkflowDbContext context)
                 throw new InvalidOperationException("Existing waiting-timer operation conflicts.");
             return new(timer.TimerId, timer.Generation, previous.ResultingVersion, true);
         }
+        if (await WorkflowCancellationStore.HasIntentAsync(context, identity, ct))
+            throw new InvalidOperationException("Cancellation intent forbids a fresh waiting timer.");
         if (locked.Value.State != WorkflowState.Running || instance.State != (int)WorkflowState.Running ||
             step.State != (int)WorkflowStepState.Running || custody.Phase != ActiveCustody ||
             custody.Version != request.Custody.Version || request.RecordedAtUtc < specification.CreatedAtUtc ||

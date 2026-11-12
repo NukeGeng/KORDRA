@@ -10,12 +10,27 @@ namespace Kordra.WorkflowOrchestration.Tests;
 public sealed class WorkflowStoreGuardTests
 {
     [Fact]
+    public async Task MetadataReadRequiresScopedInputAndNeverOpensItsOwnConnection()
+    {
+        await using var context = WorkflowDbContext.CreateOfflineModel();
+        var reader = new WorkflowMetadataReader(context);
+        var identity = new WorkflowIdentity(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid());
+        var project = Guid.NewGuid();
+        var environment = Guid.NewGuid();
+        await Assert.ThrowsAsync<ArgumentException>(() => reader.ReadAsync(identity, Guid.Empty, environment));
+        await Assert.ThrowsAsync<ArgumentException>(() => reader.ReadAsync(identity, project, Guid.Empty));
+        await Assert.ThrowsAsync<ArgumentException>(() => reader.ReadAsync(identity, project, environment, 0));
+        await Assert.ThrowsAsync<InvalidOperationException>(() => reader.ReadAsync(identity, project, environment));
+        Assert.Equal(ConnectionState.Closed, context.Database.GetDbConnection().State);
+    }
+
+    [Fact]
     public async Task StoreCannotReadOrStageWithoutAnExplicitCallerRoot()
     {
         using var context = WorkflowDbContext.CreateOfflineModel(); var store = new WorkflowStore(context);
         var spec = WorkflowSpecification.ReadCanonical(File.ReadAllBytes(Path.Combine(AppContext.BaseDirectory, "Fixtures", "checkpoint-v1.json")));
         var scope = new WorkflowIdentity(spec.InstallationId, spec.TenantId, spec.InstanceId);
-        await Assert.ThrowsAsync<InvalidOperationException>(() => store.StageCreationAsync(spec));
+        await Assert.ThrowsAsync<InvalidOperationException>(() => store.StageCreationAsync(spec, spec.CreatedAtUtc));
         await Assert.ThrowsAsync<InvalidOperationException>(() => store.StageTransitionAsync(scope, Guid.NewGuid(), Guid.NewGuid(),
             spec.SpecificationHash, 1, WorkflowState.Running, spec.CreatedAtUtc));
         await Assert.ThrowsAsync<InvalidOperationException>(() => store.StageInitialCustodyAsync(scope, Guid.NewGuid(), Guid.NewGuid(),
