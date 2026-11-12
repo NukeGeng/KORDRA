@@ -6,3 +6,4 @@ __pycache__/
 **/TestResults/
 **/.temp
 /docs/secret/accountpostgre.md
+/docs/secret/accountnomad.md
