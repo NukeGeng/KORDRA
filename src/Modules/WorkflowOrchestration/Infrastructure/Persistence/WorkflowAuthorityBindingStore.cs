@@ -11,6 +11,20 @@ namespace Kordra.Modules.WorkflowOrchestration.Infrastructure.Persistence;
 public sealed class WorkflowAuthorityBindingStore(WorkflowDbContext context)
 {
     /// <summary>
+    /// Locks the owner instance (SELECT ... FOR UPDATE) on the caller root before any receipt check or delegation
+    /// reissue, so concurrent executions of one request serialize. False when unavailable in scope.
+    /// </summary>
+    public async Task<bool> LockOwnerAsync(WorkflowReauthorizationCommand command, CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(command);
+        if (!context.IncludesAuthorizationReceipts || context.Database.CurrentTransaction is null || context.ChangeTracker.HasChanges())
+            throw new InvalidOperationException("Reauthorization locking requires the revision 6 clean owner context on its caller root.");
+        var owner = await new WorkflowStore(context).ReadLockedInstanceAsync(
+            new WorkflowIdentity(command.InstallationId, command.TenantId, command.InstanceId), ct);
+        return owner is not null && owner.Value.Hash == command.SpecificationHash;
+    }
+
+    /// <summary>
     /// The original result for an already recorded request, or null. Lets the caller avoid reissuing delegation for a retry.
     /// A changed command for the same request identity conflicts.
     /// </summary>

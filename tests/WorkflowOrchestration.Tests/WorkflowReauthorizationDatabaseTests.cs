@@ -122,6 +122,35 @@ public sealed class WorkflowReauthorizationDatabaseTests
             await AssertState(WorkflowState.BlockedAuthority, 3, 2);
             Assert.Equal(spec.WriteCanonical(), await Canonical());
 
+            // PR32 review: a concurrent execution of one request blocks on the owner lock until the first root commits,
+            // then observes the recorded receipt (so the coordinator never reissues delegation twice).
+            var raced = Make(3, key: Guid.NewGuid());
+            await using var rival = WorkflowModelFixture.Connection(cs, CaseId);
+            await rival.OpenAsync(ct);
+            await using (var holderContext = WorkflowModelFixture.CreateAuthorizationFixture(writer, CaseId))
+            await using (var holder = await writer.BeginTransactionAsync(ct))
+            {
+                await holderContext.Database.UseTransactionAsync(holder, ct);
+                var holderStore = new WorkflowAuthorityBindingStore(holderContext);
+                Assert.True(await holderStore.LockOwnerAsync(raced, ct));
+                Assert.Null(await holderStore.ReadRecordedAsync(raced, ct));
+                await using var rivalContext = WorkflowModelFixture.CreateAuthorizationFixture(rival, CaseId);
+                await using var rivalRoot = await rival.BeginTransactionAsync(ct);
+                await rivalContext.Database.UseTransactionAsync(rivalRoot, ct);
+                var rivalStore = new WorkflowAuthorityBindingStore(rivalContext);
+                var waiting = rivalStore.LockOwnerAsync(raced, ct);
+                await Task.Delay(TimeSpan.FromMilliseconds(500), ct);
+                Assert.False(waiting.IsCompleted);
+                var won = await holderStore.StageReauthorizationAsync(raced, delegation, at, ct);
+                Assert.False(won.Duplicate); Assert.Equal(3, won.Generation);
+                await holder.CommitAsync(ct);
+                Assert.True(await waiting);
+                var observed = await rivalStore.ReadRecordedAsync(raced, ct);
+                Assert.NotNull(observed); Assert.True(observed!.Duplicate); Assert.Equal(won.BindingId, observed.BindingId);
+                await rivalRoot.RollbackAsync(ct);
+            }
+            await AssertState(WorkflowState.BlockedAuthority, 4, 3);
+
             async Task<WorkflowAuthorityBindingResult> Stage(WorkflowReauthorizationCommand command, bool commit,
                 DateTimeOffset? effective = null, WorkflowDelegationReference? reference = null, string? before = null)
             {

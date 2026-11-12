@@ -95,6 +95,23 @@ public sealed class WorkflowReauthorizationModelTests
     }
 
     [Fact]
+    public async Task OwnerLockRequiresRevisionSixCallerRootAndNeverOpensTheDatabaseOtherwise()
+    {
+        // PR32 review: the coordinator serializes on this lock before receipt lookup and delegation reissue.
+        var command = new Kordra.Modules.WorkflowOrchestration.Domain.WorkflowReauthorizationCommand(Guid.NewGuid(), Guid.NewGuid(),
+            Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), 2, new string('a', 64));
+        foreach (var context in new[] { WorkflowDbContext.CreateOfflineReconciliationModel(), WorkflowDbContext.CreateOfflineAuthorizationModel() })
+        await using (context)
+        {
+            var error = await Assert.ThrowsAsync<InvalidOperationException>(() => new WorkflowAuthorityBindingStore(context).LockOwnerAsync(command));
+            Assert.Contains("caller root", error.Message);
+            Assert.Equal(ConnectionState.Closed, context.Database.GetDbConnection().State);
+        }
+        await using var current = WorkflowDbContext.CreateOfflineAuthorizationModel();
+        await Assert.ThrowsAsync<ArgumentNullException>(() => new WorkflowAuthorityBindingStore(current).LockOwnerAsync(null!));
+    }
+
+    [Fact]
     public void AuthorityBindingCannotBeInsertedBeforeRevisionSixOrWithoutTrackedOwnerAndIsAppendOnly()
     {
         foreach (var context in new[] { WorkflowDbContext.CreateOfflineReconciliationModel(), WorkflowDbContext.CreateOfflineAuthorizationModel() })

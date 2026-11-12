@@ -206,13 +206,16 @@ public static class WorkflowReauthorizationTransaction
         try
         {
             var store = new WorkflowAuthorityBindingStore(workflow);
+            // Serialize on the owner instance before the receipt check and any delegation reissue (PR32 review):
+            // a concurrent execution of the same request waits here and then observes the recorded receipt.
+            if (!await store.LockOwnerAsync(command, ct))
+            {
+                await audit.RollbackAsync();
+                return new(WorkflowCommitDisposition.NoCommitAttempt, null);
+            }
             // A retry returns the original receipt and must never reissue a delegation.
             if (await store.ReadRecordedAsync(command, ct) is { } recorded)
-            {
-                var allowed = await stillCurrent(ct) && !admission.IsClosed;
-                await audit.RollbackAsync();
-                return new(WorkflowCommitDisposition.NoCommitAttempt, allowed ? recorded : null);
-            }
+                return await RetainOriginalAsync(recorded);
             var specification = await ScopedAsync(workflow, command, projectId, environmentId, ct)
                 ?? throw new InvalidOperationException("Workflow unavailable in trusted reauthorization scope.");
             var delegation = await reissuer.StageReissueAsync(connection, root, new(command.InstallationId, command.TenantId,
@@ -225,6 +228,9 @@ public static class WorkflowReauthorizationTransaction
                 return new(WorkflowCommitDisposition.NoCommitAttempt, null);
             }
             var receipt = await store.StageReauthorizationAsync(command, delegation, mutation.OccurredAtUtc, ct);
+            // Defense in depth: a duplicate here means delegation effects were staged for an already recorded
+            // request. Never commit them; roll the whole root back and return only the original receipt.
+            if (receipt.Duplicate) return await RetainOriginalAsync(receipt);
 
             if ((await audit.StageAsync(mutation, ct)).Status != AuditTransactionStageStatus.Staged)
                 throw new InvalidOperationException("Reauthorization requires a fresh mutation audit.");
@@ -258,6 +264,13 @@ public static class WorkflowReauthorizationTransaction
             }
             await audit.RollbackAsync();
             throw;
+        }
+
+        async Task<WorkflowReauthorizationTransactionResult> RetainOriginalAsync(WorkflowAuthorityBindingResult original)
+        {
+            var allowed = await stillCurrent(ct) && !admission.IsClosed;
+            await audit.RollbackAsync();
+            return new(WorkflowCommitDisposition.NoCommitAttempt, allowed ? original : null);
         }
     }
 
