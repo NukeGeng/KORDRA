@@ -259,7 +259,7 @@ public sealed class WorkflowReadAuditDatabaseTests
         IArtifactAuditTransactionFactory audits, FairAsyncReaderWriterAdmissionGate gate, IAuthorityClock clock) =>
         RegressionPostgreSqlSelection.LoadRunnerProfile() is { } profile
             ? WorkflowReadCoordinator.CreateDisposableTestCoordinator(installation, identity, workflows, authority, policies, audits, gate, clock, profile.OwnerBinding)
-            : new WorkflowReadCoordinator(installation, identity, workflows, authority, policies, audits, gate, clock);
+            : WorkflowReadCoordinator.CreateIsolatedTestCoordinator(installation, identity, workflows, authority, policies, audits, gate, clock);
 
     private static WorkflowDbContext StartFixture(NpgsqlConnection connection) =>
         RegressionPostgreSqlSelection.LoadRunnerProfile() is { } profile

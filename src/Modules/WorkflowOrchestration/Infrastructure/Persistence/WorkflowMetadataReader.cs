@@ -28,8 +28,12 @@ public sealed class WorkflowMetadataReader(WorkflowDbContext context)
         var specification = WorkflowSpecification.ReadCanonical(instance.Specification);
         if (specification.InstallationId != identity.InstallationId || specification.TenantId != identity.TenantId ||
             specification.InstanceId != identity.InstanceId || specification.SpecificationHash != instance.SpecificationHash ||
-            specification.RequestId != instance.RequestId || specification.DeadlineUtc != instance.DeadlineUtc ||
+            specification.RequestId != instance.RequestId ||
             instance.Version < 1 || !Enum.IsDefined((WorkflowState)instance.State))
+            throw new InvalidOperationException("Workflow metadata binding is inconsistent.");
+        // Compare through a PostgreSQL parameter, using exactly the provider precision used at insertion.
+        // Canonical bytes/hash retain all seven fractional digits; no tolerance or canonical truncation.
+        if (!await instances.AnyAsync(x => x.DeadlineUtc == specification.DeadlineUtc, ct))
             throw new InvalidOperationException("Workflow metadata binding is inconsistent.");
         if (specification.ProjectId != projectId || specification.EnvironmentId != environmentId) return null;
 

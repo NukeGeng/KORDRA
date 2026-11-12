@@ -2,7 +2,7 @@
 id: ENG-T12-CONFORMANCE-PLAN
 status: accepted
 owner: NukeGeng
-last_reviewed: 2026-10-31
+last_reviewed: 2026-11-12
 ---
 
 > Accepted scoped design ngày 2026-10-31; xem Exact scoped acceptance ở cuối file. Chưa có runtime/operation qualification.
@@ -203,3 +203,7 @@ ADR-0025 explicit disposable test-target core is prepared under exact owner appr
 ADR-0025 continuation: explicit profile now reaches cancel/reconcile and ART/REL/APR/catalog owner transaction entry points and their AUD factories, preserving shared commit/authority behavior. Existing owner/offline manifests and actual full-suite test composition still require profile integration before freezing the disposable DB operation plan. No operational rights are inferred from ADR acceptance.
 
 ADR-0025 native fixture wiring is now present in the working tree: WFL isolated/root/handler/probe/custody/recovery selection, module-only model fixtures, MSG compatibility/native/metadata/receipt paths, exact restricted transport-role selection, and isolated IAM policy/read-audit fixtures. Offline configuration/SQL/default-guard evidence is distinct from native crash/recovery execution. Historical live receipts are retained and are not represented as current-source verification. T12.2 exit/full regression and T12.3/T12.4 remain open; freeze the final DB/role/config/executable operation manifest only after remaining suite-composition review.
+
+## PR29 precision and fixture-floor regressions — PR29-WFL-TIMESTAMP-002 / PR29-IAM-FLOOR-001
+
+The successor fixture seeds canonical creation/deadline/due values with a seventh fractional digit, stages a valid successor, and rejects an adjacent persisted microsecond on each scalar inside a rolled-back root. The read/audit fixture reads a fractional-deadline workflow, rejects a 1µs persisted deadline change with a durable Use and no Disclosure, and requires the IAM floor in the case schema with any pre-existing `app` floor unchanged. These are operation-gated cases: implemented, not yet executed on this revision. They grant no clock grace or deadline extension and do not change WF04–WF08 status.

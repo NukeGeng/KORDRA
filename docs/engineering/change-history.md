@@ -2,7 +2,7 @@
 id: ENG-HISTORY
 status: proposed
 owner: unassigned
-last_reviewed: 2026-10-26
+last_reviewed: 2026-11-12
 ---
 
 # Feature change log and release-note discipline
@@ -853,3 +853,7 @@ The first configured T12.2 full regression exposed disposable ART/SEC/IAM target
 The approved targeted follow-up passed all 102 cases across ART, SEC, IAM and MSG, including the seven native MSG methods. Cleanup verified the disposable database was absent and no new Keychain fixture file remained.
 
 The T12.2 opt-in follow-up corrected five fixture and test-selection failures. All five now have targeted PostgreSQL passes and verified disposable cleanup. The full AMR gate from checkpoint 62 predates these fixes.
+
+## PR29 round-1 review fixes — 2026-11-12
+
+FEAT-WFL-001 / FEAT-IAM-001 / FEAT-PRJ-001: fixed the three Codex P2 findings on `fd56a6e`. Workflow metadata and successor staging now compare persisted timestamps through PostgreSQL parameters (PR29-WFL-TIMESTAMP-002). The legacy isolated read coordinator writes its IAM floor to the case schema (PR29-IAM-FLOOR-001). Environment creation accepts only schema-1 `target.read` policies at admission and precommit (PR29-PRJ-POLICY-001). No schema, wire, permission or ADR change; no new technical debt. Operation-gated DB regressions and CI on the new head are pending approval.

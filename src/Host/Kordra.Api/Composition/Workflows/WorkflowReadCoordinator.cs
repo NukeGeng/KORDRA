@@ -51,6 +51,18 @@ public sealed class WorkflowReadCoordinator(Guid installationId, IDbContextFacto
         DisposableTestBinding profile) =>
         new(installationId, identity, workflows, authority, policies, audits, gate, clock) { disposableTest = profile };
 
+    private bool isolatedTest;
+
+    /// <summary>
+    /// Legacy isolated kordra_test fixture only. The IAM clock floor stays in the case-owned schema and is
+    /// removed with that namespace; it never touches the runtime app schema. Authority, audit and gate rules are unchanged.
+    /// </summary>
+    public static WorkflowReadCoordinator CreateIsolatedTestCoordinator(Guid installationId,
+        IDbContextFactory<KordraIdentityDbContext> identity, IDbContextFactory<WorkflowDbContext> workflows,
+        WorkflowEnvironmentAuthorityReader authority, IWorkflowReadPolicyReader policies,
+        IArtifactAuditTransactionFactory audits, FairAsyncReaderWriterAdmissionGate gate, IAuthorityClock clock) =>
+        new(installationId, identity, workflows, authority, policies, audits, gate, clock) { isolatedTest = true };
+
     private const string Permission = "workflow.read";
     private const int MaximumBytes = 256 * 1024;
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
@@ -139,6 +151,8 @@ public sealed class WorkflowReadCoordinator(Guid installationId, IDbContextFacto
                     await using var iam = await identity.CreateDbContextAsync(token);
                     if (disposableTest is { } profile)
                         IdentityAccessDbContextFactory.ValidateDisposableTestTarget(iam.Database.GetDbConnection().ConnectionString, profile);
+                    else if (isolatedTest)
+                        IdentityAccessDbContextFactory.ValidateIsolatedTestTarget(iam.Database.GetDbConnection().ConnectionString);
                     else
                         IdentityAccessDbContextFactory.ValidateRuntimeOrTestTransactionTarget(iam.Database.GetDbConnection().ConnectionString);
                     await using var root = await iam.Database.BeginTransactionAsync(token);
@@ -159,6 +173,8 @@ public sealed class WorkflowReadCoordinator(Guid installationId, IDbContextFacto
                     if (!Revalidate(await ReadEligibilityAsync(subject, scope, token))) return WorkflowReadOutcome.Denied;
                     if (disposableTest is { } floorProfile)
                         await AuthorityClockFloorStore.StageDisposableIsolatedTestAsync(iam, installationId, now, floorProfile, token);
+                    else if (isolatedTest)
+                        await AuthorityClockFloorStore.StageIsolatedTestAsync(iam, installationId, now, token);
                     else
                         await AuthorityClockFloorStore.StageAsync(iam, installationId, now, token);
                     var commitTime = clock.GetTrustedUtcNow();

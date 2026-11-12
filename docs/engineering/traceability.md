@@ -2,7 +2,7 @@
 id: ENG-TRACE
 status: proposed
 owner: unassigned
-last_reviewed: 2026-10-26
+last_reviewed: 2026-11-12
 ---
 
 # Requirements ↔ Module ↔ Feature ↔ Code ↔ Tests
@@ -840,3 +840,13 @@ Checkpoint 60 records the first configured full-solution regression. Its 15 asse
 Checkpoint 61 records a passing follow-up for all 67 failed method identities from the configured full run, with 102 theory-expanded cases passed and zero skips. The disposable database and synthetic Keychain files were independently checked after cleanup. The final AMR gate remains a separate, unfiltered run on the revised source.
 
 FEAT-WFL-001 / ADR-0025: targeted opt-in receipts under `.amr-local/t12-remaining-design/t12-2-opt-in-five/` and `t12-2-opt-in-two-v2/` record passing cases with cleanup. Current-source full validation and T12.2 exit reconciliation remain open.
+
+## PR29 round-1 review fixes — 2026-11-12
+
+FEAT-WFL-001 → Durable Workflow v1 §canonical time → `WorkflowMetadataReader`, `WorkflowWakeSuccessorStore` → `WorkflowWakeSuccessorDatabaseTests`, `WorkflowReadAuditDatabaseTests` (PR29-WFL-TIMESTAMP-002, [thread](https://github.com/NukeGeng/KORDRA/pull/29#discussion_r4545357139)).
+
+FEAT-WFL-001 / FEAT-IAM-001 / ADR-0025 legacy branch → `WorkflowReadCoordinator.CreateIsolatedTestCoordinator`, `AuthorityClockFloorStore.StageIsolatedTestAsync`, `IdentityAccessDbContextFactory.ValidateIsolatedTestTarget` → `WorkflowReadAuditDatabaseTests`, `WorkflowPersistedAuthorityDatabaseTests` (PR29-IAM-FLOOR-001, [thread](https://github.com/NukeGeng/KORDRA/pull/29#discussion_r4545357146)).
+
+FEAT-IAM-001 / FEAT-PRJ-001 → Resource Policy v1 / ADR-0024 consumer rule → `CurrentResourcePolicyReader.IsApplicableUnderAdmissionAsync` (used by `ProjectCatalogStore.PrepareEnvironmentV2Async` and `CatalogMutationCoordinator` precommit) → `CurrentAuthorityHttpTests.V2_environment_creation_rejects_workflow_policy_before_binding_and_keeps_target_read_policy` (PR29-PRJ-POLICY-001, [thread](https://github.com/NukeGeng/KORDRA/pull/29#discussion_r4545357149)).
+
+Evidence state: source implemented; Release build and offline subsets pass. PostgreSQL fail-before/pass-after runs, the AMR gate and current-head CI are pending owner approval for the operation batch and push. Not verified until those exist.

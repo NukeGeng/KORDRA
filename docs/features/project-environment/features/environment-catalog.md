@@ -2,7 +2,7 @@
 id: FEAT-PRJ-001
 status: proposed
 owner: NukeGeng
-last_reviewed: 2026-10-25
+last_reviewed: 2026-11-12
 module_id: MOD-PRJ
 feature_id: FEAT-PRJ-001
 phase: MVP
@@ -287,3 +287,7 @@ ADR-0025 integration: catalog composition accepts explicit disposable PRJ/INV an
 ADR-0025 fixture wiring continuation: shared test-only composition captures the explicit profile and supplies actual owner factories/adapters. Initializer, HTTP and injected-fault paths are being retargeted without changing business assertions or default/runtime target rules. No database operations were performed; full native/isolated fixture wiring and selected-target integration evidence remain pending.
 
 ADR-0025 regression preparation. Catalog and resource-policy fixtures use the selected disposable owner options, exact policy manifest database, and the same profiled AUD adapter inside fault injection. Live fixture evidence remains pending.
+
+### PR29-PRJ-POLICY-001 — environment policy kind — 2026-11-12
+
+Environment creation v2 binds only `target.read`. The exact IAM reader used by `ProjectCatalogStore.PrepareEnvironmentV2Async` and the catalog precommit recheck now requires an active, effective, environment-scoped **schema-1 `target.read`** policy; a schema-2 workflow policy is denied before the environment or binding is staged. A valid schema-1 reference still creates the environment and its binding. No PRJ schema, contract shape or permission changed. Evidence and status: see FEAT-IAM-001 (implemented; CI regression pending on the next pushed head).

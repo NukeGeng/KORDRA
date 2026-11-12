@@ -2,7 +2,7 @@
 id: CONTRACT-DURABLE-WORKFLOW-V1
 status: accepted
 owner: NukeGeng
-last_reviewed: 2026-10-31
+last_reviewed: 2026-11-12
 ---
 
 > Accepted scoped design ngày 2026-10-31; xem Exact scoped acceptance ở cuối file. Chưa có runtime/operation qualification.
@@ -123,7 +123,7 @@ Due discovery is metadata-only, installation/tenant scoped, ordered by due/time 
 
 ## Canonical time versus scalar persistence precision
 
-Canonical workflow JSON retains its seven fractional digits and original hash. Scalar timestamp equality checks at the timer owner boundary run through typed PostgreSQL parameters, matching the provider representation used at insertion. This applies to creation/deadline and duplicate due-date checks. It is not a time tolerance or a clock/deadline extension: an adjacent persisted microsecond remains a conflicting binding. Existing schema revision1 and wire/canonical encodings are unchanged. Actual DB regression covers sub-microsecond dates on both sides of the PostgreSQL epoch with original-byte/hash preservation.
+Canonical workflow JSON retains its seven fractional digits and original hash. Scalar timestamp equality checks at the timer owner boundary run through typed PostgreSQL parameters, matching the provider representation used at insertion. This applies to creation/deadline and duplicate due-date checks, and (PR29-WFL-TIMESTAMP-002) to the owner metadata projection's deadline binding and successor staging's creation/deadline/original-timer due checks. It is not a time tolerance or a clock/deadline extension: an adjacent persisted microsecond remains a conflicting binding. Existing schema revision1 and wire/canonical encodings are unchanged. Actual DB regression covers sub-microsecond dates on both sides of the PostgreSQL epoch with original-byte/hash preservation.
 
 ## Inactive native wake representation
 

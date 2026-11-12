@@ -2,7 +2,7 @@
 id: FEAT-WFL-001
 status: proposed
 owner: unassigned
-last_reviewed: 2026-11-01
+last_reviewed: 2026-11-12
 module_id: MOD-WFL
 feature_id: FEAT-WFL-001
 phase: MVP
@@ -475,3 +475,15 @@ ADR-0025 native/isolated fixture wiring (working tree): explicit runner selectio
 The approved v4 remaining-case batch passed producer and receiver COMMIT-response loss and the successor guards, including both native DLQ and receiver-rollback scenarios. Independent checks verified the three case namespaces and the disposable database were absent after cleanup. The preceding v3 receipt covers wake publication and native redelivery on its recorded binary. The two receipts do not establish a single-revision full regression or close WF01–WF08/HO03.
 
 The disposable T12.2 opt-in run exposed fixture selection and clock-floor schema mismatches. The corrected cancellation, expiry, lock contention and two authority/read cases passed on their respective recorded binaries. The two read cases use the caller-owned isolated IAM floor transaction. Disposable database cleanup was independently verified after each batch. A combined current-source gate remains required.
+
+## PR29 round-1 review fixes — 2026-11-12
+
+Codex round 1 on reviewed head `fd56a6edc7300f00ee0f5a80ae0290339c00fd26` reported three P2 findings. Two touch this feature; the third is owned by FEAT-IAM-001/FEAT-PRJ-001.
+
+**PR29-WFL-TIMESTAMP-002 — metadata and successor precision.** The PR27 rule (canonical seven-digit JSON/hash, scalar comparison at provider precision) had not reached two new owner ports. `WorkflowMetadataReader` compared the reloaded microsecond deadline with the canonical value in CLR, so a valid `.xxxxxx7` deadline made `WorkflowReadCoordinator` return Unavailable. `WorkflowWakeSuccessorStore.StageAsync` did the same for creation/deadline and for the generation-1 timer due time, rejecting a valid successor. All three comparisons now run as typed PostgreSQL parameters on the exact scoped row. Canonical bytes/hash are unchanged; no tolerance, truncation or deadline extension is introduced, and an adjacent persisted microsecond still conflicts.
+
+**PR29-IAM-FLOOR-001 — legacy isolated read floor.** Without a disposable runner profile, the read coordinator used the runtime IAM floor writer, which targets `app.iam_authority_clock_floors`, while the legacy fixture's IAM model lives in the case schema. `WorkflowReadCoordinator.CreateIsolatedTestCoordinator` now selects an explicit isolated path: target validation is exact loopback `kordra_test` without session overrides, and the floor is written to the case-owned schema in the same IAM/AUD root. Admission, revalidation, audit staging and gate-close behavior are unchanged; the public constructor keeps the runtime writer.
+
+Regressions: `WorkflowWakeSuccessorDatabaseTests` now seeds sub-microsecond creation/deadline/due values and adds adjacent-microsecond rejection for each scalar; `WorkflowReadAuditDatabaseTests` uses a fractional deadline, requires the case-schema floor row and an unchanged runtime-shaped `app` floor, and rejects a 1µs persisted deadline change with Use but no Disclosure. `WorkflowPersistedAuthorityDatabaseTests` uses the same isolated coordinator.
+
+Status: Implemented in source. Release build and the offline WFL/IAM/Bootstrap subsets pass (WFL 232 passed, 4 gated skips). The operation-gated PostgreSQL cases have **not** been executed for this revision; their fail-before/pass-after evidence and current-head CI remain pending explicit operation and push approval. No schema, wire contract, permission or accepted ADR changed.

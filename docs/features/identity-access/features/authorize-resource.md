@@ -2,7 +2,7 @@
 id: FEAT-IAM-001
 status: proposed
 owner: unassigned
-last_reviewed: 2026-10-25
+last_reviewed: 2026-11-12
 module_id: MOD-IAM
 feature_id: FEAT-IAM-001
 phase: MVP
@@ -640,3 +640,11 @@ ADR-0025 offline test selection: explicit coordinator/factory paths retain owner
 ADR-0025 native/isolated fixture wiring (working tree): explicit runner selection now reaches actual WFL models/revisions, AUD enlistment, MSG receipts/journals/capacity/inspectors, native handlers, transaction probes, custody and recovery readers. SQL-only exports retain explicit offline metadata paths; live fixture construction validates the selected target before opening connections. Existing crash/redelivery/COMMIT-loss and authorization assertions remain in place. This is source plus offline verification, not current-binary live recovery evidence or database-operation approval.
 
 The disposable HTTP authority and credential fixtures now construct the AUD port from their existing profile-aware test composition. They retain the same policy, scope and audit assertions.
+
+### PR29 round-1 review fixes — 2026-11-12
+
+**PR29-PRJ-POLICY-001 — environment creation policy kind.** After ADR-0024 the shared IAM reader returns valid schema-2 workflow policies. `CurrentResourcePolicyReader.IsApplicableUnderAdmissionAsync` checked only status, scope and validity, so environment creation could bind `target.read` to an active `workflow.*` policy that every later target read denies. It now also requires payload schema 1 and action `target.read`. The PRJ owner admission (`ProjectCatalogStore.PrepareEnvironmentV2Async`) and the catalog precommit recheck both call this method, so a schema-2 policy is denied before any environment, binding, audit or receipt is staged. Workflow consumers keep their own action-qualified reader; v2 evaluation is unchanged. Regression: `CurrentAuthorityHttpTests.V2_environment_creation_rejects_workflow_policy_before_binding_and_keeps_target_read_policy` (reader false/true, HTTP 403 with no row, schema-1 201 with a `target.read` binding).
+
+**PR29-IAM-FLOOR-001 — explicit legacy isolated floor.** `AuthorityClockFloorStore.StageIsolatedTestAsync` and `IdentityAccessDbContextFactory.ValidateIsolatedTestTarget` add the legacy `kordra_test` counterpart to the disposable case-schema floor path. The case schema derives only from the trusted installation GUID; runtime `StageAsync` and its `app` target are unchanged. See FEAT-WFL-001 for the read-coordinator selection.
+
+Status: Implemented in source with offline build/test evidence. The HTTP regression needs the CI `kordra_test` fixture and the read-audit case needs separate operation approval; neither has run on this revision yet.

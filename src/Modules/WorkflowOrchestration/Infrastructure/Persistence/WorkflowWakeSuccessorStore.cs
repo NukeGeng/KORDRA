@@ -71,8 +71,12 @@ public sealed class WorkflowWakeSuccessorStore(WorkflowDbContext context)
                 throw new InvalidOperationException("Recorded successor or reconciliation evidence conflicts.");
             return new(successor, successor.ExpectedWorkflowVersion, true);
         }
+        // Persisted timestamps compare through PostgreSQL parameters at the provider precision used at insertion.
+        // Canonical bytes/hash retain all seven fractional digits; no tolerance or canonical truncation.
         if (instance.RequestId != specification.RequestId || instance.SpecificationHash != previous.SpecificationHash ||
-            instance.CreatedAtUtc != specification.CreatedAtUtc || instance.DeadlineUtc != specification.DeadlineUtc ||
+            !await context.Set<WorkflowInstanceRecord>().AsNoTracking().AnyAsync(x =>
+                x.InstallationId == identity.InstallationId && x.TenantId == identity.TenantId && x.InstanceId == identity.InstanceId &&
+                x.CreatedAtUtc == specification.CreatedAtUtc && x.DeadlineUtc == specification.DeadlineUtc, ct) ||
             instance.State != (int)WorkflowState.WaitingTimer || instance.Version != previous.ExpectedWorkflowVersion ||
             instance.DeadlineExceeded || effectiveUtc.ToUniversalTime() != successor.OccurredAtUtc ||
             effectiveUtc >= successor.DeadlineUtc || effectiveUtc >= specification.DeadlineUtc ||
@@ -107,7 +111,10 @@ public sealed class WorkflowWakeSuccessorStore(WorkflowDbContext context)
             x.StepId == previous.StepId && x.TimerId == previous.TimerId && x.Generation == previous.Generation, ct);
         await context.Entry(timer).ReloadAsync(ct);
         if (timer.Status != 2 || timer.Version != expectedTimerVersion || timer.SchedulerAttempts != previous.SchedulerAttempt ||
-            timer.DueAtUtc != specification.DueAtUtc)
+            !await context.Set<WorkflowTimerRecord>().AsNoTracking().AnyAsync(x =>
+                x.InstallationId == identity.InstallationId && x.TenantId == identity.TenantId && x.InstanceId == identity.InstanceId &&
+                x.StepId == previous.StepId && x.TimerId == previous.TimerId && x.Generation == previous.Generation &&
+                x.DueAtUtc == specification.DueAtUtc, ct))
             throw new InvalidOperationException("Original timer changed since reconciliation.");
         timer.Status = 3;
         timer.Version = WorkflowStateRules.NextVersion(timer.Version, expectedTimerVersion);

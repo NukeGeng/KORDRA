@@ -2,7 +2,7 @@
 id: CTR-RESOURCE-POLICY-V1
 status: accepted
 owner: NukeGeng
-last_reviewed: 2026-10-22
+last_reviewed: 2026-11-12
 ---
 
 # Resource Policy v1 — accepted bounded T06 design
@@ -208,7 +208,7 @@ This is the end of the bounded design task. The recorded approval adopts the des
 
 ## Approved workflow payload extension — ADR-0024, 2026-11-07
 
-[ADR-0024](../decisions/0024-workflow-action-policy.md) accepts payload schemaVersion 2 for the four exact workflow actions. The payload field set and canonical writer order remain the same. Version 2 requires environment scope and only Development/Test rules. Each selection carries its expected action, with target.read as the existing caller default. Evaluation requires the policy action to equal the selected action. A v2 allow cannot authorize a target.read caller or another workflow action. Explicit deny, missing/stale binding and expiry rules apply as before.
+[ADR-0024](../decisions/0024-workflow-action-policy.md) accepts payload schemaVersion 2 for the four exact workflow actions. The payload field set and canonical writer order remain the same. Version 2 requires environment scope and only Development/Test rules. Each selection carries its expected action, with target.read as the existing caller default. Evaluation requires the policy action to equal the selected action. A v2 allow cannot authorize a target.read caller or another workflow action. Explicit deny, missing/stale binding and expiry rules apply as before. Consumer conformance (PR29-PRJ-POLICY-001): environment creation v2 is a `target.read` association, so its exact owner admission and precommit recheck accept only an active schema-1 `target.read` environment policy; a schema-2 workflow policy is denied before any binding. No payload, wire or OpenAPI shape changes.
 
 The Contracts validator, canonical parser/writer and evaluator support both versions. Persistence constraints, policy identity action immutability, offline publication and PRJ action-qualified bindings still require their implementation and migration evidence. Existing database constraints continue to reject v2. Runtime workflow policy registration remains pending those gates.
 
