@@ -2,7 +2,7 @@
 id: FEAT-MSG-001
 status: proposed
 owner: unassigned
-last_reviewed: 2026-10-20
+last_reviewed: 2026-11-12
 module_id: MOD-MSG
 feature_id: FEAT-MSG-001
 phase: MVP
@@ -220,3 +220,7 @@ The v3 disposable native run passed wake publication and host replacement/redeli
 The two-process delivery and loopback COMMIT-loss regression fixtures now select the same explicit ADR-0025 target as their child executables. The legacy guard tests still construct the legacy scope explicitly. Full disposable regression remains pending.
 
 The local disposable full-regression manifest now includes the required case purpose for all seven native MSG fixtures. The first full run stopped these seven cases before their DB work because the field was absent. CI fixture generation and the accepted message contract are unchanged.
+
+### WFL schema revision 6 fixture selection — 2026-11-12
+
+`DisposableWorkflowMessagingTargetTests` now also covers WFL schema revision 6 (12.2f authority-binding receipts) for the explicit disposable fixture selection and rejects revision 7. No MSG behavior, contract or catalog change; the message receipt inspector selection is unchanged.

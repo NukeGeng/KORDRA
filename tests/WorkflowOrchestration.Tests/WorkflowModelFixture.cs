@@ -29,6 +29,7 @@ internal static class WorkflowModelFixture
             3 => WorkflowDbContext.CreateCancellationFixture(connection, caseId),
             4 => WorkflowDbContext.CreateStartFixture(connection, caseId),
             5 => WorkflowDbContext.CreateReconciliationFixture(connection, caseId),
+            6 => WorkflowDbContext.CreateAuthorizationFixture(connection, caseId),
             _ => throw new InvalidOperationException("Unsupported fixture schema revision.") };
     }
     internal static WorkflowDbContext CreateFixture(NpgsqlConnection connection, Guid caseId) => Create(connection, caseId, 1);
@@ -36,4 +37,5 @@ internal static class WorkflowModelFixture
     internal static WorkflowDbContext CreateCancellationFixture(NpgsqlConnection connection, Guid caseId) => Create(connection, caseId, 3);
     internal static WorkflowDbContext CreateStartFixture(NpgsqlConnection connection, Guid caseId) => Create(connection, caseId, 4);
     internal static WorkflowDbContext CreateReconciliationFixture(NpgsqlConnection connection, Guid caseId) => Create(connection, caseId, 5);
+    internal static WorkflowDbContext CreateAuthorizationFixture(NpgsqlConnection connection, Guid caseId) => Create(connection, caseId, 6);
 }
