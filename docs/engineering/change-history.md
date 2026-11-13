@@ -864,5 +864,5 @@ Implements the approved option B: reauthorization command/rules, schema revision
 
 ## FEAT-WFL-001 — PR32 round-1 review fix — 2026-11-12
 
-Reauthorization coordinator now serializes on the owner instance lock before the receipt check and delegation reissue, and rolls back the whole root on a duplicate staging result (Codex P2 on `5af3839`). Offline regression added; the extended PostgreSQL race case awaits an owner-approved disposable run. No contract, schema or ADR change.
+Reauthorization coordinator now serializes on the owner instance lock before the receipt check and delegation reissue, and rolls back the whole root on a duplicate staging result (Codex P2 on `5af3839`). Offline regression added; the extended PostgreSQL race case passed on its owner-approved disposable run on `44a8102` (2026-11-13). No contract, schema or ADR change.
 
