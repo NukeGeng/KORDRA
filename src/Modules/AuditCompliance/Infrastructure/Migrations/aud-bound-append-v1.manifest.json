@@ -1,0 +1,22 @@
+{
+  "revision": 1,
+  "owner": "AUD",
+  "artifact": "aud-bound-append-v1.sql",
+  "requires": [
+    "app.aud_intents",
+    "iam-workflow-authority-v1.sql"
+  ],
+  "scope": "12.3a PoC: permit-bound append-only AUD intent function; C# canonicalizer stays authoritative; offline artifact only",
+  "functions": [
+    "app.aud_append_bound_intent(uuid, uuid, text, text, bytea)"
+  ],
+  "sha256": "fe3bf0f0c54340b9c524a03ed15fd5eb5d11591a66c7a5e57265870aac9ae5af",
+  "roles": [
+    "kordra_iam_owner",
+    "kordra_wfl_owner",
+    "kordra_aud_owner",
+    "kordra_worker_runtime",
+    "kordra_api_runtime"
+  ],
+  "destructiveOperations": false
+}

@@ -19,6 +19,14 @@
     <ProjectReference Include="../../src/Modules/InfrastructureInventory/Kordra.Modules.InfrastructureInventory.csproj" />
     <ProjectReference Include="../../src/Modules/InfrastructureInventory/Contracts/Kordra.Modules.InfrastructureInventory.Contracts.csproj" />
   </ItemGroup>
+  <ItemGroup>
+    <None Include="../../src/Modules/IdentityAccess/Infrastructure/Migrations/iam-workflow-authority-v1.sql" Link="Fixtures/OwnerFunctions/iam-workflow-authority-v1.sql" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="../../src/Modules/IdentityAccess/Infrastructure/Migrations/iam-workflow-authority-v1.manifest.json" Link="Fixtures/OwnerFunctions/iam-workflow-authority-v1.manifest.json" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="../../src/Modules/WorkflowOrchestration/Infrastructure/Migrations/wfl-owner-functions-v1.sql" Link="Fixtures/OwnerFunctions/wfl-owner-functions-v1.sql" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="../../src/Modules/WorkflowOrchestration/Infrastructure/Migrations/wfl-owner-functions-v1.manifest.json" Link="Fixtures/OwnerFunctions/wfl-owner-functions-v1.manifest.json" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="../../src/Modules/AuditCompliance/Infrastructure/Migrations/aud-bound-append-v1.sql" Link="Fixtures/OwnerFunctions/aud-bound-append-v1.sql" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="../../src/Modules/AuditCompliance/Infrastructure/Migrations/aud-bound-append-v1.manifest.json" Link="Fixtures/OwnerFunctions/aud-bound-append-v1.manifest.json" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
   <ItemGroup><Compile Include="../Shared/DisposablePostgreSqlProfile.cs" Link="Fixtures/DisposablePostgreSqlProfile.cs" /></ItemGroup>
   <ItemGroup><Compile Include="../Shared/RegressionPostgreSqlSelection.cs" Link="Fixtures/RegressionPostgreSqlSelection.cs" /></ItemGroup>
   <ItemGroup><Compile Include="../Shared/NomadTlsFixture.cs" Link="Fixtures/NomadTlsFixture.cs" /></ItemGroup>
