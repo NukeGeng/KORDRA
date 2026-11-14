@@ -854,3 +854,7 @@ Evidence state: implemented. Approved disposable batches: regression-only `4e604
 ## 12.2f WF01 reauthorization (WFL part) — 2026-11-12
 
 FEAT-WFL-001 → Durable Workflow v1 §Reauthorization + accepted WF01 scope §9 → `WorkflowReauthorization.cs`, `WorkflowAuthorityBindingStore`, `WorkflowDbContext` revision 6 (`wfl-v6-authorization.sql`), `WorkflowStore` BlockedAuthority guard, `WorkflowReauthorizationTransaction` → `WorkflowReauthorizationTests`, `WorkflowReauthorizationModelTests`, `WorkflowReauthorizationDatabaseTests` (gated, not executed), `WorkflowReauthorizationAdmissionTests`. Evidence state: implemented; disposable PostgreSQL case passed and full AMR gate passed (2,457/0/27) on `0b3abd3`. CI and PR review pending.
+
+## 12.3a owner function/ACL PoC — 2026-11-14
+
+FEAT-IAM-001 / FEAT-WFL-001 / FEAT-AUD-001 → Worker Authority v1 §Database rights và owner ports + ADR-0022 gate 12.3a + accepted [12.3a scope](t12-3a-owner-function-poc-scope.vi.md) §8 → `iam-workflow-authority-v1.sql` + `WorkflowAuthorityFunctionPort`, `wfl-owner-functions-v1.sql` + `WorkflowTransitionFunctionPort`, `aud-bound-append-v1.sql` + `AuditBoundAppendFunctionPort` → `OwnerFunctionPocArtifactTests` (offline), `OwnerFunctionPocDatabaseTests` (DB01 subset, AU02 subset, fence-ordering subset, atomic root, AUD parity). Evidence state: PoC verified on `8428054` (approved disposable run, database and run roles cleaned up); inactive, not activation.

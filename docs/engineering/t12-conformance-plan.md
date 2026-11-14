@@ -211,3 +211,7 @@ The successor fixture seeds canonical creation/deadline/due values with a sevent
 ## WF01 split — owner decision D1/D2, 2026-11-12
 
 Per the [accepted WF01 scope](t12-wf01-reauthorization-scope.vi.md) (option B), the T12.2 exit for WF01 covers start plus the WFL part of reauthorization (slice 12.2f: BlockedAuthority-only eligibility, unchanged spec/deadline/counters, append-only generation, idempotency/If-Match, no generic BlockedAuthority → Running). IAM delegation issuance, old-generation invalidation with epoch, worker entry/resume and end-to-end AU05/WF01 reauthorization cases are T12.3 exit criteria. 12.2f has offline evidence and a passing approved disposable PostgreSQL case on `0b3abd3`.
+
+## T12.3a owner function/ACL PoC evidence — 2026-11-14
+
+Gate 12.3a (ADR-0022) passed: least-privilege worker/API logins reach IAM/WFL/AUD state only through owner functions in one atomic root on actual PostgreSQL (`OwnerFunctionPocDatabaseTests`, approved disposable run on `8428054`, database and five run roles cleaned up). Subsets only: DB01 (raw DML/DDL/AUD update-delete/SET ROLE/SESSION AUTHORIZATION/foreign function denied; hostile `search_path` and spoofed GUC ineffective), AU02 (permit mismatch/expired/consumed/foreign root), AU03 ordering primitive (held fence makes the writer wait ≤1 s; committed epoch change denies a stale permit). Full AU01–AU05, DB02 and HO cases remain 12.3b–f.

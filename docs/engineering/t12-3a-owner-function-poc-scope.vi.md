@@ -7,7 +7,7 @@ last_reviewed: 2026-11-14
 
 # T12.3a — PoC owner function/ACL và root transaction: đề xuất phạm vi
 
-> Accepted scoped design ngày 2026-11-14; xem Exact scoped acceptance ở cuối file. Chưa có implementation.
+> Accepted scoped design ngày 2026-11-14; xem Exact scoped acceptance ở cuối file. **Implemented / PoC verified (inactive)** — xem mục Implementation evidence.
 >
 > **Lịch sử:** Chủ dự án đã chốt D1–D6 ngày 2026-11-13 (mục 5a) và duyệt đúng nội dung mục 8 ngày 2026-11-14. Tài liệu không thay đổi [ADR-0022](../decisions/0022-controlworker-authority.md), [Worker Authority v1](../contracts/worker-authority-v1.md) hay [conformance plan](t12-conformance-plan.md). Không cấp quyền DB, role, operation hay activation. Chưa có implementation.
 
@@ -167,4 +167,10 @@ Feature IAM authorize-resource, AUD immutable-audit, WFL durable-workflow (sourc
 NukeGeng đã trả lời **"Duyệt thiết kế"** cho thiết kế chi tiết 12.3a (mục 8) được trình với SHA-256 trước annotation `d91b35cf0fb44410292c026fd159b3641539f6453197f9679e41bee1f520ac7a`. Bằng chứng riêng giữ tại `.amr-local/t12-integration/t12-3a-design-acceptance/`.
 
 Accepted chỉ cho đúng thiết kế slice 12.3a: function surface và slice assignment ở 8.2, pattern 8.3, bảng IAM tối thiểu, ngữ nghĩa root transaction, adapter inactive và bộ test bắt buộc. **Không cấp quyền DB, tạo/xoá role, operation, activation hay merge**; mỗi batch PostgreSQL (kể cả role hậu tố run-id theo D4) cần manifest và approval riêng. Không thay đổi ADR-0022, Worker Authority v1 hay conformance plan.
+
+## Implementation evidence — 2026-11-14
+
+- Source: `iam-workflow-authority-v1.sql`, `wfl-owner-functions-v1.sql`, `aud-bound-append-v1.sql` (+ manifests) và ba adapter inactive; test `OwnerFunctionPocArtifactTests`, `OwnerFunctionPocDatabaseTests`.
+- Batch DB lần 1 (`5dddd24`): fail trong helper test (rollback một root đã commit), không liên quan owner functions; dọn dẹp đã kiểm. Batch lần 2 (`8428054`): **pass**, database và năm role run-id đã xoá và kiểm độc lập. Kết luận mục 4: **không fail** → gate 12.3a đạt, tiếp tục 12.3b.
+- Khác chữ so với mục 8 (đã báo chủ dự án): bảng hiện có giữ owner migration, role owner chỉ nhận quyền bảng tối thiểu (AUD owner chỉ SELECT/INSERT); `app.aud_append_bound_intent` nhận thêm `operation_id`/`specification_hash` vì `require_consumed` cần; chuyển owner function cấp tạm CREATE schema rồi thu hồi trong cùng artifact.
 

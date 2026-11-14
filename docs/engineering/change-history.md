@@ -866,3 +866,6 @@ Implements the approved option B: reauthorization command/rules, schema revision
 
 Reauthorization coordinator now serializes on the owner instance lock before the receipt check and delegation reissue, and rolls back the whole root on a duplicate staging result (Codex P2 on `5af3839`). Offline regression added; the extended PostgreSQL race case passed on its owner-approved disposable run on `44a8102` (2026-11-13). No contract, schema or ADR change.
 
+## FEAT-IAM-001 / FEAT-WFL-001 / FEAT-AUD-001 — 12.3a owner function/ACL PoC — 2026-11-14
+
+Owner-approved design ([12.3a scope](t12-3a-owner-function-poc-scope.vi.md), D1–D6). Adds reviewed SECURITY DEFINER artifacts for IAM (fence, permit, floor), WFL (`stage_transition`, worker kind `admit`) and AUD (permit-bound append), exact grants for least-privilege worker/API logins, inactive caller-root adapters and tests. ADR-0022 gate 12.3a passed on actual PostgreSQL with run-scoped roles; no runtime registration, route, consumer, production migration or role. No ADR or contract change.
