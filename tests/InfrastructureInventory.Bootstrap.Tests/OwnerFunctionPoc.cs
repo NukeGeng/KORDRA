@@ -51,4 +51,16 @@ internal static partial class OwnerFunctionPoc
     }
 
     internal static string Sha256(string text) => Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(text)));
+
+    /// <summary>
+    /// Fixture-only permit seed (privileged setup login). Both timestamps derive from ONE clock sample, so the TTL is exactly
+    /// the stated interval and never exceeds the 2 s <c>ck_permits_ttl</c> check (PR33-POC-CLOCK-001).
+    /// </summary>
+    internal static string PermitSeedSql(bool expired) =>
+        "INSERT INTO iam_workflow.permits (permit_id, service_id, generation, installation_id, tenant_id, instance_id, operation_id, " +
+        "expected_version, specification_hash, transition_kind, authority_epoch, boot_id, custody_epoch, issued_at, expires_at) " +
+        "SELECT @id, @s, 1, @i, @t, @n, @o, 1, @h, 'admit', @e, @b, 0, " +
+        (expired ? "sample.at - interval '3 seconds', sample.at - interval '2 seconds'"
+                 : "sample.at, sample.at + interval '2 seconds'") +
+        " FROM (SELECT clock_timestamp() AS at) AS sample";
 }

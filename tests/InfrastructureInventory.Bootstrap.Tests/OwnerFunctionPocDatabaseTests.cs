@@ -351,11 +351,7 @@ public sealed class OwnerFunctionPocDatabaseTests
         async Task<Guid> SeedPermit(Seeded seeded, Guid service, Guid? operation = null, bool expired = false, long epoch = 1)
         {
             var id = Guid.NewGuid();
-            await using var command = new NpgsqlCommand("INSERT INTO iam_workflow.permits (permit_id, service_id, generation, installation_id, " +
-                "tenant_id, instance_id, operation_id, expected_version, specification_hash, transition_kind, authority_epoch, boot_id, " +
-                "custody_epoch, issued_at, expires_at) VALUES (@id, @s, 1, @i, @t, @n, @o, 1, @h, 'admit', @e, @b, 0, " +
-                (expired ? "clock_timestamp() - interval '3 seconds', clock_timestamp() - interval '2 seconds')"
-                         : "clock_timestamp(), clock_timestamp() + interval '2 seconds')"), setup);
+            await using var command = new NpgsqlCommand(OwnerFunctionPoc.PermitSeedSql(expired), setup);
             command.Parameters.AddWithValue("id", id); command.Parameters.AddWithValue("s", service);
             command.Parameters.AddWithValue("i", installation); command.Parameters.AddWithValue("t", tenant);
             command.Parameters.AddWithValue("n", seeded.Identity.InstanceId); command.Parameters.AddWithValue("o", operation ?? seeded.Operation);

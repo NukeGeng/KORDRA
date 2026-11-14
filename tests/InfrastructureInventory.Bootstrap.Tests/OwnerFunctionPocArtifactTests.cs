@@ -147,6 +147,24 @@ public sealed class OwnerFunctionPocArtifactTests
     }
 
     [Fact]
+    public void PermitSeedSamplesTheClockOnceAndStaysWithinTheTtlCheck()
+    {
+        // PR33-POC-CLOCK-001: two clock_timestamp() samples could make expires_at - issued_at exceed ck_permits_ttl.
+        var check = Regex.Match(OwnerFunctionPoc.Sql("iam-workflow-authority-v1"), @"expires_at - issued_at <= interval '(\d+) seconds'");
+        Assert.True(check.Success);
+        var limit = TimeSpan.FromSeconds(int.Parse(check.Groups[1].Value));
+        foreach (var expired in new[] { false, true })
+        {
+            var sql = OwnerFunctionPoc.PermitSeedSql(expired);
+            Assert.Single(Regex.Matches(sql, @"clock_timestamp\(\)"));
+            var offsets = Regex.Matches(sql, @"sample\.at(?: ([+-]) interval '(\d+) seconds')?")
+                .Select(m => m.Groups[1].Success ? (m.Groups[1].Value == "-" ? -1 : 1) * int.Parse(m.Groups[2].Value) : 0).ToArray();
+            Assert.Equal(2, offsets.Length);
+            Assert.InRange(TimeSpan.FromSeconds(offsets[1] - offsets[0]), TimeSpan.FromTicks(1), limit);
+        }
+    }
+
+    [Fact]
     public void AdaptersRequireTheCallerRootAndNeverOpenAConnection()
     {
         using var connection = new NpgsqlConnection("Host=127.0.0.1;Database=kordra_test;Username=kordra_test;Timeout=1");
