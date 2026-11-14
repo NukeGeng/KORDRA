@@ -30,7 +30,6 @@ public sealed class WorkflowTransitionFunctionPort
         ArgumentNullException.ThrowIfNull(identity);
         ArgumentNullException.ThrowIfNull(specificationHash);
         if (!Enum.IsDefined(nextState)) throw new ArgumentOutOfRangeException(nameof(nextState));
-        if (_root.Connection != _connection) throw new InvalidOperationException("The caller root is no longer active.");
         await using var command = new NpgsqlCommand("SELECT resulting_version, duplicate FROM wfl.stage_transition(" +
             "@permit, @installation, @tenant, @instance, @step, @operation, @hash, @version, @next)", _connection, _root);
         command.Parameters.Add(new("permit", NpgsqlDbType.Uuid) { Value = permitId });

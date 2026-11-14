@@ -68,8 +68,6 @@ public sealed class WorkflowAuthorityFunctionPort
 
     private NpgsqlCommand Command(string sql)
     {
-        if (_root.Connection != _connection)
-            throw new InvalidOperationException("The caller root is no longer active.");
         return new NpgsqlCommand(sql, _connection, _root);
     }
 }

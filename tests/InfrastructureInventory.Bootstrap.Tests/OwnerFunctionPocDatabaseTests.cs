@@ -373,9 +373,10 @@ public sealed class OwnerFunctionPocDatabaseTests
 
         async Task InRoot(NpgsqlConnection connection, Func<NpgsqlTransaction, Task> action)
         {
+            // Disposal rolls back an uncommitted root; a root the action committed is left as is (Npgsql keeps
+            // Transaction.Connection after commit, so it cannot signal completion).
             await using var root = await connection.BeginTransactionAsync(ct);
             await action(root);
-            if (root.Connection is not null) await root.RollbackAsync(ct);
         }
 
         async Task<string> DeniedInRoot(NpgsqlConnection connection, Func<NpgsqlTransaction, Task> action)

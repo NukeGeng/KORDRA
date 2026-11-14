@@ -30,7 +30,6 @@ public sealed class AuditBoundAppendFunctionPort
     {
         ArgumentNullException.ThrowIfNull(specificationHash);
         var canonical = Canonicalize(intent);
-        if (_root.Connection != _connection) throw new InvalidOperationException("The caller root is no longer active.");
         await using var command = new NpgsqlCommand("SELECT record_id, duplicate FROM app.aud_append_bound_intent(" +
             "@permit, @operation, @hash, @intent, @intent_hash)", _connection, _root);
         command.Parameters.Add(new("permit", NpgsqlDbType.Uuid) { Value = permitId });
