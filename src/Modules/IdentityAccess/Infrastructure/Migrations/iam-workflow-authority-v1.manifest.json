@@ -1,0 +1,26 @@
+{
+  "revision": 1,
+  "owner": "IAM",
+  "artifact": "iam-workflow-authority-v1.sql",
+  "requires": [
+    "app.iam_authority_clock_floors"
+  ],
+  "scope": "12.3a PoC: iam_workflow schema (fence, service logins, permits) and owner functions current_service/acquire_fence/advance_epoch/consume_permit/require_consumed/advance_floor; offline artifact only",
+  "functions": [
+    "iam_workflow.current_service()",
+    "iam_workflow.acquire_fence(uuid)",
+    "iam_workflow.advance_epoch(uuid, text)",
+    "iam_workflow.consume_permit(uuid, uuid, uuid, bigint, text, uuid, bigint)",
+    "iam_workflow.require_consumed(uuid, uuid, text)",
+    "iam_workflow.advance_floor(uuid, timestamp with time zone)"
+  ],
+  "sha256": "7d94e1126d4e88c41c7281f70519ab453a6fabe370748f15ca574b175fe2e688",
+  "roles": [
+    "kordra_iam_owner",
+    "kordra_wfl_owner",
+    "kordra_aud_owner",
+    "kordra_worker_runtime",
+    "kordra_api_runtime"
+  ],
+  "destructiveOperations": false
+}

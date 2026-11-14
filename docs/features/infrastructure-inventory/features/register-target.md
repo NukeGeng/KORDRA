@@ -381,3 +381,5 @@ Exact scoped ADR-0025 is owner-accepted. The owning factory adds separate dispos
 ADR-0025 integration: catalog composition accepts explicit disposable PRJ/INV and AUD target selection; no default target or current authorization rule changes. Offline adapter tests retain closed-root/expiry rejection; actual selected-target mutation qualification remains pending.
 
 ADR-0025 fixture wiring continuation: shared test-only composition captures the explicit profile and supplies actual owner factories/adapters. Initializer, HTTP and injected-fault paths are being retargeted without changing business assertions or default/runtime target rules. No database operations were performed; full native/isolated fixture wiring and selected-target integration evidence remain pending.
+
+T12.3a (2026-11-14): the shared `InfrastructureInventory.Bootstrap.Tests` project only links the three owner-function SQL artifacts/manifests as test fixtures for the cross-owner PoC case; no INV behavior or contract change.

@@ -1,0 +1,22 @@
+{
+  "revision": 1,
+  "owner": "WFL",
+  "artifact": "wfl-owner-functions-v1.sql",
+  "requires": [
+    "wfl-v6-authorization.sql",
+    "iam-workflow-authority-v1.sql"
+  ],
+  "scope": "12.3a PoC: wfl.state_edges (from WorkflowStateRules) and wfl.stage_transition for worker kind admit (Pending -> Running); offline artifact only",
+  "functions": [
+    "wfl.stage_transition(uuid, uuid, uuid, uuid, uuid, uuid, text, bigint, integer)"
+  ],
+  "sha256": "c892dab673fb5a3872c9ff4ec14f44c69159858a2efcaa2ff10d78b8df53eda0",
+  "roles": [
+    "kordra_iam_owner",
+    "kordra_wfl_owner",
+    "kordra_aud_owner",
+    "kordra_worker_runtime",
+    "kordra_api_runtime"
+  ],
+  "destructiveOperations": false
+}
