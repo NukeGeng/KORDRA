@@ -869,3 +869,5 @@ Reauthorization coordinator now serializes on the owner instance lock before the
 ## FEAT-IAM-001 / FEAT-WFL-001 / FEAT-AUD-001 — 12.3a owner function/ACL PoC — 2026-11-14
 
 Owner-approved design ([12.3a scope](t12-3a-owner-function-poc-scope.vi.md), D1–D6). Adds reviewed SECURITY DEFINER artifacts for IAM (fence, permit, floor), WFL (`stage_transition`, worker kind `admit`) and AUD (permit-bound append), exact grants for least-privilege worker/API logins, inactive caller-root adapters and tests. ADR-0022 gate 12.3a passed on actual PostgreSQL with run-scoped roles; no runtime registration, route, consumer, production migration or role. No ADR or contract change.
+
+Full AMR gate (approved disposable batch, head `576b841`, base `79f3228`): `local_status: passed` — docs, scope, unit, clients, restore, build, product-test (2,467 passed / 0 failed / 28 expected operation-gated skips) and mapping; database cleanup verified. A first gate packet on the same head failed only its expected-skip comparison (it omitted the two operation-gated DB cases, each passed in its own approved batch); all checks and tests had passed.
