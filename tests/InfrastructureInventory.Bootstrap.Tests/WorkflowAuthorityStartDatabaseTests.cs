@@ -201,7 +201,8 @@ public sealed class WorkflowAuthorityStartDatabaseTests
     {
         var scripts = WorkflowStartOwnerFixture.OwnerScripts();
         using var connection = new NpgsqlConnection(
-            $"Host=127.0.0.1;Port=5432;Database={IsolatedWorkflowFixture.ExpectedDatabase};Username=kordra_test;Password=SYNTHETIC");
+            // Offline only; disposable selection validates the exact unpooled locator shape without opening it.
+            $"Host=127.0.0.1;Port=5432;Database={IsolatedWorkflowFixture.ExpectedDatabase};Username=kordra_test;Password=SYNTHETIC;Pooling=false;Multiplexing=false");
         using var workflow = IsolatedWorkflowFixture.CreateOriginalBindingFixture(connection, CaseId);
         using var audit = IsolatedWorkflowFixture.AuditContext(connection, CaseId);
         using var host = WorkflowTransactionSchemaTests.BuildNativeProfile("Host=127.0.0.1;Port=1;Database=not_opened;Username=not_opened", Schema);
