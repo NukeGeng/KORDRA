@@ -17,7 +17,7 @@ namespace Kordra.Api;
 
 public sealed record WorkflowReadScope(Guid TenantId, Guid ProjectId, Guid EnvironmentId, Guid InstanceId);
 public sealed record WorkflowReadPolicy(Guid BindingId, long BindingRevision, Guid PolicyId, long PolicyRevision,
-    DateTimeOffset ValidUntilUtc, string AuthorityDigest = "");
+    DateTimeOffset ValidUntilUtc, string AuthorityDigest = "", DateTimeOffset? PolicyExpiresAtUtc = null);
 
 /// <summary>Returns current allow evidence for this exact owner scope and workflow.read, or null.</summary>
 public interface IWorkflowReadPolicyReader

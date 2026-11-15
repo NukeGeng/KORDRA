@@ -47,6 +47,10 @@ internal sealed class WorkflowStartOwnerFixture : IAsyncDisposable
     internal SessionSelection Session { get; private set; } = null!;
     internal WorkflowStartSelection Selection { get; private set; } = null!;
     internal WorkflowStartAdmissionReader Reader { get; private set; } = null!;
+    // 12.3b: concrete session-free owner readers for the authority start, reissuer and permit issuer cases.
+    internal IDurablePrincipalReader Principals { get; private set; } = null!;
+    internal IDbContextFactory<KordraIdentityDbContext> IdentityContexts { get; private set; } = null!;
+    internal IDbContextFactory<ReleaseDbContext> ReleaseContexts { get; private set; } = null!;
     private readonly NpgsqlConnection connection;
     private IWorkflowStartEligibilityReader eligibility = null!;
     private WorkflowActionPolicyReader policies = null!;
@@ -191,6 +195,7 @@ internal sealed class WorkflowStartOwnerFixture : IAsyncDisposable
             new Factory<ApprovalDbContext>(locator), subjects, effective, auth);
         policies = new WorkflowActionPolicyReader(owners, owners, owners, auth); clock = auth;
         Reader = new(CaseId, eligibility, policies, clock);
+        Principals = principals; IdentityContexts = iamFactory; ReleaseContexts = new Factory<ReleaseDbContext>(locator);
     }
 
     internal static ReleaseApprovalPolicy ApprovalPolicy(DateTimeOffset now) => ReleaseApprovalPolicy.Parse(

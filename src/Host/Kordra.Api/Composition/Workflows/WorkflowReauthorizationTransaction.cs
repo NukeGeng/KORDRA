@@ -18,7 +18,8 @@ namespace Kordra.Api;
 /// <summary>Exact facts IAM needs to reissue a workflow delegation (12.3b). Data only; the request confers no authority.</summary>
 public sealed record WorkflowDelegationReissueRequest(Guid InstallationId, Guid TenantId, Guid ProjectId, Guid EnvironmentId,
     Guid InstanceId, Guid ActorId, Guid ReleaseId, long ReleaseRevision, string ReleaseHash, string SpecificationHash,
-    DateTimeOffset NotAfterUtc, Guid CorrelationId);
+    DateTimeOffset NotAfterUtc, Guid CorrelationId, CurrentSubject? Subject = null, ScopedGrant? StartGrant = null,
+    ScopedGrant? ReadGrant = null, DateTimeOffset? PolicyExpiresAtUtc = null, DateTimeOffset? ApprovalValidUntilUtc = null);
 
 /// <summary>
 /// IAM-owned port, implemented in 12.3b. It must stage on the same caller root under the authority fence, verify the previous
@@ -152,7 +153,7 @@ public static class WorkflowReauthorizationTransaction
         var mutation = WorkflowReauthorizationAdmission.CreateMutationAudit(original!, specification, command, session, Guid.NewGuid());
         return await ExecuteCoreAsync(connection, root, caseId, command, projectId, environmentId, mutation, admission,
             async token => original!.IsCurrentSuccessor(await authority.ReadUnderAdmissionAsync(
-                session, selection, command.RequestId, invocation, token)), reissuer, profile, ct);
+                session, selection, command.RequestId, invocation, token)), reissuer, profile, ct, original);
     }
 
     public static Task<WorkflowReauthorizationTransactionResult> ExecuteIsolatedAsync(NpgsqlConnection connection,
@@ -173,7 +174,8 @@ public static class WorkflowReauthorizationTransaction
     private static async Task<WorkflowReauthorizationTransactionResult> ExecuteCoreAsync(NpgsqlConnection connection,
         NpgsqlTransaction root, Guid caseId, WorkflowReauthorizationCommand command, Guid projectId, Guid environmentId,
         AuditIntent mutation, FairAsyncReaderWriterAdmissionGate admission, Func<CancellationToken, Task<bool>> stillCurrent,
-        IWorkflowDelegationReissuer reissuer, DisposableTestBinding? profile, CancellationToken ct)
+        IWorkflowDelegationReissuer reissuer, DisposableTestBinding? profile, CancellationToken ct,
+        WorkflowStartAdmission? admitted = null)
     {
         if (profile is { } selected) _ = WorkflowFixtureTarget.ValidateDisposableTest(connection, caseId, selected);
         ArgumentNullException.ThrowIfNull(command);
@@ -218,9 +220,13 @@ public static class WorkflowReauthorizationTransaction
                 return await RetainOriginalAsync(recorded);
             var specification = await ScopedAsync(workflow, command, projectId, environmentId, ct)
                 ?? throw new InvalidOperationException("Workflow unavailable in trusted reauthorization scope.");
+            // 12.3b: the admitted path forwards the exact current owner facts the IAM reissuer captures as new evidence.
             var delegation = await reissuer.StageReissueAsync(connection, root, new(command.InstallationId, command.TenantId,
                 projectId, environmentId, command.InstanceId, command.ActorId, specification.ReleaseId, specification.ReleaseRevision,
-                specification.ReleaseHash, command.SpecificationHash, specification.DeadlineUtc, command.RequestId), ct);
+                specification.ReleaseHash, command.SpecificationHash, specification.DeadlineUtc, command.RequestId,
+                admitted?.Eligibility.WorkflowAuthority.Subject, admitted?.Eligibility.WorkflowAuthority.Grant,
+                admitted?.Eligibility.ReleaseAuthority.Grant, admitted?.Policy.Policy.PolicyExpiresAtUtc,
+                admitted?.Eligibility.ApprovalValidUntilUtc), ct);
             if (delegation is null || delegation.DelegationId == Guid.Empty ||
                 delegation.ValidUntilUtc <= mutation.OccurredAtUtc || delegation.ValidUntilUtc > specification.DeadlineUtc)
             {
@@ -231,6 +237,12 @@ public static class WorkflowReauthorizationTransaction
             // Defense in depth: a duplicate here means delegation effects were staged for an already recorded
             // request. Never commit them; roll the whole root back and return only the original receipt.
             if (receipt.Duplicate) return await RetainOriginalAsync(receipt);
+            // 12.3b: IAM and WFL generations advance together; a mismatch would strand the worker (KD109).
+            if (delegation.Generation is { } issuedGeneration && issuedGeneration != receipt.Generation)
+            {
+                await audit.RollbackAsync();
+                return new(WorkflowCommitDisposition.NoCommitAttempt, null);
+            }
 
             if ((await audit.StageAsync(mutation, ct)).Status != AuditTransactionStageStatus.Staged)
                 throw new InvalidOperationException("Reauthorization requires a fresh mutation audit.");

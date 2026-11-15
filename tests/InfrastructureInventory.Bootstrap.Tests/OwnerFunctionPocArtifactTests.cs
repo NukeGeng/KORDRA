@@ -176,8 +176,11 @@ public sealed class OwnerFunctionPocArtifactTests
     }
 
     [Fact]
-    public void PocAdaptersAreNotComposedIntoTheRuntimeHost()
+    public void OwnerFunctionAdaptersAreOnlyUsedByInactiveHostCompositionAndNeverRegistered()
     {
+        // 12.3b: the Host may compose the owner function ports only in these inactive workflow composition files.
+        var allowed = new[] { "WorkflowRootTransaction.cs", "IamWorkflowDelegationReissuer.cs", "WorkflowPermitIssuer.cs",
+            "WorkflowDelegationAuthority.cs" };
         var host = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "..", "src", "Host"));
         Assert.True(Directory.Exists(host));
         foreach (var file in Directory.EnumerateFiles(host, "*.cs", SearchOption.AllDirectories)
@@ -185,10 +188,18 @@ public sealed class OwnerFunctionPocArtifactTests
                                  !x.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}")))
         {
             var text = File.ReadAllText(file);
-            Assert.DoesNotContain(nameof(WorkflowAuthorityFunctionPort), text);
-            Assert.DoesNotContain(nameof(WorkflowTransitionFunctionPort), text);
-            Assert.DoesNotContain(nameof(AuditBoundAppendFunctionPort), text);
+            foreach (var type in new[] { nameof(WorkflowAuthorityFunctionPort), nameof(WorkflowTransitionFunctionPort),
+                         nameof(AuditBoundAppendFunctionPort), "WorkflowPermitIssuer", "IamWorkflowDelegationReissuer" })
+            {
+                if (allowed.Contains(Path.GetFileName(file))) continue;
+                Assert.DoesNotContain(type, text);
+            }
+            Assert.DoesNotMatch(new Regex(@"Add(Singleton|Scoped|Transient)<[^>]*(FunctionPort|PermitIssuer|DelegationReissuer)"), text);
         }
+        Assert.DoesNotContain(nameof(WorkflowTransitionFunctionPort), string.Concat(allowed.Select(name =>
+            Directory.EnumerateFiles(host, name, SearchOption.AllDirectories).Select(File.ReadAllText).FirstOrDefault() ?? "")));
+        Assert.DoesNotContain(nameof(AuditBoundAppendFunctionPort), string.Concat(allowed.Select(name =>
+            Directory.EnumerateFiles(host, name, SearchOption.AllDirectories).Select(File.ReadAllText).FirstOrDefault() ?? "")));
     }
 
     private static string Strip(string sql) => string.Join("\n", sql.Split('\n').Where(x => !x.TrimStart().StartsWith("--", StringComparison.Ordinal)));

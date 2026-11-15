@@ -55,7 +55,8 @@ public sealed class DisposableWorkflowMessagingTargetTests
         Assert.Throws<InvalidOperationException>(() => WorkflowFixtureTarget.ValidateDisposableTest(connection, Guid.Empty, profile));
         Assert.Throws<InvalidOperationException>(() => MessageReceiptInspector.CreateDisposableTestInspector(connection, Guid.Empty, profile));
         Assert.Throws<InvalidOperationException>(() => WorkflowDbContext.CreateDisposableTestFixture(connection, caseId, 0, profile));
-        Assert.Throws<InvalidOperationException>(() => WorkflowDbContext.CreateDisposableTestFixture(connection, caseId, 7, profile));
+        // 12.3b: revision 7 (original authority binding) is the highest known revision.
+        Assert.Throws<InvalidOperationException>(() => WorkflowDbContext.CreateDisposableTestFixture(connection, caseId, 8, profile));
         profile.ExpiresAtUtc = DateTimeOffset.UtcNow.AddMinutes(-1);
         Assert.Throws<InvalidOperationException>(() => WorkflowFixtureTarget.ValidateDisposableTest(connection, caseId, profile));
         Assert.Throws<InvalidOperationException>(() => MessageReceiptInspector.CreateDisposableTestInspector(connection, caseId, profile));
