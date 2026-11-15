@@ -1,0 +1,23 @@
+{
+  "revision": 2,
+  "owner": "WFL",
+  "artifact": "wfl-owner-functions-v2.sql",
+  "requires": [
+    "wfl-v7-original-binding.sql",
+    "iam-workflow-authority-v2.sql"
+  ],
+  "replaces": "wfl-owner-functions-v1.sql (12.3a PoC, never deployed)",
+  "scope": "12.3b: wfl.state_edges and wfl.stage_transition (worker kind admit) requiring the permit's delegation to match the current authority generation (KD109); offline artifact only",
+  "functions": [
+    "wfl.stage_transition(uuid, uuid, uuid, uuid, uuid, uuid, text, bigint, integer)"
+  ],
+  "sha256": "83f49e0deacbd35dc0deb3a60292f6b82c80e79ca75a094af371fa868e3ae053",
+  "roles": [
+    "kordra_iam_owner",
+    "kordra_wfl_owner",
+    "kordra_aud_owner",
+    "kordra_worker_runtime",
+    "kordra_api_runtime"
+  ],
+  "destructiveOperations": false
+}

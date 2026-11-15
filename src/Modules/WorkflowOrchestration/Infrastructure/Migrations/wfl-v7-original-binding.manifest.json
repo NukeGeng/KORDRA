@@ -1,0 +1,14 @@
+{
+  "revision": 7,
+  "fromRevision": 6,
+  "scope": "12.3b (D3): replace ck_authority_bindings_versions so the start root can record authority generation 1 (expected 0, resulting 1); offline artifact only; no data change",
+  "baselineSha256": "9f2b5c70b6b90855f048b8f515537e1126f8fc8d86798d990f9a82e8ffce67b5",
+  "sha256": "77e62456ed95e33b191a08f258c0307fe210bb52b9baba0efeb954916de792eb",
+  "tablesAltered": [
+    "authority_bindings"
+  ],
+  "constraintsReplaced": [
+    "ck_authority_bindings_versions"
+  ],
+  "destructiveOperations": false
+}

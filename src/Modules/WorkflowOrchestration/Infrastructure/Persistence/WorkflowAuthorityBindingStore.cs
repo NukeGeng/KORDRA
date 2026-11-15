@@ -25,6 +25,43 @@ public sealed class WorkflowAuthorityBindingStore(WorkflowDbContext context)
     }
 
     /// <summary>
+    /// 12.3b (D3): records generation 1 for the owner this start root just staged (expected 0 → resulting 1). The caller binds
+    /// the IAM delegation on the same root and keeps start duplicate/rollback semantics. Never commits.
+    /// </summary>
+    public async Task<WorkflowAuthorityBindingResult> StageOriginalAsync(WorkflowSpecification specification, Guid actorId,
+        string startCommandHash, WorkflowDelegationReference delegation, CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(specification);
+        ArgumentNullException.ThrowIfNull(delegation);
+        ct.ThrowIfCancellationRequested();
+        if (!context.IncludesOriginalBinding || context.Database.CurrentTransaction is null)
+            throw new InvalidOperationException("Original authority binding requires the revision 7 owner context on the caller root.");
+        if (actorId == Guid.Empty || delegation.DelegationId == Guid.Empty || startCommandHash is not { Length: 64 } ||
+            !startCommandHash.All(c => c is >= '0' and <= '9' or >= 'a' and <= 'f') ||
+            delegation.ValidUntilUtc <= specification.CreatedAtUtc || delegation.ValidUntilUtc > specification.DeadlineUtc)
+            throw new ArgumentException("Exact original actor, start command hash and bounded delegation required.");
+        var tracked = context.ChangeTracker.Entries<WorkflowInstanceRecord>().SingleOrDefault(x =>
+            x.Entity.InstallationId == specification.InstallationId && x.Entity.TenantId == specification.TenantId &&
+            x.Entity.InstanceId == specification.InstanceId)?.Entity;
+        if (tracked is null || tracked.Version != 1 || tracked.State != (int)WorkflowState.Pending ||
+            tracked.SpecificationHash != specification.SpecificationHash)
+            throw new InvalidOperationException("Original authority binding requires the freshly staged owner of this root.");
+        if (await context.Set<WorkflowAuthorityBindingRecord>().AsNoTracking().AnyAsync(x =>
+                x.InstallationId == specification.InstallationId && x.TenantId == specification.TenantId &&
+                x.InstanceId == specification.InstanceId, ct))
+            throw new InvalidOperationException("Original authority binding already exists.");
+        var binding = new WorkflowAuthorityBindingRecord {
+            InstallationId = specification.InstallationId, TenantId = specification.TenantId, InstanceId = specification.InstanceId,
+            BindingId = Guid.NewGuid(), DelegationId = delegation.DelegationId, ActorId = actorId, Generation = 1,
+            RecordedAtUtc = specification.CreatedAtUtc, RequestId = specification.RequestId, CommandHash = startCommandHash,
+            SpecificationHash = specification.SpecificationHash, ExpectedVersion = 0, ResultingVersion = 1
+        };
+        context.Add(binding);
+        await context.SaveChangesAsync(ct);
+        return new(binding.BindingId, 1, 1, false);
+    }
+
+    /// <summary>
     /// The original result for an already recorded request, or null. Lets the caller avoid reissuing delegation for a retry.
     /// A changed command for the same request identity conflicts.
     /// </summary>
