@@ -224,3 +224,5 @@ The local disposable full-regression manifest now includes the required case pur
 ### WFL schema revision 6 fixture selection — 2026-11-12
 
 `DisposableWorkflowMessagingTargetTests` now also covers WFL schema revision 6 (12.2f authority-binding receipts) for the explicit disposable fixture selection and rejects revision 7. No MSG behavior, contract or catalog change; the message receipt inspector selection is unchanged.
+
+T12.3b (2026-11-15): no MSG behavior change. `DisposableWorkflowMessagingTargetTests` now treats WFL revision 8 as the first unknown disposable revision (revision 7 exists); `IsolatedWorkflowFixture` adds authority-start/reauthorization helpers.

@@ -215,3 +215,7 @@ Per the [accepted WF01 scope](t12-wf01-reauthorization-scope.vi.md) (option B), 
 ## T12.3a owner function/ACL PoC evidence — 2026-11-14
 
 Gate 12.3a (ADR-0022) passed: least-privilege worker/API logins reach IAM/WFL/AUD state only through owner functions in one atomic root on actual PostgreSQL (`OwnerFunctionPocDatabaseTests`, approved disposable run on `8428054`, database and five run roles cleaned up). Subsets only: DB01 (raw DML/DDL/AUD update-delete/SET ROLE/SESSION AUTHORIZATION/foreign function denied; hostile `search_path` and spoofed GUC ineffective), AU02 (permit mismatch/expired/consumed/foreign root), AU03 ordering primitive (held fence makes the writer wait ≤1 s; committed epoch change denies a stale permit). Full AU01–AU05, DB02 and HO cases remain 12.3b–f.
+
+## T12.3b IAM authority evidence — 2026-11-15
+
+Prepared (pending owner-approved disposable batch): AU05/WF01 IAM part — admitted start records delegation + WFL generation 1 atomically; admitted reauthorization revokes it, advances the epoch and records generation 2 in both owners; a stale generation never admits (`KD109`). AU02 additions — per-attempt permits, expiry needs a new attempt, one consume per operation, service bindings/retirement, fence ordering for issuance; DB01 for every new function. Writer coverage (AU03/AU04) stays 12.3c.

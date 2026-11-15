@@ -7,7 +7,7 @@ last_reviewed: 2026-11-14
 
 # T12.3b — IAM service/delegation/permit/fence: phạm vi và thiết kế chi tiết
 
-> Accepted scoped design ngày 2026-11-14 (D1–D6 như đề xuất); xem Exact scoped acceptance ở cuối file. Chưa có implementation. Không thay đổi [ADR-0022](../decisions/0022-controlworker-authority.md), [Worker Authority v1](../contracts/worker-authority-v1.md), [Durable Workflow v1](../contracts/durable-workflow-v1.md) hay [conformance plan](t12-conformance-plan.md). Không cấp quyền DB, role, cert, listener, operation, activation hay merge. Chưa có implementation.
+> Accepted scoped design ngày 2026-11-14 (D1–D6 như đề xuất); xem Exact scoped acceptance ở cuối file. **Implemented (inactive)** — xem Implementation evidence. Không thay đổi [ADR-0022](../decisions/0022-controlworker-authority.md), [Worker Authority v1](../contracts/worker-authority-v1.md), [Durable Workflow v1](../contracts/durable-workflow-v1.md) hay [conformance plan](t12-conformance-plan.md). Không cấp quyền DB, role, cert, listener, operation, activation hay merge. Chưa có implementation.
 
 ## 1. Mục tiêu và lộ trình 12.3
 
@@ -111,4 +111,10 @@ Chủ dự án duyệt đúng nội dung (gồm D1–D6) → triển khai trên 
 NukeGeng đã chọn **"Duyệt thiết kế"** cho đúng nội dung tài liệu này (gồm D1–D6 như đề xuất), trình với SHA-256 trước annotation `74f790e7f6a523058fd43c73e21baeec5dabe9e0e0668626d368b51e33ada05b`. Bằng chứng riêng tại `.amr-local/t12-integration/t12-3b-design-acceptance/`.
 
 Accepted chỉ cho thiết kế slice 12.3b. Không cấp quyền DB, role, cert, listener, operation, activation hay merge; mỗi batch PostgreSQL cần manifest và approval riêng. Chủ dự án cho phép sẵn: push nhánh và mở PR cho từng slice 12.3 khi gate local đã qua.
+
+## Implementation evidence — 2026-11-15
+
+- Source: `iam-workflow-authority-v2.sql` (+ manifest), `WorkflowDelegationEvidence`, `WorkflowDelegationSessionReader`, `WorkflowAuthorityFunctionPort` v2; `wfl-v7-original-binding.sql`, `wfl-owner-functions-v2.sql`, `StageOriginalAsync`; Host `StageAdmittedAuthorityStartAsync`, `IamWorkflowDelegationReissuer`, `WorkflowPermitIssuer`, `WorkflowDelegationAuthority`.
+- Bổ sung nhỏ không đổi thiết kế: `iam_workflow.services.kind` (api/worker) để `current_service` phân biệt login API và worker; permit kiểm thêm `step_id` (`KD101`); `read_current_delegation` cho issuer/reissuer; các field tùy chọn additive (`ApprovalValidUntilUtc`, `PolicyExpiresAtUtc`, `Generation`, facts trong `WorkflowDelegationReissueRequest`) để tính D2 đúng hạn thật thay vì cửa sổ đánh giá 10 s.
+- Test offline: pass. PostgreSQL: `WorkflowAuthorityStartDatabaseTests`, `WorkflowAuthorityWorkerDatabaseTests` — chờ batch được duyệt.
 
