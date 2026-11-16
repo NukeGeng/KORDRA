@@ -318,10 +318,15 @@ public sealed class WorkflowDbContext : DbContext
                 // Revision 7 only (D3): the start root records the original binding of its own freshly staged owner.
                 if (!IncludesOriginalBinding)
                     throw new InvalidOperationException("Original authority binding requires schema revision 7.");
-                var owner = ChangeTracker.Entries<WorkflowInstanceRecord>().SingleOrDefault(x =>
+                var ownerEntry = ChangeTracker.Entries<WorkflowInstanceRecord>().SingleOrDefault(x =>
                     x.Entity.InstallationId == originalBinding.InstallationId && x.Entity.TenantId == originalBinding.TenantId &&
-                    x.Entity.InstanceId == originalBinding.InstanceId)?.Entity
+                    x.Entity.InstanceId == originalBinding.InstanceId)
                     ?? throw new InvalidOperationException("Original authority binding requires its tracked owner.");
+                // PR34 review: only the owner created in this same save (a fresh start) may receive generation 1;
+                // a loaded, already persisted workflow never gains authority outside its atomic start.
+                if (ownerEntry.State != EntityState.Added)
+                    throw new InvalidOperationException("Original authority binding requires the owner created in the same save.");
+                var owner = ownerEntry.Entity;
                 var canonical = WorkflowSpecification.ReadCanonical(owner.Specification);
                 if (originalBinding.BindingId == Guid.Empty || originalBinding.DelegationId == Guid.Empty || originalBinding.ActorId == Guid.Empty ||
                     originalBinding.ExpectedVersion != 0 || originalBinding.ResultingVersion != 1 || owner.Version != 1 ||

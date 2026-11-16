@@ -9,13 +9,22 @@ namespace Kordra.Modules.WorkflowOrchestration.Infrastructure.Persistence;
 
 public sealed record WorkflowStoredResult(Guid InstanceId, long Version, bool Duplicate);
 
+/// <summary>
+/// 12.3b (D3): the original authority of a fresh start (actor, start command hash, IAM delegation). Recorded as authority
+/// generation 1 in the SAME save as the new owner, so it can never be attached to an already persisted workflow (PR34 review).
+/// </summary>
+public sealed record WorkflowOriginalAuthority(Guid ActorId, string StartCommandHash,
+    Kordra.Modules.WorkflowOrchestration.Contracts.WorkflowDelegationReference Delegation);
+
 /// <summary>Owner persistence only. Caller supplies trusted scope and current admission; never commits the root.</summary>
 public sealed class WorkflowStore(WorkflowDbContext context)
 {
     public async Task<WorkflowStoredResult> StageCreationAsync(WorkflowSpecification specification, DateTimeOffset effectiveUtc,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default, WorkflowOriginalAuthority? original = null)
     {
         ArgumentNullException.ThrowIfNull(specification);
+        if (original is not null && !context.IncludesOriginalBinding)
+            throw new InvalidOperationException("Original authority binding requires the revision 7 owner context.");
         RequireRoot();
         var receipt = await context.Set<WorkflowRequestReceiptRecord>().SingleOrDefaultAsync(x =>
             x.InstallationId == specification.InstallationId && x.TenantId == specification.TenantId &&
@@ -46,6 +55,22 @@ public sealed class WorkflowStore(WorkflowDbContext context)
             ResultJson = JsonSerializer.Serialize(new { instanceId = specification.InstanceId, version = 1 }),
             RecordedAtUtc = specification.CreatedAtUtc
         });
+        if (original is not null)
+        {
+            if (original.ActorId == Guid.Empty || original.Delegation is null || original.Delegation.DelegationId == Guid.Empty ||
+                original.StartCommandHash is not { Length: 64 } ||
+                !original.StartCommandHash.All(c => c is >= '0' and <= '9' or >= 'a' and <= 'f') ||
+                original.Delegation.ValidUntilUtc <= specification.CreatedAtUtc ||
+                original.Delegation.ValidUntilUtc > specification.DeadlineUtc ||
+                original.Delegation.Generation is { } generation && generation != 1)
+                throw new ArgumentException("Exact original actor, start command hash and bounded generation-1 delegation required.");
+            context.Add(new WorkflowAuthorityBindingRecord {
+                InstallationId = specification.InstallationId, TenantId = specification.TenantId, InstanceId = specification.InstanceId,
+                BindingId = Guid.NewGuid(), DelegationId = original.Delegation.DelegationId, ActorId = original.ActorId, Generation = 1,
+                RecordedAtUtc = specification.CreatedAtUtc, RequestId = specification.RequestId, CommandHash = original.StartCommandHash,
+                SpecificationHash = specification.SpecificationHash, ExpectedVersion = 0, ResultingVersion = 1
+            });
+        }
         // Concurrent uniqueness conflicts require root rollback and independent receipt reconciliation, never a hidden retry.
         await context.SaveChangesAsync(cancellationToken);
         return new(specification.InstanceId, 1, false);

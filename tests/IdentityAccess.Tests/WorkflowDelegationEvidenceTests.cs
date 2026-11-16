@@ -27,7 +27,9 @@ public sealed class WorkflowDelegationEvidenceTests
             (start with { Permission = "release.approve" }, read), (start, read with { Permission = "release.approval.read" }),
             (start with { ScopeId = Guid.NewGuid() }, read), (start, read with { ScopeId = Guid.NewGuid() }),
             (start with { MembershipId = Guid.NewGuid() }, read), (start with { PrincipalId = Guid.NewGuid() }, read),
-            (start with { TenantId = Guid.NewGuid() }, read), (start with { ExpiresAtUtc = DateTimeOffset.Now.AddHours(1) }, read) })
+            (start with { TenantId = Guid.NewGuid() }, read),
+            // Explicit non-UTC offset: the result must not depend on the machine's time zone (CI runs in UTC).
+            (start with { ExpiresAtUtc = new DateTimeOffset(2026, 11, 16, 9, 0, 0, TimeSpan.FromHours(7)) }, read) })
             Assert.Throws<ArgumentException>(() => WorkflowDelegationEvidence.Capture(ActivePrincipal(), s, r, Tenant, Project, Environment));
         Assert.Throws<ArgumentException>(() => WorkflowDelegationEvidence.Capture(ActivePrincipal() with { Active = false }, start, read,
             Tenant, Project, Environment));

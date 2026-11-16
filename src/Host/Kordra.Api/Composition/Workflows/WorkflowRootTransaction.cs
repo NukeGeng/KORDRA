@@ -280,10 +280,17 @@ public sealed class WorkflowRootTransaction : IAsyncDisposable
     }
 
     /// <summary>Retains typed current admission and validates lazy owner allocation plus exact audit revisions.</summary>
-    public async Task<WorkflowStoredResult> StageAdmittedStartAsync(WorkflowStartAdmission admitted,
+    public Task<WorkflowStoredResult> StageAdmittedStartAsync(WorkflowStartAdmission admitted,
         WorkflowStartAdmissionReader authority, SessionSelection session, DateTimeOffset originalDeadlineUtc,
         string idempotencyKey, Func<WorkflowSpecification> createSpecification, DateTimeOffset effectiveUtc,
-        CancellationToken ct = default)
+        CancellationToken ct = default) =>
+        StageAdmittedStartCoreAsync(admitted, authority, session, originalDeadlineUtc, idempotencyKey, createSpecification,
+            effectiveUtc, ct, null);
+
+    private async Task<WorkflowStoredResult> StageAdmittedStartCoreAsync(WorkflowStartAdmission admitted,
+        WorkflowStartAdmissionReader authority, SessionSelection session, DateTimeOffset originalDeadlineUtc,
+        string idempotencyKey, Func<WorkflowSpecification> createSpecification, DateTimeOffset effectiveUtc,
+        CancellationToken ct, Func<WorkflowSpecification, CancellationToken, Task<WorkflowOriginalAuthority>>? authorize)
     {
         using var operation = EnterOperation();
         RequireOpen();
@@ -302,7 +309,7 @@ public sealed class WorkflowRootTransaction : IAsyncDisposable
                     throw new InvalidOperationException("Allocated start specification differs from the admitted owners.");
                 return specification;
             }, async token => admitted.IsCurrentSuccessor(await authority.ReadUnderAdmissionAsync(session,
-                admitted.Selection, admitted.RequestId, admitted.InvocationId, token)), effectiveUtc, ct, admitted);
+                admitted.Selection, admitted.RequestId, admitted.InvocationId, token)), effectiveUtc, ct, admitted, authorize);
             if (!result.Duplicate) _startAdmission = admitted;
             return result;
         }
@@ -322,38 +329,39 @@ public sealed class WorkflowRootTransaction : IAsyncDisposable
         ArgumentNullException.ThrowIfNull(principals);
         if (!_workflow.IncludesOriginalBinding)
             throw new InvalidOperationException("Authority start requires the revision 7 authority-start composition.");
-        var started = await StageAdmittedStartAsync(admitted, authority, session, originalDeadlineUtc, idempotencyKey,
-            createSpecification, effectiveUtc, ct);
+        Kordra.Modules.IdentityAccess.Infrastructure.WorkflowDelegationCreated? created = null;
+        Kordra.Modules.IdentityAccess.Infrastructure.WorkflowDelegationDraft? draft = null;
+        // PR34 review: the IAM delegation is created after the specification is allocated and BEFORE the creation save, so
+        // WFL generation 1 is saved together with the new owner and can never attach to an already persisted workflow.
+        var started = await StageAdmittedStartCoreAsync(admitted, authority, session, originalDeadlineUtc, idempotencyKey,
+            createSpecification, effectiveUtc, ct, async (specification, token) =>
+            {
+                if (_startDelegation is not null || created is not null)
+                    throw new InvalidOperationException("Authority start creates exactly one delegation.");
+                var actor = admitted.Eligibility.WorkflowAuthority.Subject.PrincipalId;
+                var principal = await principals.ReadUnderAdmissionAsync(actor, token)
+                    ?? throw new InvalidOperationException("Delegation principal unavailable.");
+                draft = WorkflowDelegationAuthority.StartDraft(admitted, specification, principal, effectiveUtc);
+                var connection = (NpgsqlConnection)_workflow.Database.GetDbConnection();
+                var root = (NpgsqlTransaction)_workflow.Database.CurrentTransaction!.GetDbTransaction();
+                created = await new Kordra.Modules.IdentityAccess.Infrastructure.WorkflowAuthorityFunctionPort(connection, root)
+                    .CreateDelegationAsync(draft, token);
+                if (created.Duplicate || created.Generation != 1 || created.DelegationId != draft.DelegationId)
+                    throw new InvalidOperationException("A fresh start must create a fresh delegation.");
+                return new WorkflowOriginalAuthority(actor, admitted.BindCommand(originalDeadlineUtc, idempotencyKey).BusinessHash,
+                    new WorkflowDelegationReference(created.DelegationId, draft.ValidUntilUtc, created.Generation));
+            });
         if (started.Duplicate) return new(started, null);
-        using var operation = EnterOperation();
-        RequireOpen();
-        try
-        {
-            if (_startSpecification is not { } specification || _startCommand is not { } command || _startDelegation is not null)
-                throw new InvalidOperationException("Authority start requires its own freshly staged start.");
-            var actor = admitted.Eligibility.WorkflowAuthority.Subject.PrincipalId;
-            var principal = await principals.ReadUnderAdmissionAsync(actor, ct)
-                ?? throw new InvalidOperationException("Delegation principal unavailable.");
-            var draft = WorkflowDelegationAuthority.StartDraft(admitted, specification, principal, effectiveUtc);
-            var connection = (NpgsqlConnection)_workflow.Database.GetDbConnection();
-            var root = (NpgsqlTransaction)_workflow.Database.CurrentTransaction!.GetDbTransaction();
-            var created = await new Kordra.Modules.IdentityAccess.Infrastructure.WorkflowAuthorityFunctionPort(connection, root)
-                .CreateDelegationAsync(draft, ct);
-            if (created.Duplicate || created.Generation != 1 || created.DelegationId != draft.DelegationId)
-                throw new InvalidOperationException("A fresh start must create a fresh delegation.");
-            await new WorkflowAuthorityBindingStore(_workflow).StageOriginalAsync(specification, actor, command.BusinessHash,
-                new WorkflowDelegationReference(created.DelegationId, draft.ValidUntilUtc), ct);
-            if (_admission.IsClosed || !await _startAuthority!(ct) || _admission.IsClosed)
-                throw new InvalidOperationException("Workflow start authority changed.");
-            _startDelegation = created;
-            return new(started, new WorkflowDelegationReference(created.DelegationId, draft.ValidUntilUtc, created.Generation));
-        }
-        catch { await RollbackCoreAsync(); throw; }
+        if (created is null || draft is null)
+            throw new InvalidOperationException("A fresh authority start must have created its delegation.");
+        _startDelegation = created;
+        return new(started, new WorkflowDelegationReference(created.DelegationId, draft.ValidUntilUtc, created.Generation));
     }
 
     private async Task<WorkflowStoredResult> StageStartCoreAsync(WorkflowStartCommand command,
         Func<WorkflowSpecification> createSpecification, Func<CancellationToken, Task<bool>> stillCurrent,
-        DateTimeOffset effectiveUtc, CancellationToken ct, WorkflowStartAdmission? admitted = null)
+        DateTimeOffset effectiveUtc, CancellationToken ct, WorkflowStartAdmission? admitted = null,
+        Func<WorkflowSpecification, CancellationToken, Task<WorkflowOriginalAuthority>>? authorize = null)
     {
         try
         {
@@ -364,9 +372,13 @@ public sealed class WorkflowRootTransaction : IAsyncDisposable
                 _auditStaged || _floorStaged || _publicationStaged || _admission.IsClosed || !await stillCurrent(ct) || _admission.IsClosed)
                 throw new InvalidOperationException("Start requires fresh current admission on a producer root.");
             WorkflowSpecification? generated = null;
-            var result = await new WorkflowStartStore(_workflow).StageAsync(command,
-                () => generated = createSpecification(), effectiveUtc,
-                original => admitted is null || admitted.MatchesOwnerBinding(original, command), ct);
+            var result = authorize is null
+                ? await new WorkflowStartStore(_workflow).StageAsync(command,
+                    () => generated = createSpecification(), effectiveUtc,
+                    original => admitted is null || admitted.MatchesOwnerBinding(original, command), ct)
+                : await new WorkflowStartStore(_workflow).StageAsync(command,
+                    () => generated = createSpecification(), effectiveUtc,
+                    original => admitted is null || admitted.MatchesOwnerBinding(original, command), authorize, ct);
             if (!await stillCurrent(ct) || _admission.IsClosed)
                 throw new InvalidOperationException("Workflow start authority changed.");
             if (result.Duplicate)

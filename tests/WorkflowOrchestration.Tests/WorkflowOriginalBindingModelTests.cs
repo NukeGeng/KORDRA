@@ -69,22 +69,53 @@ public sealed class WorkflowOriginalBindingModelTests
         Assert.Equal(["ck_authority_bindings_versions"], manifest.RootElement.GetProperty("constraintsReplaced").EnumerateArray().Select(x => x.GetString()));
     }
 
+    private static WorkflowSpecification Specification(DateTimeOffset now) => new(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(),
+        Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), 1, new string('a', 64),
+        WorkflowEnvironment.Test, now, now.AddHours(1), now.AddMinutes(3));
+
     [Fact]
-    public async Task OriginalBindingNeedsRevisionSevenCallerRootAndFreshOwnerAndNeverOpensTheDatabaseOtherwise()
+    public async Task OriginalAuthorityOnlyRidesTheRevisionSevenCreationSaveAndNeverOpensTheDatabaseOtherwise()
     {
         var now = DateTimeOffset.UtcNow;
-        var specification = new WorkflowSpecification(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(),
-            Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), 1, new string('a', 64), WorkflowEnvironment.Test,
-            now, now.AddHours(1), now.AddMinutes(3));
-        var delegation = new WorkflowDelegationReference(Guid.NewGuid(), now.AddMinutes(30));
-        foreach (var context in new[] { WorkflowDbContext.CreateOfflineAuthorizationModel(), WorkflowDbContext.CreateOfflineOriginalBindingModel() })
-        await using (context)
+        var specification = Specification(now);
+        var original = new WorkflowOriginalAuthority(Guid.NewGuid(), new string('b', 64),
+            new WorkflowDelegationReference(Guid.NewGuid(), now.AddMinutes(30), 1));
+        await using (var previous = WorkflowDbContext.CreateOfflineAuthorizationModel())
         {
-            var error = await Assert.ThrowsAsync<InvalidOperationException>(() => new WorkflowAuthorityBindingStore(context)
-                .StageOriginalAsync(specification, Guid.NewGuid(), new string('b', 64), delegation));
-            Assert.Contains("caller root", error.Message);
-            Assert.Equal(ConnectionState.Closed, context.Database.GetDbConnection().State);
+            var error = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+                new WorkflowStore(previous).StageCreationAsync(specification, now, default, original));
+            Assert.Contains("revision 7", error.Message);
+            await Assert.ThrowsAsync<InvalidOperationException>(() => new WorkflowStartStore(previous).StageAsync(
+                new WorkflowStartCommand(specification.InstallationId, specification.TenantId, Guid.NewGuid(), specification.ProjectId,
+                    specification.EnvironmentId, specification.RequestId, specification.ReleaseId, 1, specification.ReleaseHash,
+                    WorkflowSpecification.TemplateId, WorkflowSpecification.TemplateVersion, specification.DeadlineUtc, "offline-key"),
+                () => specification, now, _ => true, (_, _) => Task.FromResult(original)));
+            Assert.Equal(ConnectionState.Closed, previous.Database.GetDbConnection().State);
         }
+        await using var current = WorkflowDbContext.CreateOfflineOriginalBindingModel();
+        // Revision 7 still needs the caller root before any owner read.
+        await Assert.ThrowsAnyAsync<InvalidOperationException>(() => new WorkflowStore(current).StageCreationAsync(specification, now, default, original));
+        Assert.Equal(ConnectionState.Closed, current.Database.GetDbConnection().State);
+    }
+
+    [Fact]
+    public void GenerationOneNeverAttachesToAnAlreadyPersistedOwner()
+    {
+        // PR34 review: a loaded Pending/version-1 workflow with no binding must not gain generation 1 outside its start.
+        var now = DateTimeOffset.UtcNow;
+        var specification = Specification(now);
+        using var context = WorkflowDbContext.CreateOfflineOriginalBindingModel();
+        context.Attach(new WorkflowInstanceRecord {
+            InstallationId = specification.InstallationId, TenantId = specification.TenantId, InstanceId = specification.InstanceId,
+            RequestId = specification.RequestId, SpecificationHash = specification.SpecificationHash, Specification = specification.WriteCanonical(),
+            State = (int)WorkflowState.Pending, Version = 1, CreatedAtUtc = specification.CreatedAtUtc, DeadlineUtc = specification.DeadlineUtc });
+        context.Add(new WorkflowAuthorityBindingRecord {
+            InstallationId = specification.InstallationId, TenantId = specification.TenantId, InstanceId = specification.InstanceId,
+            BindingId = Guid.NewGuid(), DelegationId = Guid.NewGuid(), ActorId = Guid.NewGuid(), Generation = 1,
+            RecordedAtUtc = specification.CreatedAtUtc, RequestId = specification.RequestId, CommandHash = new string('c', 64),
+            SpecificationHash = specification.SpecificationHash, ExpectedVersion = 0, ResultingVersion = 1 });
+        Assert.Contains("created in the same save", Assert.Throws<InvalidOperationException>(() => context.SaveChanges()).Message);
+        Assert.Equal(ConnectionState.Closed, context.Database.GetDbConnection().State);
     }
 
     [Fact]

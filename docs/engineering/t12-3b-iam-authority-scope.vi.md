@@ -77,12 +77,12 @@ Function (signature cuối cùng ghi trong manifest; grant như bảng):
 ### 5.2 WFL revision 7 và owner function v2
 
 - `wfl-v7-original-binding.sql`: thay `ck_authority_bindings_versions` theo D3 (manifest ghi rõ `constraintReplaced`, không xóa dữ liệu); `WorkflowDbContext` revision 7.
-- `WorkflowAuthorityBindingStore.StageOriginalAsync` (start root, generation 1, `expected_version = 0`, `resulting_version = 1`, request/command hash của start).
+- `WorkflowStore.StageCreationAsync` + `WorkflowOriginalAuthority` (start root, generation 1, `expected_version = 0`, `resulting_version = 1`, request/command hash của start).
 - `wfl-owner-functions-v2.sql` (baseline thay thế, như D1): `stage_transition` kiểm `delegation_id` của permit trùng delegation của binding generation **hiện hành**; generation cũ bị từ chối (`KD109`).
 
 ### 5.3 Host (inactive, không route/consumer)
 
-- Start root: sau khi stage WFL, gọi `create_delegation` và `StageOriginalAsync` trên **cùng** root; `valid_until` theo D2 từ fact đã admit; delegation và binding nằm trong cùng duplicate/rollback như start hiện có.
+- Start root: sau khi stage WFL, gọi `create_delegation` và `StageCreationAsync` + `WorkflowOriginalAuthority` trên **cùng** root; `valid_until` theo D2 từ fact đã admit; delegation và binding nằm trong cùng duplicate/rollback như start hiện có.
 - `IamWorkflowDelegationReissuer` (production `IWorkflowDelegationReissuer`): gọi `reauthorize_delegation` trên root reauth hiện có (D4).
 - `WorkflowPermitIssuer` (owner port, inactive): nhận service identity đã xác thực (12.3d sẽ cung cấp), instance/step/operation/expected version/hash/kind; đọc delegation hiện hành; đánh giá lại principal (`IDurablePrincipalReader`: active, revision, boot), session không bị thu hồi, grant/policy/approval/release qua reader bền; rồi `issue_permit`. Không giữ transaction qua I/O mạng.
 
@@ -114,8 +114,11 @@ Accepted chỉ cho thiết kế slice 12.3b. Không cấp quyền DB, role, cert
 
 ## Implementation evidence — 2026-11-15
 
-- Source: `iam-workflow-authority-v2.sql` (+ manifest), `WorkflowDelegationEvidence`, `WorkflowDelegationSessionReader`, `WorkflowAuthorityFunctionPort` v2; `wfl-v7-original-binding.sql`, `wfl-owner-functions-v2.sql`, `StageOriginalAsync`; Host `StageAdmittedAuthorityStartAsync`, `IamWorkflowDelegationReissuer`, `WorkflowPermitIssuer`, `WorkflowDelegationAuthority`.
+- Source: `iam-workflow-authority-v2.sql` (+ manifest), `WorkflowDelegationEvidence`, `WorkflowDelegationSessionReader`, `WorkflowAuthorityFunctionPort` v2; `wfl-v7-original-binding.sql`, `wfl-owner-functions-v2.sql`, `StageCreationAsync` + `WorkflowOriginalAuthority`; Host `StageAdmittedAuthorityStartAsync`, `IamWorkflowDelegationReissuer`, `WorkflowPermitIssuer`, `WorkflowDelegationAuthority`.
 - Bổ sung nhỏ không đổi thiết kế: `iam_workflow.services.kind` (api/worker) để `current_service` phân biệt login API và worker; permit kiểm thêm `step_id` (`KD101`); `read_current_delegation` cho issuer/reissuer; các field tùy chọn additive (`ApprovalValidUntilUtc`, `PolicyExpiresAtUtc`, `Generation`, facts trong `WorkflowDelegationReissueRequest`) để tính D2 đúng hạn thật thay vì cửa sổ đánh giá 10 s.
 - Test offline: pass. PostgreSQL: `WorkflowAuthorityStartDatabaseTests` và `WorkflowAuthorityWorkerDatabaseTests` **pass** ngay lần chạy đầu trên batch được duyệt (`7e113d0`; database và năm role run-id đã xoá và kiểm độc lập).
 - Gate AMR đầy đủ trên `f16f35f` (base `f7dd783`): `local_status: passed`, 2.483 pass / 0 fail / 30 skip có gate như dự kiến. Gate trước đó trên `7e113d0` chỉ fail `WorkflowModelFixtureSelectionTests` (chỉ chạy dưới profile runner; revision 7 nay hợp lệ), đã sửa ở `f16f35f`.
 
+## PR #34 review vòng 1 — 2026-11-16
+
+Codex P2 (PR34-WFL-ORIGINAL-001): binding thế hệ 1 có thể gắn vào một workflow Pending/version 1 đã lưu từ trước, ngoài lần start nguyên tử. Sửa: start root tạo delegation IAM sau khi cấp phát specification và **trước** lần lưu tạo instance; WFL ghi thế hệ 1 cùng lần lưu với instance mới (`WorkflowStore.StageCreationAsync` + `WorkflowOriginalAuthority`); guard lúc lưu bắt instance phải ở trạng thái `Added` trong cùng lần lưu; bỏ `StageOriginalAsync` riêng. Vẫn đúng D3. CI hosted còn lộ một assert phụ thuộc múi giờ trong `WorkflowDelegationEvidenceTests`; đã dùng offset cố định khác UTC. Case PostgreSQL start/reauth và gate cần chạy lại trên bản sửa.
