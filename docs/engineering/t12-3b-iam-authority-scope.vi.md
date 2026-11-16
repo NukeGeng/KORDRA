@@ -116,5 +116,6 @@ Accepted chỉ cho thiết kế slice 12.3b. Không cấp quyền DB, role, cert
 
 - Source: `iam-workflow-authority-v2.sql` (+ manifest), `WorkflowDelegationEvidence`, `WorkflowDelegationSessionReader`, `WorkflowAuthorityFunctionPort` v2; `wfl-v7-original-binding.sql`, `wfl-owner-functions-v2.sql`, `StageOriginalAsync`; Host `StageAdmittedAuthorityStartAsync`, `IamWorkflowDelegationReissuer`, `WorkflowPermitIssuer`, `WorkflowDelegationAuthority`.
 - Bổ sung nhỏ không đổi thiết kế: `iam_workflow.services.kind` (api/worker) để `current_service` phân biệt login API và worker; permit kiểm thêm `step_id` (`KD101`); `read_current_delegation` cho issuer/reissuer; các field tùy chọn additive (`ApprovalValidUntilUtc`, `PolicyExpiresAtUtc`, `Generation`, facts trong `WorkflowDelegationReissueRequest`) để tính D2 đúng hạn thật thay vì cửa sổ đánh giá 10 s.
-- Test offline: pass. PostgreSQL: `WorkflowAuthorityStartDatabaseTests`, `WorkflowAuthorityWorkerDatabaseTests` — chờ batch được duyệt.
+- Test offline: pass. PostgreSQL: `WorkflowAuthorityStartDatabaseTests` và `WorkflowAuthorityWorkerDatabaseTests` **pass** ngay lần chạy đầu trên batch được duyệt (`7e113d0`; database và năm role run-id đã xoá và kiểm độc lập).
+- Gate AMR đầy đủ trên `f16f35f` (base `f7dd783`): `local_status: passed`, 2.483 pass / 0 fail / 30 skip có gate như dự kiến. Gate trước đó trên `7e113d0` chỉ fail `WorkflowModelFixtureSelectionTests` (chỉ chạy dưới profile runner; revision 7 nay hợp lệ), đã sửa ở `f16f35f`.
 

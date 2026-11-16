@@ -218,4 +218,4 @@ Gate 12.3a (ADR-0022) passed: least-privilege worker/API logins reach IAM/WFL/AU
 
 ## T12.3b IAM authority evidence — 2026-11-15
 
-Prepared (pending owner-approved disposable batch): AU05/WF01 IAM part — admitted start records delegation + WFL generation 1 atomically; admitted reauthorization revokes it, advances the epoch and records generation 2 in both owners; a stale generation never admits (`KD109`). AU02 additions — per-attempt permits, expiry needs a new attempt, one consume per operation, service bindings/retirement, fence ordering for issuance; DB01 for every new function. Writer coverage (AU03/AU04) stays 12.3c.
+Passed on the owner-approved disposable batch (`7e113d0`, cleanup verified): AU05/WF01 IAM part — admitted start records delegation + WFL generation 1 atomically; admitted reauthorization revokes it, advances the epoch and records generation 2 in both owners; a stale generation never admits (`KD109`). AU02 additions — per-attempt permits, expiry needs a new attempt, one consume per operation, service bindings/retirement, fence ordering for issuance; DB01 for every new function. Writer coverage (AU03/AU04) stays 12.3c.
