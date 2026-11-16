@@ -77,12 +77,18 @@ Function (signature cuối cùng ghi trong manifest; grant như bảng):
 ### 5.2 WFL revision 7 và owner function v2
 
 - `wfl-v7-original-binding.sql`: thay `ck_authority_bindings_versions` theo D3 (manifest ghi rõ `constraintReplaced`, không xóa dữ liệu); `WorkflowDbContext` revision 7.
-- `WorkflowStore.StageCreationAsync` + `WorkflowOriginalAuthority` (start root, generation 1, `expected_version = 0`, `resulting_version = 1`, request/command hash của start).
+- Generation 1 lúc start (start root, `expected_version = 0`, `resulting_version = 1`, request/command hash của start). *Cập nhật sau review PR #34 (2026-11-16): bản duyệt ban đầu ghi `WorkflowAuthorityBindingStore.StageOriginalAsync` ghi binding sau khi WFL đã được lưu; bản hiện hành ghi qua `WorkflowStore.StageCreationAsync` + `WorkflowOriginalAuthority` **trong cùng lần lưu** với instance mới, và guard lúc lưu bắt instance phải ở trạng thái `Added` trong lần lưu đó. Không đổi D3.*
 - `wfl-owner-functions-v2.sql` (baseline thay thế, như D1): `stage_transition` kiểm `delegation_id` của permit trùng delegation của binding generation **hiện hành**; generation cũ bị từ chối (`KD109`).
 
 ### 5.3 Host (inactive, không route/consumer)
 
-- Start root: sau khi stage WFL, gọi `create_delegation` và `StageCreationAsync` + `WorkflowOriginalAuthority` trên **cùng** root; `valid_until` theo D2 từ fact đã admit; delegation và binding nằm trong cùng duplicate/rollback như start hiện có.
+- Start root, theo đúng thứ tự (bất biến start nguyên tử, *cập nhật sau review PR #34, 2026-11-16*; bản duyệt ban đầu ghi "sau khi stage WFL, gọi `create_delegation`"):
+  1. kiểm receipt trùng — start trùng trả kết quả gốc, **không** tạo delegation;
+  2. cấp phát specification;
+  3. `create_delegation` (IAM, thế hệ 1) trên **cùng** root, `valid_until` theo D2 từ fact đã admit;
+  4. `WorkflowStore.StageCreationAsync` lưu instance mới **cùng** binding WFL thế hệ 1 (`WorkflowOriginalAuthority`) trong một lần lưu;
+  5. kiểm lại admission rồi AUD/floor/publication và commit như start hiện có. Lỗi ở bất kỳ bước nào rollback cả delegation lẫn binding.
+  Không được tách bước 4 thành một lần lưu riêng sau khi instance đã lưu: binding thế hệ 1 chỉ đi cùng instance vừa tạo.
 - `IamWorkflowDelegationReissuer` (production `IWorkflowDelegationReissuer`): gọi `reauthorize_delegation` trên root reauth hiện có (D4).
 - `WorkflowPermitIssuer` (owner port, inactive): nhận service identity đã xác thực (12.3d sẽ cung cấp), instance/step/operation/expected version/hash/kind; đọc delegation hiện hành; đánh giá lại principal (`IDurablePrincipalReader`: active, revision, boot), session không bị thu hồi, grant/policy/approval/release qua reader bền; rồi `issue_permit`. Không giữ transaction qua I/O mạng.
 
