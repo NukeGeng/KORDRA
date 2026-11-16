@@ -122,3 +122,5 @@ Accepted chỉ cho thiết kế slice 12.3b. Không cấp quyền DB, role, cert
 ## PR #34 review vòng 1 — 2026-11-16
 
 Codex P2 (PR34-WFL-ORIGINAL-001): binding thế hệ 1 có thể gắn vào một workflow Pending/version 1 đã lưu từ trước, ngoài lần start nguyên tử. Sửa: start root tạo delegation IAM sau khi cấp phát specification và **trước** lần lưu tạo instance; WFL ghi thế hệ 1 cùng lần lưu với instance mới (`WorkflowStore.StageCreationAsync` + `WorkflowOriginalAuthority`); guard lúc lưu bắt instance phải ở trạng thái `Added` trong cùng lần lưu; bỏ `StageOriginalAsync` riêng. Vẫn đúng D3. CI hosted còn lộ một assert phụ thuộc múi giờ trong `WorkflowDelegationEvidenceTests`; đã dùng offset cố định khác UTC. Case PostgreSQL start/reauth và gate cần chạy lại trên bản sửa.
+
+Bằng chứng cho bản sửa trên `97a1478`: hai case PostgreSQL **pass** (database và năm role run-id đã xoá, kiểm độc lập); gate AMR đầy đủ `local_status: passed`, 2.484 pass / 0 fail / 30 skip có gate như dự kiến.
