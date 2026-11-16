@@ -30,6 +30,8 @@
     <None Include="../../src/Modules/WorkflowOrchestration/Infrastructure/Migrations/wfl-v5-operator-decisions.manifest.json" Link="Fixtures/wfl-v5-operator-decisions.manifest.json" CopyToOutputDirectory="PreserveNewest" />
     <None Include="../../src/Modules/WorkflowOrchestration/Infrastructure/Migrations/wfl-v6-authorization.sql" Link="Fixtures/wfl-v6-authorization.sql" CopyToOutputDirectory="PreserveNewest" />
     <None Include="../../src/Modules/WorkflowOrchestration/Infrastructure/Migrations/wfl-v6-authorization.manifest.json" Link="Fixtures/wfl-v6-authorization.manifest.json" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="../../src/Modules/WorkflowOrchestration/Infrastructure/Migrations/wfl-v7-original-binding.sql" Link="Fixtures/wfl-v7-original-binding.sql" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="../../src/Modules/WorkflowOrchestration/Infrastructure/Migrations/wfl-v7-original-binding.manifest.json" Link="Fixtures/wfl-v7-original-binding.manifest.json" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
   <ItemGroup><Compile Include="../Shared/DisposablePostgreSqlProfile.cs" Link="Fixtures/DisposablePostgreSqlProfile.cs" /></ItemGroup>
   <ItemGroup><Compile Include="../Shared/RegressionPostgreSqlSelection.cs" Link="Fixtures/RegressionPostgreSqlSelection.cs" /></ItemGroup>

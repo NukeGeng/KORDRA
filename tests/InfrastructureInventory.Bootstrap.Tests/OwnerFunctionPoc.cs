@@ -11,6 +11,8 @@ namespace Kordra.InfrastructureInventory.Bootstrap.Tests;
 internal static partial class OwnerFunctionPoc
 {
     internal static readonly string[] Artifacts = ["iam-workflow-authority-v1", "wfl-owner-functions-v1", "aud-bound-append-v1"];
+    /// <summary>12.3b replacement baselines (D1); applied with the unchanged AUD v1 function.</summary>
+    internal static readonly string[] V2Artifacts = ["iam-workflow-authority-v2", "wfl-owner-functions-v2"];
     internal static readonly string[] Roles = ["kordra_iam_owner", "kordra_wfl_owner", "kordra_aud_owner", "kordra_worker_runtime", "kordra_api_runtime"];
 
     internal static string Directory => Path.Combine(AppContext.BaseDirectory, "Fixtures", "OwnerFunctions");

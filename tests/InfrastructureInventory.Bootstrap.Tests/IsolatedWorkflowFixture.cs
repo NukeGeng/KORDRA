@@ -83,6 +83,22 @@ internal static class IsolatedWorkflowFixture
         MessageContext messages, FairAsyncReaderWriterAdmissionGate admission, CancellationToken ct = default) => Profile(connection) is { } p
         ? WorkflowRootTransaction.CreateDisposableStartTestAsync(connection, root, caseId, messages, admission, p.OwnerBinding, ct)
         : WorkflowRootTransaction.CreateIsolatedStartTestAsync(connection, root, caseId, messages, admission, ct);
+    // 12.3b: revision 7 authority-start root, original-binding context and admitted reauthorization (isolated or disposable).
+    internal static Task<WorkflowRootTransaction> CreateAuthorityStartTestAsync(NpgsqlConnection connection, NpgsqlTransaction root, Guid caseId,
+        MessageContext messages, FairAsyncReaderWriterAdmissionGate admission, CancellationToken ct = default) => Profile(connection) is { } p
+        ? WorkflowRootTransaction.CreateDisposableAuthorityStartTestAsync(connection, root, caseId, messages, admission, p.OwnerBinding, ct)
+        : WorkflowRootTransaction.CreateIsolatedAuthorityStartTestAsync(connection, root, caseId, messages, admission, ct);
+    internal static WorkflowDbContext CreateOriginalBindingFixture(NpgsqlConnection connection, Guid caseId) => Profile(connection) is { } p
+        ? WorkflowDbContext.CreateDisposableTestFixture(connection, caseId, WorkflowDbContext.OriginalBindingSchemaRevision, p.OwnerBinding)
+        : WorkflowDbContext.CreateOriginalBindingFixture(connection, caseId);
+    internal static Task<WorkflowReauthorizationTransactionResult> ReauthorizeAdmitted(NpgsqlConnection connection, NpgsqlTransaction root,
+        Guid caseId, WorkflowReauthorizationCommand command, Guid projectId, Guid environmentId, SessionSelection session,
+        WorkflowStartAdmissionReader authority, IWorkflowReleaseRevisionResolver revisions, IWorkflowDelegationReissuer reissuer,
+        FairAsyncReaderWriterAdmissionGate admission, CancellationToken ct = default) => Profile(connection) is { } p
+        ? WorkflowReauthorizationTransaction.ExecuteAdmittedDisposableTestAsync(connection, root, caseId, command, projectId, environmentId,
+            session, authority, revisions, reissuer, admission, p.OwnerBinding, ct)
+        : WorkflowReauthorizationTransaction.ExecuteAdmittedIsolatedAsync(connection, root, caseId, command, projectId, environmentId,
+            session, authority, revisions, reissuer, admission, ct);
     internal static CallerOwnedReceiptStore ReceiptStore(NpgsqlConnection connection, DbTransaction root, Guid caseId) => Profile(connection) is { } p
         ? CallerOwnedReceiptStore.CreateDisposableTestStore(connection, root, caseId, p.OwnerBinding)
         : CallerOwnedReceiptStore.CreateIsolatedTestStore(connection, root, caseId);

@@ -1,0 +1,33 @@
+{
+  "revision": 2,
+  "owner": "IAM",
+  "artifact": "iam-workflow-authority-v2.sql",
+  "requires": [
+    "app.iam_authority_clock_floors"
+  ],
+  "replaces": "iam-workflow-authority-v1.sql (12.3a PoC, never deployed)",
+  "scope": "12.3b: iam_workflow fence, service registry (bindings, pins, manifests), delegations, permits per attempt and owner functions; offline artifact only",
+  "functions": [
+    "iam_workflow.current_service()",
+    "iam_workflow.acquire_fence(uuid)",
+    "iam_workflow.advance_epoch(uuid, text)",
+    "iam_workflow.advance_floor(uuid, timestamp with time zone)",
+    "iam_workflow.create_delegation(uuid, uuid, uuid, uuid, uuid, uuid, bigint, uuid, uuid, uuid, bigint, text, text, integer, text, text[], bytea, bytea, timestamp with time zone)",
+    "iam_workflow.reauthorize_delegation(uuid, uuid, bigint, uuid, uuid, uuid, uuid, bigint, text, bytea, bytea, timestamp with time zone, text)",
+    "iam_workflow.revoke_delegation(uuid, text)",
+    "iam_workflow.read_current_delegation(uuid, uuid)",
+    "iam_workflow.issue_permit(uuid, uuid, uuid, uuid, uuid, uuid, bigint, text, text, text, uuid, bigint)",
+    "iam_workflow.consume_permit(uuid, uuid, uuid, bigint, text, uuid, bigint)",
+    "iam_workflow.require_consumed(uuid, uuid, text)",
+    "iam_workflow.apply_service_manifest(text, text, uuid, uuid, text, name, text, timestamp with time zone, timestamp with time zone, jsonb, uuid)"
+  ],
+  "sha256": "e24596220c9caf4fb438f9279c9a4d8dbef27e3e4ceeeae49758774a1506712b",
+  "roles": [
+    "kordra_iam_owner",
+    "kordra_wfl_owner",
+    "kordra_aud_owner",
+    "kordra_worker_runtime",
+    "kordra_api_runtime"
+  ],
+  "destructiveOperations": false
+}

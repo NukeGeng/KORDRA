@@ -64,10 +64,12 @@ public sealed class WorkflowReauthorizationAdmissionTests
     }
 
     [Fact]
-    public void NoProductionTypeImplementsTheDelegationPortOrRegistersIt()
+    public void OnlyTheIamReissuerImplementsTheDelegationPortAndNothingRegistersIt()
     {
+        // 12.3b (D4): exactly one production implementation, still inactive (no DI registration, route or consumer).
         var api = typeof(IWorkflowDelegationReissuer).Assembly;
-        Assert.DoesNotContain(api.GetTypes(), t => !t.IsInterface && typeof(IWorkflowDelegationReissuer).IsAssignableFrom(t));
+        Assert.Equal([typeof(IamWorkflowDelegationReissuer)],
+            api.GetTypes().Where(t => !t.IsInterface && typeof(IWorkflowDelegationReissuer).IsAssignableFrom(t)));
         var root = new DirectoryInfo(AppContext.BaseDirectory);
         while (root is not null && !File.Exists(Path.Combine(root.FullName, "Kordra.slnx"))) root = root.Parent;
         Assert.NotNull(root);
@@ -78,7 +80,10 @@ public sealed class WorkflowReauthorizationAdmissionTests
         {
             var text = File.ReadAllText(file);
             Assert.DoesNotContain("<IWorkflowDelegationReissuer", text);
+            Assert.DoesNotContain("<IamWorkflowDelegationReissuer", text);
             Assert.DoesNotContain("WorkflowReauthorizationTransaction", Path.GetFileName(file) == "WorkflowReauthorizationTransaction.cs" ? "" : text);
+            if (Path.GetFileName(file) is not ("IamWorkflowDelegationReissuer.cs" or "WorkflowReauthorizationTransaction.cs"))
+                Assert.DoesNotContain("IamWorkflowDelegationReissuer", text);
         }
     }
 

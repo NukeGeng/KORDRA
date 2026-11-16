@@ -9,12 +9,13 @@ namespace Kordra.WorkflowOrchestration.Tests;
 public sealed class WorkflowModelFixtureSelectionTests
 {
     [Fact]
-    public void RunnerSelectionKeepsAllSixRevisionsOnExactUnopenedConnection()
+    public void RunnerSelectionKeepsAllSevenRevisionsOnExactUnopenedConnection()
     {
         var profile = RegressionPostgreSqlSelection.LoadRunnerProfile();
         var locator = $"Host=127.0.0.1;Database={profile?.Database ?? "kordra_test"};Username=kordra_test;Pooling=false";
         using var connection = WorkflowModelFixture.Connection(locator, Guid.NewGuid()); var caseId = Guid.NewGuid();
-        for (var revision = 1; revision <= 6; revision++)
+        // 12.3b: revision 7 (original authority binding) is selectable on both isolated and disposable paths.
+        for (var revision = 1; revision <= WorkflowDbContext.OriginalBindingSchemaRevision; revision++)
         {
             using var context = WorkflowModelFixture.Create(connection, caseId, revision);
             Assert.Same(connection, context.Database.GetDbConnection());
@@ -24,11 +25,12 @@ public sealed class WorkflowModelFixtureSelectionTests
             Assert.Equal(revision >= 4, context.IncludesStartReceipts);
             Assert.Equal(revision >= 5, context.IncludesOperatorReconciliation);
             Assert.Equal(revision >= 6, context.IncludesAuthorizationReceipts);
+            Assert.Equal(revision >= 7, context.IncludesOriginalBinding);
         }
         Assert.Equal(System.Data.ConnectionState.Closed, connection.State);
         var forbidden = new NpgsqlConnectionStringBuilder(locator) { Database = profile is null ? "kordra" : "kordra_test" };
         Assert.Throws<InvalidOperationException>(() => WorkflowModelFixture.Connection(forbidden.ConnectionString, caseId));
-        Assert.Throws<InvalidOperationException>(() => WorkflowModelFixture.Create(connection, caseId, 7));
+        Assert.Throws<InvalidOperationException>(() => WorkflowModelFixture.Create(connection, caseId, 8));
         Assert.Equal(4, WorkflowStartPostgreSqlTests.Scripts(connection).Count);
         Assert.Equal(4, WorkflowOperatorDecisionDatabaseTests.Scripts(connection).Count);
         Assert.Equal(System.Data.ConnectionState.Closed, connection.State);

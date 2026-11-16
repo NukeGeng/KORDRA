@@ -19,9 +19,27 @@ public sealed class WorkflowStartStore(WorkflowDbContext context)
         return StageCoreAsync(command, createSpecification, effectiveUtc, matchesOwner, ct);
     }
 
+    /// <summary>
+    /// 12.3b (D3): fresh start that also records authority generation 1. <paramref name="authorize"/> runs once, only for a
+    /// freshly allocated specification (never for a duplicate), on the caller root before the creation save; its result is
+    /// saved together with the new owner.
+    /// </summary>
+    public Task<WorkflowStoredResult> StageAsync(WorkflowStartCommand command,
+        Func<WorkflowSpecification> createSpecification, DateTimeOffset effectiveUtc,
+        Func<WorkflowSpecification, bool> matchesOwner,
+        Func<WorkflowSpecification, CancellationToken, Task<WorkflowOriginalAuthority>> authorize, CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(matchesOwner);
+        ArgumentNullException.ThrowIfNull(authorize);
+        if (!context.IncludesOriginalBinding)
+            throw new InvalidOperationException("Authority start requires the revision 7 owner context.");
+        return StageCoreAsync(command, createSpecification, effectiveUtc, matchesOwner, ct, authorize);
+    }
+
     private async Task<WorkflowStoredResult> StageCoreAsync(WorkflowStartCommand command,
         Func<WorkflowSpecification> createSpecification, DateTimeOffset effectiveUtc,
-        Func<WorkflowSpecification, bool>? matchesOwner, CancellationToken ct)
+        Func<WorkflowSpecification, bool>? matchesOwner, CancellationToken ct,
+        Func<WorkflowSpecification, CancellationToken, Task<WorkflowOriginalAuthority>>? authorize = null)
     {
         ArgumentNullException.ThrowIfNull(command);
         ArgumentNullException.ThrowIfNull(createSpecification);
@@ -52,7 +70,8 @@ public sealed class WorkflowStartStore(WorkflowDbContext context)
         var specification = createSpecification();
         if (specification is null || !command.Matches(specification) || matchesOwner is not null && !matchesOwner(specification))
             throw new InvalidOperationException("Workflow specification differs from its start command.");
-        var result = await new WorkflowStore(context).StageCreationAsync(specification, effectiveUtc, ct);
+        var originalAuthority = authorize is null ? null : await authorize(specification, ct);
+        var result = await new WorkflowStore(context).StageCreationAsync(specification, effectiveUtc, ct, originalAuthority);
         if (result.Duplicate)
             throw new InvalidOperationException("Workflow request ID is already bound without this exact start key.");
 

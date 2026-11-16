@@ -62,7 +62,9 @@ public sealed class WorkflowActionPolicyReader(IReleasePolicyEnvironmentReader e
                 schemaVersion = 1, scope, action, owner.ProjectRevision, owner.EnvironmentRevision, owner.Classification,
                 binding.BindingId, binding.BindingRevision, binding.PolicyId, binding.PolicyRevision, policy.ContentHash
             })));
-            return new(new(binding.BindingId, binding.BindingRevision, binding.PolicyId, binding.PolicyRevision, until, digest),
+            // 12.3b (D2): keep the policy's own expiry separate from the 10 s evaluation horizon.
+            return new(new(binding.BindingId, binding.BindingRevision, binding.PolicyId, binding.PolicyRevision, until, digest,
+                    policy.Payload.ExpiresAtUtc),
                 owner.ProjectRevision, owner.EnvironmentRevision, owner.Classification);
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }

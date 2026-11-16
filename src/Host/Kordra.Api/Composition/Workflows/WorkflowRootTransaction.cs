@@ -53,6 +53,7 @@ public sealed class WorkflowRootTransaction : IAsyncDisposable
     private WorkflowStartCommand? _startCommand;
     private WorkflowStartAdmission? _startAdmission;
     private WorkflowSpecification? _startSpecification;
+    private Kordra.Modules.IdentityAccess.Infrastructure.WorkflowDelegationCreated? _startDelegation;
     private Func<CancellationToken, Task<bool>>? _startAuthority;
     private VerifiedMessageEnvelope? _stagedTimerPublication;
     private WorkflowOperationBudget? _timerBudget;
@@ -112,9 +113,21 @@ public sealed class WorkflowRootTransaction : IAsyncDisposable
         DisposableTestBinding profile, CancellationToken ct = default)
         => CreateIsolatedCoreAsync(connection, root, caseId, messages, admission, true, true, ct, true, profile);
 
+    /// <summary>12.3b: start root on WFL revision 7 that also records the IAM delegation and authority generation 1.</summary>
+    public static Task<WorkflowRootTransaction> CreateIsolatedAuthorityStartTestAsync(NpgsqlConnection connection,
+        NpgsqlTransaction root, Guid caseId, MessageContext messages, FairAsyncReaderWriterAdmissionGate admission,
+        CancellationToken ct = default)
+        => CreateIsolatedCoreAsync(connection, root, caseId, messages, admission, true, true, ct, true, null, true);
+
+    public static Task<WorkflowRootTransaction> CreateDisposableAuthorityStartTestAsync(NpgsqlConnection connection,
+        NpgsqlTransaction root, Guid caseId, MessageContext messages, FairAsyncReaderWriterAdmissionGate admission,
+        DisposableTestBinding profile, CancellationToken ct = default)
+        => CreateIsolatedCoreAsync(connection, root, caseId, messages, admission, true, true, ct, true, profile, true);
+
     private static async Task<WorkflowRootTransaction> CreateIsolatedCoreAsync(NpgsqlConnection connection,
         NpgsqlTransaction root, Guid caseId, MessageContext messages, FairAsyncReaderWriterAdmissionGate admission,
-        bool wakeOperations, bool cancellationIntents, CancellationToken ct, bool startReceipts = false, DisposableTestBinding? disposableTest = null)
+        bool wakeOperations, bool cancellationIntents, CancellationToken ct, bool startReceipts = false, DisposableTestBinding? disposableTest = null,
+        bool originalBinding = false)
     {
         ArgumentNullException.ThrowIfNull(connection); ArgumentNullException.ThrowIfNull(root);
         ArgumentNullException.ThrowIfNull(messages); ArgumentNullException.ThrowIfNull(admission);
@@ -124,8 +137,10 @@ public sealed class WorkflowRootTransaction : IAsyncDisposable
         // Native received contexts use themselves as the default envelope transaction.
         // Accept only that self binding or null; never replace a foreign owner enlistment.
         var workflow = disposableTest is { } selected
-            ? WorkflowDbContext.CreateDisposableTestFixture(connection, caseId, startReceipts ? 4 : cancellationIntents ? 3 : wakeOperations ? 2 : 1, selected)
-            : startReceipts ? WorkflowDbContext.CreateStartFixture(connection, caseId) : cancellationIntents ? WorkflowDbContext.CreateCancellationFixture(connection, caseId) :
+            ? WorkflowDbContext.CreateDisposableTestFixture(connection, caseId, originalBinding ? WorkflowDbContext.OriginalBindingSchemaRevision :
+                startReceipts ? 4 : cancellationIntents ? 3 : wakeOperations ? 2 : 1, selected)
+            : originalBinding ? WorkflowDbContext.CreateOriginalBindingFixture(connection, caseId) :
+            startReceipts ? WorkflowDbContext.CreateStartFixture(connection, caseId) : cancellationIntents ? WorkflowDbContext.CreateCancellationFixture(connection, caseId) :
             wakeOperations ? WorkflowDbContext.CreateWakeFixture(connection, caseId) : WorkflowDbContext.CreateFixture(connection, caseId);
         AuditTransactionContext? audit = null;
         try
@@ -265,10 +280,17 @@ public sealed class WorkflowRootTransaction : IAsyncDisposable
     }
 
     /// <summary>Retains typed current admission and validates lazy owner allocation plus exact audit revisions.</summary>
-    public async Task<WorkflowStoredResult> StageAdmittedStartAsync(WorkflowStartAdmission admitted,
+    public Task<WorkflowStoredResult> StageAdmittedStartAsync(WorkflowStartAdmission admitted,
         WorkflowStartAdmissionReader authority, SessionSelection session, DateTimeOffset originalDeadlineUtc,
         string idempotencyKey, Func<WorkflowSpecification> createSpecification, DateTimeOffset effectiveUtc,
-        CancellationToken ct = default)
+        CancellationToken ct = default) =>
+        StageAdmittedStartCoreAsync(admitted, authority, session, originalDeadlineUtc, idempotencyKey, createSpecification,
+            effectiveUtc, ct, null);
+
+    private async Task<WorkflowStoredResult> StageAdmittedStartCoreAsync(WorkflowStartAdmission admitted,
+        WorkflowStartAdmissionReader authority, SessionSelection session, DateTimeOffset originalDeadlineUtc,
+        string idempotencyKey, Func<WorkflowSpecification> createSpecification, DateTimeOffset effectiveUtc,
+        CancellationToken ct, Func<WorkflowSpecification, CancellationToken, Task<WorkflowOriginalAuthority>>? authorize)
     {
         using var operation = EnterOperation();
         RequireOpen();
@@ -287,16 +309,59 @@ public sealed class WorkflowRootTransaction : IAsyncDisposable
                     throw new InvalidOperationException("Allocated start specification differs from the admitted owners.");
                 return specification;
             }, async token => admitted.IsCurrentSuccessor(await authority.ReadUnderAdmissionAsync(session,
-                admitted.Selection, admitted.RequestId, admitted.InvocationId, token)), effectiveUtc, ct, admitted);
+                admitted.Selection, admitted.RequestId, admitted.InvocationId, token)), effectiveUtc, ct, admitted, authorize);
             if (!result.Duplicate) _startAdmission = admitted;
             return result;
         }
         catch { await RollbackCoreAsync(); throw; }
     }
 
+    /// <summary>
+    /// 12.3b (D3): admitted start that also creates the IAM delegation (generation 1) and the WFL authority binding on this
+    /// same root. Needs the revision 7 authority-start composition and an API-profile login with the IAM function grants.
+    /// A duplicate start returns the original receipt without creating anything.
+    /// </summary>
+    public async Task<WorkflowAuthorityStartResult> StageAdmittedAuthorityStartAsync(WorkflowStartAdmission admitted,
+        WorkflowStartAdmissionReader authority, SessionSelection session, DateTimeOffset originalDeadlineUtc,
+        string idempotencyKey, Func<WorkflowSpecification> createSpecification, DateTimeOffset effectiveUtc,
+        IDurablePrincipalReader principals, CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(principals);
+        if (!_workflow.IncludesOriginalBinding)
+            throw new InvalidOperationException("Authority start requires the revision 7 authority-start composition.");
+        Kordra.Modules.IdentityAccess.Infrastructure.WorkflowDelegationCreated? created = null;
+        Kordra.Modules.IdentityAccess.Infrastructure.WorkflowDelegationDraft? draft = null;
+        // PR34 review: the IAM delegation is created after the specification is allocated and BEFORE the creation save, so
+        // WFL generation 1 is saved together with the new owner and can never attach to an already persisted workflow.
+        var started = await StageAdmittedStartCoreAsync(admitted, authority, session, originalDeadlineUtc, idempotencyKey,
+            createSpecification, effectiveUtc, ct, async (specification, token) =>
+            {
+                if (_startDelegation is not null || created is not null)
+                    throw new InvalidOperationException("Authority start creates exactly one delegation.");
+                var actor = admitted.Eligibility.WorkflowAuthority.Subject.PrincipalId;
+                var principal = await principals.ReadUnderAdmissionAsync(actor, token)
+                    ?? throw new InvalidOperationException("Delegation principal unavailable.");
+                draft = WorkflowDelegationAuthority.StartDraft(admitted, specification, principal, effectiveUtc);
+                var connection = (NpgsqlConnection)_workflow.Database.GetDbConnection();
+                var root = (NpgsqlTransaction)_workflow.Database.CurrentTransaction!.GetDbTransaction();
+                created = await new Kordra.Modules.IdentityAccess.Infrastructure.WorkflowAuthorityFunctionPort(connection, root)
+                    .CreateDelegationAsync(draft, token);
+                if (created.Duplicate || created.Generation != 1 || created.DelegationId != draft.DelegationId)
+                    throw new InvalidOperationException("A fresh start must create a fresh delegation.");
+                return new WorkflowOriginalAuthority(actor, admitted.BindCommand(originalDeadlineUtc, idempotencyKey).BusinessHash,
+                    new WorkflowDelegationReference(created.DelegationId, draft.ValidUntilUtc, created.Generation));
+            });
+        if (started.Duplicate) return new(started, null);
+        if (created is null || draft is null)
+            throw new InvalidOperationException("A fresh authority start must have created its delegation.");
+        _startDelegation = created;
+        return new(started, new WorkflowDelegationReference(created.DelegationId, draft.ValidUntilUtc, created.Generation));
+    }
+
     private async Task<WorkflowStoredResult> StageStartCoreAsync(WorkflowStartCommand command,
         Func<WorkflowSpecification> createSpecification, Func<CancellationToken, Task<bool>> stillCurrent,
-        DateTimeOffset effectiveUtc, CancellationToken ct, WorkflowStartAdmission? admitted = null)
+        DateTimeOffset effectiveUtc, CancellationToken ct, WorkflowStartAdmission? admitted = null,
+        Func<WorkflowSpecification, CancellationToken, Task<WorkflowOriginalAuthority>>? authorize = null)
     {
         try
         {
@@ -307,9 +372,13 @@ public sealed class WorkflowRootTransaction : IAsyncDisposable
                 _auditStaged || _floorStaged || _publicationStaged || _admission.IsClosed || !await stillCurrent(ct) || _admission.IsClosed)
                 throw new InvalidOperationException("Start requires fresh current admission on a producer root.");
             WorkflowSpecification? generated = null;
-            var result = await new WorkflowStartStore(_workflow).StageAsync(command,
-                () => generated = createSpecification(), effectiveUtc,
-                original => admitted is null || admitted.MatchesOwnerBinding(original, command), ct);
+            var result = authorize is null
+                ? await new WorkflowStartStore(_workflow).StageAsync(command,
+                    () => generated = createSpecification(), effectiveUtc,
+                    original => admitted is null || admitted.MatchesOwnerBinding(original, command), ct)
+                : await new WorkflowStartStore(_workflow).StageAsync(command,
+                    () => generated = createSpecification(), effectiveUtc,
+                    original => admitted is null || admitted.MatchesOwnerBinding(original, command), authorize, ct);
             if (!await stillCurrent(ct) || _admission.IsClosed)
                 throw new InvalidOperationException("Workflow start authority changed.");
             if (result.Duplicate)
