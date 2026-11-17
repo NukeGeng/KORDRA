@@ -7,7 +7,7 @@ last_reviewed: 2026-11-16
 
 # T12.3c — mọi invalidating writer tham gia global fence: phạm vi và thiết kế chi tiết
 
-> Accepted scoped design ngày 2026-11-16 (D1–D7 như đề xuất); xem Exact scoped acceptance ở cuối file. **12.3c-1 implemented (inactive mặc định)**; 12.3c-2/3 chưa làm. Không thay đổi [ADR-0022](../decisions/0022-controlworker-authority.md), [Worker Authority v1](../contracts/worker-authority-v1.md) hay [authority/admission v1](../contracts/authority-admission-v1.md). Không cấp quyền DB, role, operation, activation hay merge.
+> Accepted scoped design ngày 2026-11-16 (D1–D7 như đề xuất); xem Exact scoped acceptance ở cuối file. **12.3c-1 và 12.3c-2 implemented (inactive mặc định)**; 12.3c-3 chưa làm. Không thay đổi [ADR-0022](../decisions/0022-controlworker-authority.md), [Worker Authority v1](../contracts/worker-authority-v1.md) hay [authority/admission v1](../contracts/authority-admission-v1.md). Không cấp quyền DB, role, operation, activation hay merge.
 
 ## 1. Mục tiêu
 
@@ -95,3 +95,7 @@ Accepted chỉ cho thiết kế slice 12.3c (ba PR 12.3c-1..3). Không cấp quy
 - Gate AMR đầy đủ trên `e666b37` (base `8eb4db0`): `local_status: passed`, 2.489 pass / 0 fail / 31 skip có gate như dự kiến (30 của 12.3b + race test mới).
 - Sửa sau review vòng 1 của PR #35 (Codex P2, `PR35-IAM-FENCE-TIME-001`): 8 writer IAM đọc thời gian tin cậy **trước** khi chờ fence, nên session hết hạn trong lúc chờ vẫn qua được kiểm tra của logout, logout-all và đổi mật khẩu. Nay cả 9 writer đọc thời gian ngay **sau** khi khoá fence; `RoleDefinitionStore` vốn đã vậy. Không đổi thiết kế D1–D7. Hồi quy (d) trong `AuthorityFenceIamWriterDatabaseTests`: session hết hạn trong lúc writer đang chờ fence bị từ chối, không commit, epoch giữ nguyên. Race test (gồm ca (d)) **pass** trên batch được duyệt (`d8d9b91`; database và role run-id đã xoá và kiểm); gate AMR đầy đủ trên `d8d9b91` (base `8eb4db0`): `local_status: passed`, 2.489 pass / 0 fail / 31 skip có gate như dự kiến.
 
+## Implementation evidence — 12.3c-2 (2026-11-17)
+
+- Source: `TenantMembershipService` (4 writer), `CatalogMutationCoordinator` (`ExecuteAsync` cho catalog/target, `ExecuteEnvironmentV2Async`) và `OfflineResourcePolicyCoordinator.ExecuteAsync` nhận `IAuthorityFence` (mặc định `Inactive`) và khoá fence ngay sau khi mở root. Các lần đọc subject/grant/tenant từng nằm trước root (kiểm subject của TEN online, xác định principal của catalog, kiểm tenant của policy) nay chạy sau fence. Theo D2, mọi commit thành công của 7 writer đều đổi dữ liệu quyền mà permit đánh giá lại (membership, grant, trạng thái tenant, sở hữu/gắn catalog, binding và head của policy), nên tăng epoch đúng một lần trong commit có audit; replay, từ chối, xung đột và input sai không commit nên không tăng. Lỗi fence → `unavailable`, không commit. Replay receipt của policy không đọc fact quyền, không commit nên không lấy fence. Registry ghi race scenario cho 7 writer; `RequireEnforcedCoverage()` vẫn từ chối vì còn 4 writer của 12.3c-3.
+- Test offline: `AuthorityFenceTests` pass (thêm mặc định `Inactive` cho 3 owner và completeness IAM + TEN/catalog/policy). PostgreSQL: `AuthorityFenceTenantCatalogWriterDatabaseTests` trên harness chung `AuthorityFenceRaceHarness` — chờ batch được duyệt.

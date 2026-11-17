@@ -126,3 +126,5 @@ The existing INV Contracts `ITargetMetadataReader` receives an immutable server-
 The controlled adapter, audit faults and write counter exist only in tests. They use real local test owner facts, authentication, durable normal U/D and HTTPS to prove cancellation/deadline behavior, delayed-result invalidation and zero output on denial/unavailable/unknown. See [INV acceptance](../features/infrastructure-inventory/features/register-target.md#t07-bounded-read-implementation-scope--2026-10-23). These tests do not approve a provider implementation or production installation.
 
 > **Implementation note (12.3c-1, 2026-11-17, không đổi nội dung contract):** registry writer nay ghi kịch bản race của fence; 9 writer IAM đã tham gia fence ở chế độ `Enforced` (mặc định vẫn `Inactive` trước activation). Xem [12.3c scope](../engineering/t12-3c-writer-coverage-scope.vi.md).
+>
+> **Implementation note (12.3c-2, 2026-11-17, không đổi nội dung contract):** thêm 7 writer TEN/catalog/resource policy tham gia fence ở chế độ `Enforced` (mặc định `Inactive`); các lần kiểm subject/tenant trước đây đọc trước root nay chạy sau fence.
