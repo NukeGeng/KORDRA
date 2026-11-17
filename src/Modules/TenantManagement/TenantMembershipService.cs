@@ -11,14 +11,21 @@ using Microsoft.EntityFrameworkCore.Storage;
 
 namespace Kordra.Modules.TenantManagement;
 
-/// <summary>T04 owner handlers only. Trusted subject/resource/lease adapters are required; no HTTP registration.</summary>
+/// <summary>
+/// T04 owner handlers only. Trusted subject/resource/lease adapters are required; no HTTP registration. 12.3c-2 (D1/D3): the
+/// four writers lock the installation authority fence on their own root (<see cref="AuthorityFence.Inactive"/> until
+/// activation) and advance the epoch once with every committed membership/grant/tenant change.
+/// </summary>
 public sealed class TenantMembershipService(
     IDbContextFactory<TenantDbContext> contexts, IRoleDefinitionReader definitions,
     ITenantSubjectReader subjects, ITenantScopeOwner resources, ITenantAuditTransactionFactory audits,
-    FairAsyncReaderWriterAdmissionGate gate, IAuthorityClock clock) : IScopedGrantReader, IDurableGrantEvidenceReader, IPolicyTenantAuthority
+    FairAsyncReaderWriterAdmissionGate gate, IAuthorityClock clock, IAuthorityFence? fence = null)
+    : IScopedGrantReader, IDurableGrantEvidenceReader, IPolicyTenantAuthority
 {
     private sealed record Source(Guid Id, long Revision);
     private sealed record ProvenanceValidity(DateTimeOffset? ExpiresAtUtc);
+    private readonly IAuthorityFence _fence = fence ?? AuthorityFence.Inactive;
+    public AuthorityFenceMode FenceMode => _fence.Mode;
 
     public Task<bool> IsActiveTenantUnderAdmissionAsync(Guid tenantId, CancellationToken ct = default) =>
         new TenantOrganizationAuthority(contexts).IsActiveTenantUnderAdmissionAsync(tenantId, ct);
@@ -33,6 +40,7 @@ public sealed class TenantMembershipService(
         offline.RequireHeld();
         await using var db = await contexts.CreateDbContextAsync(cancellationToken);
         await using var tx = await db.Database.BeginTransactionAsync(cancellationToken);
+        if (await AcquireFenceAsync(db, tx, cancellationToken) is not { } fenceLease) return new("unavailable");
         var key = Hash(manifestId.ToString("D"));
         var hash = Hash(JsonSerializer.Serialize(new { kind = "initialize", principalId, name, definitionId, definitionRevision }));
         var replay = await ReplayAsync(db, key, hash, cancellationToken);
@@ -48,7 +56,7 @@ public sealed class TenantMembershipService(
             DefinitionId = definitionId, DefinitionRevision = definitionRevision, ScopeKind = "organization", ScopeId = org.Id,
             IsFounding = true, GrantorPrincipalId = principalId });
         offline.RequireHeld();
-        return await CommitAsync(db, tx, key, hash, org.Id, org.Id, 1, null, "tenant.initialize", cancellationToken, _ => { offline.RequireHeld(); return Task.FromResult(true); });
+        return await CommitAsync(db, tx, key, hash, org.Id, org.Id, 1, null, "tenant.initialize", fenceLease, "ten.initialize", cancellationToken, _ => { offline.RequireHeld(); return Task.FromResult(true); });
     }
 
     public async Task<TenantCommandResult> AddMemberOfflineAsync(IOfflineProvisioningLease offline,
@@ -60,6 +68,7 @@ public sealed class TenantMembershipService(
         offline.RequireHeld();
         await using var db = await contexts.CreateDbContextAsync(cancellationToken);
         await using var tx = await db.Database.BeginTransactionAsync(cancellationToken);
+        if (await AcquireFenceAsync(db, tx, cancellationToken) is not { } fenceLease) return new("unavailable");
         var key = Hash(manifestId.ToString("D"));
         var hash = Hash(JsonSerializer.Serialize(new { kind = "member", tenantId, principalId, expectedRevision }));
         var replay = await ReplayAsync(db, key, hash, cancellationToken);
@@ -70,7 +79,7 @@ public sealed class TenantMembershipService(
         var member = new TenantMembership { Id = Guid.NewGuid(), TenantId = tenantId, PrincipalId = principalId };
         db.Memberships.Add(member); org.Revision++;
         offline.RequireHeld();
-        return await CommitAsync(db, tx, key, hash, tenantId, member.Id, member.Revision, null, "membership.provision", cancellationToken, _ => { offline.RequireHeld(); return Task.FromResult(true); });
+        return await CommitAsync(db, tx, key, hash, tenantId, member.Id, member.Revision, null, "membership.provision", fenceLease, "ten.member", cancellationToken, _ => { offline.RequireHeld(); return Task.FromResult(true); });
     }
 
     public async Task<TenantCommandResult> GrantOfflineAsync(IOfflineProvisioningLease offline,
@@ -85,6 +94,7 @@ public sealed class TenantMembershipService(
         offline.RequireHeld();
         await using var db = await contexts.CreateDbContextAsync(cancellationToken);
         await using var tx = await db.Database.BeginTransactionAsync(cancellationToken);
+        if (await AcquireFenceAsync(db, tx, cancellationToken) is not { } fenceLease) return new("unavailable");
         var key = Hash(manifestId.ToString("D"));
         var hash = Hash(JsonSerializer.Serialize(new { kind = "founding-grant", tenantId, membershipId, expectedRevision, definitionId, definitionRevision, scope, expiresAtUtc }));
         var replay = await ReplayAsync(db, key, hash, cancellationToken);
@@ -102,7 +112,7 @@ public sealed class TenantMembershipService(
             ExpiresAtUtc = expiresAtUtc, IsFounding = true, GrantorPrincipalId = member.PrincipalId };
         db.Assignments.Add(assignment); member.Revision++;
         offline.RequireHeld();
-        return await CommitAsync(db, tx, key, hash, tenantId, assignment.Id, assignment.Revision, null, "membership.provision", cancellationToken, _ => { offline.RequireHeld(); return Task.FromResult(expiresAtUtc is null || expiresAtUtc > clock.GetTrustedUtcNow()); });
+        return await CommitAsync(db, tx, key, hash, tenantId, assignment.Id, assignment.Revision, null, "membership.provision", fenceLease, "ten.grant", cancellationToken, _ => { offline.RequireHeld(); return Task.FromResult(expiresAtUtc is null || expiresAtUtc > clock.GetTrustedUtcNow()); });
     }
 
     public async Task<IReadOnlyList<SelfMembership>?> MyMembershipsAsync(CancellationToken cancellationToken = default)
@@ -213,11 +223,13 @@ public sealed class TenantMembershipService(
             command.Kind is not ("assign" or "revoke-assignment" or "revoke-membership" or "suspend") ||
             command.ExpiresAtUtc is { Offset: var offset } && offset != TimeSpan.Zero) return new("invalid");
         await using var lease = await gate.AcquireWriteAsync(cancellationToken);
+        await using var db = await contexts.CreateDbContextAsync(cancellationToken);
+        await using var tx = await db.Database.BeginTransactionAsync(cancellationToken);
+        // 12.3c (D1): the subject and every grant below are read only after the fence is held on this root.
+        if (await AcquireFenceAsync(db, tx, cancellationToken) is not { } fenceLease) return new("unavailable");
         var now = clock.GetTrustedUtcNow();
         var principal = await subjects.CurrentPrincipalAsync(cancellationToken);
         if (principal is null || !await definitions.IsActivePrincipalAsync(principal.Value, cancellationToken)) return new("denied");
-        await using var db = await contexts.CreateDbContextAsync(cancellationToken);
-        await using var tx = await db.Database.BeginTransactionAsync(cancellationToken);
         // Reconcile an already committed result for the current active subject before
         // mutable grants: the successful operation itself may have revoked authority.
         var hash = Hash(JsonSerializer.Serialize(new { principal, command }));
@@ -280,7 +292,7 @@ public sealed class TenantMembershipService(
             }
         }
         return await CommitAsync(db, tx, key, hash, command.TenantId, resultId, revision, principal,
-            permission, cancellationToken, async token =>
+            permission, fenceLease, "ten.mutate", cancellationToken, async token =>
             {
                 var atCommit = clock.GetTrustedUtcNow();
                 if (await subjects.CurrentPrincipalAsync(token) != principal ||
@@ -359,8 +371,19 @@ public sealed class TenantMembershipService(
         return new(earliest);
     }
 
+    /// <summary>
+    /// 12.3c (D1): the installation fence on this root, after the writer gate and before any authorization fact. A fence
+    /// failure (lock timeout, missing fence, unregistered service) is an unavailable result; nothing commits.
+    /// </summary>
+    private async Task<IAuthorityFenceLease?> AcquireFenceAsync(TenantDbContext db, IDbContextTransaction tx, CancellationToken ct)
+    {
+        try { return await _fence.AcquireAsync(db.Database.GetDbConnection(), tx.GetDbTransaction(), ct); }
+        catch (Exception error) when (error is not OperationCanceledException) { return null; }
+    }
+
     private async Task<TenantCommandResult> CommitAsync(TenantDbContext db, IDbContextTransaction tx,
-        string key, string hash, Guid tenant, Guid resource, long revision, Guid? subject, string permission, CancellationToken ct, Func<CancellationToken, Task<bool>>? revalidate = null)
+        string key, string hash, Guid tenant, Guid resource, long revision, Guid? subject, string permission,
+        IAuthorityFenceLease fenceLease, string reasonCode, CancellationToken ct, Func<CancellationToken, Task<bool>>? revalidate = null)
     {
         db.Commands.Add(new TenantCommandReceipt { KeyHash = key, ContentHash = hash, TenantId = tenant, ResourceId = resource, Revision = revision });
         var id = Guid.NewGuid();
@@ -373,6 +396,8 @@ public sealed class TenantMembershipService(
             {
                 if (revalidate is not null && !await revalidate(token)) return false;
                 await db.SaveChangesAsync(token);
+                // 12.3c (D2): every committed TEN change alters membership, grant or tenant facts; advance once on this root.
+                await fenceLease.AdvanceAsync(reasonCode, token);
                 return true;
             }, ct);
             if (result.Status == AuditAppendStatus.Unknown) gate.Close();
