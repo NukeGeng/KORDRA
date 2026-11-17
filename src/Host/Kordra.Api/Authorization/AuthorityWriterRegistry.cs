@@ -41,7 +41,7 @@ public static class AuthorityWriterRegistry
     /// 12.3c (D3) activation guard: every registered invalidating writer must declare its fence race scenario. Throws while any
     /// writer is uncovered; used by the worker activation path (12.3e), never as a substitute for the race tests themselves.
     /// </summary>
-    public static void RequireFenceCoverage()
+    public static void RequireEnforcedCoverage()
     {
         Validate();
         var missing = Entries.Where(x => x.FenceRaceScenario is null).Select(x => x.Id).ToArray();

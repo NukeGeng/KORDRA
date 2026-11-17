@@ -60,7 +60,7 @@ public sealed class AuthorityFenceTests
         Assert.All(AuthorityWriterRegistry.Entries.Where(x => x.Id.StartsWith("iam.", StringComparison.Ordinal)),
             x => Assert.Equal(x.Id, x.FenceRaceScenario));
         // TEN, catalog, offline administration and REL/APR writers are 12.3c-2/3: activation must still refuse.
-        var error = Assert.Throws<InvalidOperationException>(AuthorityWriterRegistry.RequireFenceCoverage);
+        var error = Assert.Throws<InvalidOperationException>(AuthorityWriterRegistry.RequireEnforcedCoverage);
         Assert.Contains("ten.mutate", error.Message); Assert.DoesNotContain("iam.", error.Message);
     }
 
