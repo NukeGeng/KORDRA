@@ -246,3 +246,5 @@ ADR-0025 offline test selection: explicit coordinator/factory paths retain owner
 ADR-0025 fixture wiring continuation: shared test-only composition captures the explicit profile and supplies actual owner factories/adapters. Initializer, HTTP and injected-fault paths are being retargeted without changing business assertions or default/runtime target rules. No database operations were performed; full native/isolated fixture wiring and selected-target integration evidence remain pending.
 
 The registry credential broker's disposable test read view now enlists on the same selected caller connection and transaction as its setup. The guard still validates the exact test target. The full run exposed the previous legacy-target mismatch in three broker tests.
+
+T12.3c-1 (2026-11-17): `AuthorityWriterRegistry` gained a per-writer fence race scenario and `RequireFenceCoverage()`; `sec.binding` stays uncovered until 12.3c-3 (no SEC behavior change).

@@ -7,7 +7,7 @@ last_reviewed: 2026-11-16
 
 # T12.3c — mọi invalidating writer tham gia global fence: phạm vi và thiết kế chi tiết
 
-> Accepted scoped design ngày 2026-11-16 (D1–D7 như đề xuất); xem Exact scoped acceptance ở cuối file. Chưa có implementation. Không thay đổi [ADR-0022](../decisions/0022-controlworker-authority.md), [Worker Authority v1](../contracts/worker-authority-v1.md) hay [authority/admission v1](../contracts/authority-admission-v1.md). Không cấp quyền DB, role, operation, activation hay merge. Chưa có implementation.
+> Accepted scoped design ngày 2026-11-16 (D1–D7 như đề xuất); xem Exact scoped acceptance ở cuối file. **12.3c-1 implemented (inactive mặc định)**; 12.3c-2/3 chưa làm. Không thay đổi [ADR-0022](../decisions/0022-controlworker-authority.md), [Worker Authority v1](../contracts/worker-authority-v1.md) hay [authority/admission v1](../contracts/authority-admission-v1.md). Không cấp quyền DB, role, operation, activation hay merge. Chưa có implementation.
 
 ## 1. Mục tiêu
 
@@ -87,4 +87,9 @@ Chủ dự án duyệt đúng nội dung (gồm D1–D7) → 12.3c-1 trên `code
 NukeGeng đã trả lời **"Duyệt thiết kế"** cho đúng nội dung tài liệu này (gồm D1–D7 như đề xuất), trình với SHA-256 trước annotation `c08a06d79ad6b35e48a48e6e80072c59a498deb83fb65cb4d1056b2929e42bb3`. Bằng chứng riêng tại `.amr-local/t12-integration/t12-3c-design-acceptance/`.
 
 Accepted chỉ cho thiết kế slice 12.3c (ba PR 12.3c-1..3). Không cấp quyền DB, role, operation, activation hay merge; mỗi batch PostgreSQL cần manifest và approval riêng. Quyền push + mở PR khi gate local qua vẫn áp dụng như các slice 12.3 trước.
+
+## Implementation evidence — 12.3c-1 (2026-11-17)
+
+- Source: `AuthorityFence` (IAM Contracts, `Inactive` tường minh), `PostgresAuthorityFence`; `LocalAuthenticationService` (8 writer) và `RoleDefinitionStore.PublishOfflineAsync` khoá fence ngay sau khi mở root, trước khi đọc fact; tăng epoch theo D2: boot, logout, logout-all, đổi mật khẩu, recover, disable, revision mới/retire của definition đã có luôn tăng; login thành công, enroll và definition hoàn toàn mới không tăng; login sai chỉ tăng ở lần bắt đầu lockout; audit từ chối thuần không chạm fence. `AuthorityWriterRegistry` thêm `FenceRaceScenario` cho 9 writer IAM và `RequireFenceCoverage()` (đang từ chối vì 11 writer còn lại thuộc 12.3c-2/3).
+- Test offline: `AuthorityFenceTests` pass. PostgreSQL: `AuthorityFenceIamWriterDatabaseTests` — chờ batch được duyệt.
 

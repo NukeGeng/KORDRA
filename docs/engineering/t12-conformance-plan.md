@@ -219,3 +219,7 @@ Gate 12.3a (ADR-0022) passed: least-privilege worker/API logins reach IAM/WFL/AU
 ## T12.3b IAM authority evidence — 2026-11-15
 
 Passed on the owner-approved disposable batch (`7e113d0`, cleanup verified): AU05/WF01 IAM part — admitted start records delegation + WFL generation 1 atomically; admitted reauthorization revokes it, advances the epoch and records generation 2 in both owners; a stale generation never admits (`KD109`). AU02 additions — per-attempt permits, expiry needs a new attempt, one consume per operation, service bindings/retirement, fence ordering for issuance; DB01 for every new function. Writer coverage (AU03/AU04) stays 12.3c.
+
+## T12.3c-1 writer coverage (IAM) — 2026-11-17
+
+Prepared AU03/AU04 evidence for the nine IAM invalidating writers: each real entry point, with the enforced fence, waits while the fence is held, advances the epoch exactly once when it changes authority (a permit issued before then fails with `KD005`) and leaves the epoch unchanged otherwise. TEN/catalog/offline administration and REL/APR writers follow in 12.3c-2/3; activation stays blocked by `RequireFenceCoverage()` until then.

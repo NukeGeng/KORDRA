@@ -227,3 +227,5 @@ ADR-0025 preparation adds explicit AUD shared/isolated/offline test enlistment a
 ADR-0025 fixture wiring continuation: shared test-only composition captures the explicit profile and supplies actual owner factories/adapters. Initializer, HTTP and injected-fault paths are being retargeted without changing business assertions or default/runtime target rules. No database operations were performed; full native/isolated fixture wiring and selected-target integration evidence remain pending.
 
 The disposable fault-injection fixtures now pass the selected profile into the actual AUD enlistment adapter before injecting an authentication fault. The full regression also found a test initialization order error in the ART owner fixture. Its selection now precedes construction of the owner factories.
+
+T12.3c-1 (2026-11-17): `LocalAuthenticationService` accepts an optional `IAuthorityFence` (default `Inactive`, no behavior change). With the enforced fence its writers lock the authority fence before reading facts and advance the epoch only when authority changes; see FEAT-IAM-001 and the [12.3c scope](../../../engineering/t12-3c-writer-coverage-scope.vi.md).
