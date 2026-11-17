@@ -222,4 +222,4 @@ Passed on the owner-approved disposable batch (`7e113d0`, cleanup verified): AU0
 
 ## T12.3c-1 writer coverage (IAM) — 2026-11-17
 
-Prepared AU03/AU04 evidence for the nine IAM invalidating writers: each real entry point, with the enforced fence, waits while the fence is held, advances the epoch exactly once when it changes authority (a permit issued before then fails with `KD005`) and leaves the epoch unchanged otherwise. TEN/catalog/offline administration and REL/APR writers follow in 12.3c-2/3; activation stays blocked by `RequireEnforcedCoverage()` until then.
+Passed on the owner-approved disposable batch (`e666b37`, cleanup verified) — AU03/AU04 for the nine IAM invalidating writers: each real entry point, with the enforced fence, waits while the fence is held, advances the epoch exactly once when it changes authority (a permit issued before then fails with `KD005`) and leaves the epoch unchanged otherwise. TEN/catalog/offline administration and REL/APR writers follow in 12.3c-2/3; activation stays blocked by `RequireEnforcedCoverage()` until then.

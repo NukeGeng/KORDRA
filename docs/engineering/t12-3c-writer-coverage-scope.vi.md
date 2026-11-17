@@ -91,5 +91,6 @@ Accepted chỉ cho thiết kế slice 12.3c (ba PR 12.3c-1..3). Không cấp quy
 ## Implementation evidence — 12.3c-1 (2026-11-17)
 
 - Source: `AuthorityFence` (IAM Contracts, `Inactive` tường minh), `PostgresAuthorityFence`; `LocalAuthenticationService` (8 writer) và `RoleDefinitionStore.PublishOfflineAsync` khoá fence ngay sau khi mở root, trước khi đọc fact; tăng epoch theo D2: boot, logout, logout-all, đổi mật khẩu, recover, disable, revision mới/retire của definition đã có luôn tăng; login thành công, enroll và definition hoàn toàn mới không tăng; login sai chỉ tăng ở lần bắt đầu lockout; audit từ chối thuần không chạm fence. `AuthorityWriterRegistry` thêm `FenceRaceScenario` cho 9 writer IAM — đây là `FenceCoverage` của §5.3 ở dạng `Covered` + id race test; dạng `OperationOnly` (D6) thêm ở 12.3c-3 — và `RequireEnforcedCoverage()` (đang từ chối vì 11 writer còn lại thuộc 12.3c-2/3).
-- Test offline: `AuthorityFenceTests` pass. PostgreSQL: `AuthorityFenceIamWriterDatabaseTests` — chờ batch được duyệt.
+- Test offline: `AuthorityFenceTests` pass. PostgreSQL: `AuthorityFenceIamWriterDatabaseTests` **pass** ngay lần chạy đầu trên batch được duyệt (`e666b37`; database và role run-id đã xoá và kiểm độc lập).
+- Gate AMR đầy đủ trên `e666b37` (base `8eb4db0`): `local_status: passed`, 2.489 pass / 0 fail / 31 skip có gate như dự kiến (30 của 12.3b + race test mới).
 
