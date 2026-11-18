@@ -29,6 +29,7 @@ using Kordra.ReleaseManagement.Domain;
 using Kordra.Testing;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.Extensions.Primitives;
 using Npgsql;
 using Xunit;
 
@@ -37,7 +38,7 @@ namespace Kordra.InfrastructureInventory.Bootstrap.Tests;
 /// <summary>
 /// 12.3c-3 (D4) on actual PostgreSQL (operation-gated; ADR-0025 disposable database + run-scoped roles): the remaining registry
 /// writers — the three 12.3b IAM functions (service manifest, delegation revocation and reissue), offline credential binding,
-/// offline approval-policy publication and release mutation — each called through its REAL entry point with the enforced
+/// offline approval-policy publication, release mutation and approval request — each called through its REAL entry point with the enforced
 /// fence, (a) wait while the installation fence is held, (b) advance the epoch by exactly one with every committed change,
 /// after which a permit issued before them is rejected (KD005), and (c) leave the epoch unchanged when nothing commits.
 /// </summary>
@@ -45,7 +46,7 @@ public sealed class AuthorityFenceRemainingWriterDatabaseTests
 {
     /// <summary>Registry scenarios this class proves; the completeness test pins it to <see cref="AuthorityWriterRegistry"/>.</summary>
     internal static readonly string[] Scenarios = ["iam.service-manifest", "iam.delegation-revoke", "iam.delegation-reissue",
-        "sec.binding", "approval.policy", "release.mutate"];
+        "sec.binding", "approval.policy", "release.mutate", "approval.mutate"];
     private const string ManifestVariable = "KORDRA_FENCE_REMAINING_MANIFEST";
     private const string LocatorVariable = "KORDRA_FENCE_REMAINING_CONNECTION_STRING";
 
@@ -199,6 +200,7 @@ public sealed class AuthorityFenceRemainingWriterDatabaseTests
             (await approvals.ApplyAsync(lease, approvalPolicy, approvalHash, ct)) is { Status: "success", Replayed: true });
 
         // Release mutation (synthetic project authority, real REL/IAM/AUD owners): a draft, then its exact replay.
+        var releaseContexts = new PooledDbContextFactory<ReleaseDbContext>(selection.Release());
         var facts = new ReleaseFacts(installation);
         var releaseAuthority = new ReleaseProjectAuthorityReader(facts, facts, facts, facts, facts);
         var uses = ReleaseUseAdmission.CreateDisposableTestComposition(installation, identity, releaseAuthority, selection.ArtifactAudit(),
@@ -209,14 +211,51 @@ public sealed class AuthorityFenceRemainingWriterDatabaseTests
         Assert.Equal(AuthorityFenceMode.Enforced, releases.FenceMode);
         var draft = ReleaseMutationCommand.Create(facts.Project, "Fence release", facts.Selection);
         var releaseKey = Key("fence-release");
-        await race.RaceAsync("release.mutate", true, async () => await Mutate() == "durable");
-        await race.RaceAsync("release.mutate", false, async () => await Mutate() == "replay");
+        Guid revision = default;
+        await race.RaceAsync("release.mutate", true, async () =>
+        {
+            var (status, created) = await Mutate(draft, releaseKey);
+            revision = created ?? Guid.Empty;
+            return status == "durable";
+        });
+        await race.RaceAsync("release.mutate", false, async () => (await Mutate(draft, releaseKey)).Status == "replay");
+
+        // Approval request for the draft after it is frozen (setup through the same fenced writer, outside the race), then its
+        // exact replay, which verifies its receipt under the fence and commits nothing.
+        facts.AllowPilot(TimeSpan.FromMinutes(5));
+        var preview = await new ReleaseSelectionReader(facts, facts, facts, facts).ReadUnderAdmissionAsync(installation, facts.Tenant,
+            facts.Project, facts.Selection, facts.Now, ct);
+        var freeze = ReleaseMutationCommand.Freeze(facts.Project, revision, 1, $"\"rel-v1:{revision:D}:1\"",
+            ReleasePreviewHash.Compute(revision, 1, preview.Intent!.SpecHash));
+        Assert.Equal("durable", (await Mutate(freeze, Key("fence-freeze"))).Status);
+        var capture = new ApprovalAuthorityCapture(facts, facts, facts, facts, facts, facts, facts);
+        var approvalUses = ApprovalUseAdmission.CreateDisposableTestComposition(installation, identity, capture, selection.ArtifactAudit(),
+            gate, facts, profile.OwnerBinding);
+        var approvalMutations = ApprovalMutationTransaction.CreateDisposableTestTransaction(installation, identity, releaseContexts, capture,
+            new StoredApprovalAuthorityReader(new DurableApprovalAuthorityReader(facts, facts, facts, facts)),
+            new ApprovalSubjectReader(releaseContexts, new ReleaseSelectionReader(facts, facts, facts, facts)), selection.ArtifactAudit(),
+            new AuditMutationEvidenceReader(audits), gate, facts, profile.OwnerBinding, fence);
+        Assert.Equal(AuthorityFenceMode.Enforced, approvalMutations.FenceMode);
+        var correlation = Guid.NewGuid();
+        var approvalRequest = ApprovalRequestParser.Parse("request", facts.Environment.ToString("D"), null, Encoding.UTF8.GetBytes(
+            $"{{\"schemaVersion\":1,\"correlationId\":\"{correlation:D}\",\"releaseRevisionId\":\"{revision:D}\"}}"), StringValues.Empty);
+        var approvalKey = Key("fence-approval");
+        await race.RaceAsync("approval.mutate", true, async () => await Approve() == "durable");
+        await race.RaceAsync("approval.mutate", false, async () => await Approve() == "replay");
         Assert.Equal(Scenarios.Order(StringComparer.Ordinal), race.Proven.Order(StringComparer.Ordinal));
 
-        async Task<string> Mutate()
+        async Task<(string Status, Guid? Revision)> Mutate(ReleaseMutationCommand command, string key)
         {
-            var use = await uses.BeginAsync(facts.Session, draft, releaseKey, Guid.NewGuid(), ct);
-            return use is { Status: "admitted", Ticket: { } ticket } ? (await releases.ExecuteAsync(ticket, ct)).Status : use.Status;
+            var use = await uses.BeginAsync(facts.Session, command, key, Guid.NewGuid(), ct);
+            if (use is not { Status: "admitted", Ticket: { } ticket }) return (use.Status, null);
+            var result = await releases.ExecuteAsync(ticket, ct);
+            return (result.Status, result.RevisionId);
+        }
+
+        async Task<string> Approve()
+        {
+            var use = await approvalUses.BeginAsync(facts.Session, approvalRequest, facts.Project, approvalKey, correlation, ct);
+            return use is { Status: "admitted", Ticket: { } ticket } ? (await approvalMutations.ExecuteAsync(ticket, ct)).Status : use.Status;
         }
 
         async Task<bool> InApiRoot(Func<NpgsqlConnection, NpgsqlTransaction, Task<bool>> action)
@@ -329,32 +368,57 @@ public sealed class AuthorityFenceRemainingWriterDatabaseTests
         }
     }
 
-    /// <summary>Synthetic release authority, mirroring the release transaction tests' facts (not a writer).</summary>
+    /// <summary>
+    /// Synthetic release and approval authority, mirroring the release transaction tests' facts (not a writer): one subject whose
+    /// grants and role definitions exist for exactly the permission and scope each reader asks for.
+    /// </summary>
     private sealed class ReleaseFacts : ICurrentSubjectReader, IScopedGrantReader, IRoleDefinitionReader, IReleaseProjectAuthorityReader,
-        IAuthorityClock, IReleaseCatalogReader, IReleaseTargetReader, IReleaseArtifactReader, IReleaseApprovalPolicyReader
+        IAuthorityClock, IReleaseCatalogReader, IReleaseTargetReader, IReleaseArtifactReader, IReleaseApprovalPolicyReader,
+        IDurablePrincipalReader, IApprovalEnvironmentAuthorityReader, IDurableGrantEvidenceReader
     {
-        public readonly Guid Installation, Tenant = Guid.NewGuid(), Project = Guid.NewGuid();
-        private readonly Guid _application = Guid.NewGuid(), _environment = Guid.NewGuid(), _target = Guid.NewGuid(), _artifact = Guid.NewGuid(), _registry = Guid.NewGuid();
+        public readonly Guid Installation, Tenant = Guid.NewGuid(), Project = Guid.NewGuid(), Environment = Guid.NewGuid();
+        private readonly Guid _membership = Guid.NewGuid(), _application = Guid.NewGuid(), _target = Guid.NewGuid(), _artifact = Guid.NewGuid(), _registry = Guid.NewGuid();
+        private readonly Dictionary<(string Permission, string ScopeKind, Guid ScopeId), ScopedGrant> _grants = [];
         private readonly DateTimeOffset _captured;
         public DateTimeOffset Now = DateTimeOffset.FromUnixTimeMilliseconds(DateTimeOffset.UtcNow.ToUnixTimeMilliseconds());
-        public CurrentSubject Subject; public ScopedGrant Grant; public SessionSelection Session;
-        public ReleaseSelection Selection => ReleaseSelection.Create(_application, _environment, _target, _artifact);
+        public CurrentSubject Subject; public SessionSelection Session;
+        public ReleaseApprovalPolicyBinding? Policy;
+        public ReleaseSelection Selection => ReleaseSelection.Create(_application, Environment, _target, _artifact);
         public ReleaseFacts(Guid installation)
         {
             Installation = installation; _captured = Now;
             Subject = new(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), 1, Now.AddHours(1), Now.AddMinutes(30));
-            Grant = new(Subject.PrincipalId, Tenant, Guid.NewGuid(), 1, 1, Guid.NewGuid(), 1, Guid.NewGuid(), 1,
-                "release.create", "project", Project, Now.AddMinutes(10));
             Session = new(Subject.PrincipalId, "synthetic-session", Subject.BootGeneration);
         }
         public DateTimeOffset GetTrustedUtcNow() => Now;
         public Task<CurrentSubject?> ReadCurrentUnderAdmissionAsync(SessionSelection s, CancellationToken ct = default) => Task.FromResult<CurrentSubject?>(Subject);
-        public Task<ScopedGrant?> ReadCurrentGrantUnderAdmissionAsync(Guid principal, Guid tenant, string permission, string scopeKind, Guid scopeId, CancellationToken ct = default) => Task.FromResult<ScopedGrant?>(Grant);
-        public Task<RoleDefinitionSnapshot?> GetCurrentAsync(Guid id, long revision, CancellationToken ct = default) => Task.FromResult<RoleDefinitionSnapshot?>(new(Grant.DefinitionId, Grant.DefinitionRevision, "Synthetic", [new(Grant.Permission, "project")]));
+        public Task<ScopedGrant?> ReadCurrentGrantUnderAdmissionAsync(Guid principal, Guid tenant, string permission, string scopeKind, Guid scopeId, CancellationToken ct = default)
+        {
+            lock (_grants)
+            {
+                if (!_grants.TryGetValue((permission, scopeKind, scopeId), out var grant))
+                    _grants[(permission, scopeKind, scopeId)] = grant = new(Subject.PrincipalId, Tenant, _membership, 1, 1, Guid.NewGuid(), 1,
+                        Guid.NewGuid(), 1, permission, scopeKind, scopeId, Now.AddMinutes(10));
+                return Task.FromResult<ScopedGrant?>(principal == Subject.PrincipalId && tenant == Tenant ? grant : null);
+            }
+        }
+        public Task<RoleDefinitionSnapshot?> GetCurrentAsync(Guid id, long revision, CancellationToken ct = default)
+        {
+            lock (_grants)
+                return Task.FromResult(_grants.Values.SingleOrDefault(x => x.DefinitionId == id && x.DefinitionRevision == revision) is { } grant
+                    ? new RoleDefinitionSnapshot(grant.DefinitionId, grant.DefinitionRevision, "Synthetic", [new(grant.Permission, grant.ScopeKind)]) : null);
+        }
         public Task<bool> IsActivePrincipalAsync(Guid id, CancellationToken ct = default) => Task.FromResult(true);
+        public Task<DurablePrincipal?> ReadUnderAdmissionAsync(Guid principalId, CancellationToken ct = default) =>
+            Task.FromResult<DurablePrincipal?>(principalId == Subject.PrincipalId ? new(principalId, Subject.PrincipalRevision, true, new string('d', 64)) : null);
+        public Task<ApprovalEnvironmentAuthority?> ReadCurrentUnderAdmissionAsync(Guid tenantId, Guid projectId, Guid environmentId, CancellationToken ct = default) =>
+            Task.FromResult<ApprovalEnvironmentAuthority?>(tenantId == Tenant && projectId == Project && environmentId == Environment ? new(Tenant, Project, Environment, 1) : null);
+        // Durable grant comparison belongs to approval grants, which this race does not exercise.
+        public Task<DurableGrantEvidenceStatus> CompareUnderAdmissionAsync(ScopedGrant expected, CancellationToken ct = default) =>
+            throw new NotSupportedException("Only approval requests are exercised.");
         public Task<ReleaseProjectAuthority?> ReadCurrentUnderAdmissionAsync(Guid p, CancellationToken ct = default) => Task.FromResult<ReleaseProjectAuthority?>(new(Tenant, Project, 1));
-        public Task<ReleaseCatalogSelection?> ReadUnderAdmissionAsync(Guid t, Guid p, Guid a, Guid e, Guid target, CancellationToken ct = default) => Task.FromResult<ReleaseCatalogSelection?>(new(Tenant, Project, 1, _application, 1, _environment, 1, "Test", _target, 1));
-        public Task<ReleaseTargetIdentity?> ReadUnderAdmissionAsync(Guid t, Guid p, Guid e, Guid target, CancellationToken ct = default) => Task.FromResult<ReleaseTargetIdentity?>(new(Tenant, Project, _environment, _target, "kubernetes", 1, 1));
+        public Task<ReleaseCatalogSelection?> ReadUnderAdmissionAsync(Guid t, Guid p, Guid a, Guid e, Guid target, CancellationToken ct = default) => Task.FromResult<ReleaseCatalogSelection?>(new(Tenant, Project, 1, _application, 1, Environment, 1, "Test", _target, 1));
+        public Task<ReleaseTargetIdentity?> ReadUnderAdmissionAsync(Guid t, Guid p, Guid e, Guid target, CancellationToken ct = default) => Task.FromResult<ReleaseTargetIdentity?>(new(Tenant, Project, Environment, _target, "kubernetes", 1, 1));
         public Task<ArtifactV1?> ReadReleaseArtifactUnderAdmissionAsync(Guid t, Guid p, Guid a, CancellationToken ct = default)
         {
             var platform = new ArtifactPlatformV1("linux", "amd64", null); var digest = "sha256:" + new string('a', 64);
@@ -363,7 +427,16 @@ public sealed class AuthorityFenceRemainingWriterDatabaseTests
                 "sha256:" + new string('b', 64), 50, platform, "none", "artifact-registry-v1", _captured, _captured,
                 "manifest_config_hash_verified", "not_checked", "not_checked"));
         }
-        public Task<ReleaseApprovalPolicyBinding?> ReadCurrentUnderAdmissionAsync(Guid i, Guid t, Guid p, Guid e, CancellationToken ct = default) => Task.FromResult<ReleaseApprovalPolicyBinding?>(null);
+        public Task<ReleaseApprovalPolicyBinding?> ReadCurrentUnderAdmissionAsync(Guid i, Guid t, Guid p, Guid e, CancellationToken ct = default) => Task.FromResult(Policy);
+        public void AllowPilot(TimeSpan lifetime)
+        {
+            string Time(DateTimeOffset x) => x.ToString("yyyy-MM-dd'T'HH:mm:ss.ffffff'Z'", CultureInfo.InvariantCulture);
+            var json = "{\"schemaVersion\":1,\"purpose\":\"release-intent-v1\",\"status\":\"active\",\"effectiveFromUtc\":\"" + Time(Now.AddSeconds(-1)) +
+                "\",\"expiresAtUtc\":\"" + Time(Now.Add(lifetime)) + "\",\"rules\":[{\"classification\":\"Test\",\"effect\":\"allow\",\"separationOfDuties\":\"self_allowed\",\"allowUnattestedProvenance\":true,\"pendingLifetimeSeconds\":300,\"grantLifetimeSeconds\":300,\"blockedWindowsUtc\":[]}]}";
+            var policy = ReleaseApprovalPolicy.Parse(Encoding.UTF8.GetBytes(json));
+            Policy = new(Installation, Tenant, Project, Environment, Guid.NewGuid(), 1, Guid.NewGuid(), 1,
+                policy.PayloadHash, new string('c', 64), policy.GetCanonicalBytes());
+        }
     }
 }
 

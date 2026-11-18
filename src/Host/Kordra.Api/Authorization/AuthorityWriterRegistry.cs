@@ -42,7 +42,7 @@ public static class AuthorityWriterRegistry
         new("policy.publish-bind", typeof(OfflineResourcePolicyCoordinator), nameof(OfflineResourcePolicyCoordinator.ExecuteAsync), true, "policy.publish-bind"),
         new("approval.policy", typeof(OfflineApprovalPolicyCoordinator), nameof(OfflineApprovalPolicyCoordinator.ApplyAsync), true, "approval.policy"),
         new("release.mutate", typeof(ReleaseMutationTransaction), nameof(ReleaseMutationTransaction.ExecuteAsync), false, "release.mutate"),
-        new("approval.mutate", typeof(ApprovalMutationTransaction), nameof(ApprovalMutationTransaction.ExecuteAsync), false),
+        new("approval.mutate", typeof(ApprovalMutationTransaction), nameof(ApprovalMutationTransaction.ExecuteAsync), false, "approval.mutate"),
         // 12.3b IAM functions that lock the fence and advance the epoch themselves (registered by 12.3c-3): the reissue entry
         // names the delegation port, whose only implementation is the IAM reissuer; IAM declares its revoke and manifest methods.
         new("iam.delegation-reissue", typeof(IWorkflowDelegationReissuer), nameof(IWorkflowDelegationReissuer.StageReissueAsync), false, "iam.delegation-reissue")

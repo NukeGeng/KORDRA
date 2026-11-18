@@ -94,10 +94,10 @@ public sealed class AuthorityFenceTests
         // D6: installation restore has no entry point; it keeps activation blocked until its runbook step is accepted.
         var restore = Assert.Single(AuthorityWriterRegistry.Operations);
         Assert.Equal(("installation.restore", "docs/operations/backup-restore-runbook.md", false), (restore.Id, restore.Runbook, restore.RunbookStepAccepted));
-        // Activation still refuses, naming exactly what is uncovered: APR decisions (pending race scenario) and the restore step.
+        // Every writer now has its race scenario; activation still refuses, naming only the restore step.
         var error = Assert.Throws<InvalidOperationException>(AuthorityWriterRegistry.RequireEnforcedCoverage);
         var uncovered = AuthorityWriterRegistry.Entries.Where(x => x.FenceRaceScenario is null).Select(x => x.Id).Append(restore.Id).ToArray();
-        Assert.Equal(["approval.mutate", "installation.restore"], uncovered);
+        Assert.Equal(["installation.restore"], uncovered);
         Assert.EndsWith(string.Join(", ", uncovered), error.Message);
     }
 
