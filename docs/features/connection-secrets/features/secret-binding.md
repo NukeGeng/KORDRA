@@ -250,3 +250,5 @@ The registry credential broker's disposable test read view now enlists on the sa
 T12.3c-1 (2026-11-17): `AuthorityWriterRegistry` gained a per-writer fence race scenario and `RequireEnforcedCoverage()`; `sec.binding` stays uncovered until 12.3c-3 (no SEC behavior change).
 
 T12.3c-2 (2026-11-17): `AuthorityWriterRegistry` also records race scenarios for the TEN, catalog and resource-policy writers; `sec.binding` stays uncovered until 12.3c-3 (no SEC behavior change).
+
+T12.3c-3 (2026-11-18): `OfflineCredentialCoordinator` accepts an optional `IAuthorityFence` (default `Inactive`, no behavior change). With the enforced fence its IAM root locks the installation fence before the tenant, target and binding reads (the tenant and target checks moved under the fence; trusted time is read after the wait) and advances the epoch once per committed bind, rotate or revoke. An exact command replay is answered before the root begins and takes no fence. `sec.binding` is now covered in `AuthorityWriterRegistry`.

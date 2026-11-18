@@ -138,3 +138,5 @@ Accepted ADR-0021/0022 covers the inactive Host composition dependency on existi
 ## T12 integration: disposable regression selection
 
 ADR-0025 adds an explicit test-only disposable database profile for approval policy manifest tests. Existing runtime and default target selection remain unchanged. Live qualification on the integrated T12.2 tree remains pending.
+
+T12.3c-3 (2026-11-18): `OfflineApprovalPolicyCoordinator` accepts an optional `IAuthorityFence` (default `Inactive`, no behavior change). With the enforced fence its root locks the installation fence right after it begins, before the command, tenant, project and environment reads, and every committed publication advances the epoch once. An exact replay reads its receipt under the fence and commits nothing.
