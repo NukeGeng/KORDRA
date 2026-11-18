@@ -19,20 +19,30 @@ namespace Kordra.Api;
 public sealed record CredentialOperationResult(string Status, Guid BindingId = default, long Revision = 0, Guid ReferenceId = default);
 public sealed record CredentialImpact(string ManifestHash, Guid? CurrentBindingId, long CurrentRevision);
 
-/// <summary>API-stopped SEC/IAM-clock/AUD composition only. Never reads Keychain or registers an HTTP route.</summary>
+/// <summary>
+/// API-stopped SEC/IAM-clock/AUD composition only. Never reads Keychain or registers an HTTP route. 12.3c-3 (D1/D3): the IAM
+/// root locks the installation authority fence (<see cref="AuthorityFence.Inactive"/> until activation) before the tenant,
+/// target and binding facts, and every committed binding change advances the epoch once. Exact command replay commits nothing
+/// and is answered before the root begins, so it does not take the fence.
+/// </summary>
 public sealed class OfflineCredentialCoordinator(Guid installationId, IDbContextFactory<KordraIdentityDbContext> contexts,
     IPolicyTenantAuthority tenants, ITargetAuthorityReader targets, IAuditAppendPort auditLookup,
-    FairAsyncReaderWriterAdmissionGate gate, IAuthorityClock clock, IOfflinePolicyAuditTransactionFactory? auditTransactions = null)
+    FairAsyncReaderWriterAdmissionGate gate, IAuthorityClock clock, IOfflinePolicyAuditTransactionFactory? auditTransactions = null,
+    IAuthorityFence? fence = null)
 {
     private readonly DisposableTestBinding? disposableTest;
+    private readonly IAuthorityFence _fence = fence ?? AuthorityFence.Inactive;
+    public AuthorityFenceMode FenceMode => _fence.Mode;
     private OfflineCredentialCoordinator(Guid installationId, IDbContextFactory<KordraIdentityDbContext> contexts,
     IPolicyTenantAuthority tenants, ITargetAuthorityReader targets, IAuditAppendPort auditLookup,
-    FairAsyncReaderWriterAdmissionGate gate, IAuthorityClock clock, IOfflinePolicyAuditTransactionFactory? auditTransactions, DisposableTestBinding profile)
-        : this(installationId, contexts, tenants, targets, auditLookup, gate, clock, auditTransactions) => disposableTest = profile;
+    FairAsyncReaderWriterAdmissionGate gate, IAuthorityClock clock, IOfflinePolicyAuditTransactionFactory? auditTransactions,
+    IAuthorityFence? fence, DisposableTestBinding profile)
+        : this(installationId, contexts, tenants, targets, auditLookup, gate, clock, auditTransactions, fence) => disposableTest = profile;
     public static OfflineCredentialCoordinator CreateDisposableTestCoordinator(Guid installationId, IDbContextFactory<KordraIdentityDbContext> contexts,
     IPolicyTenantAuthority tenants, ITargetAuthorityReader targets, IAuditAppendPort auditLookup,
-    FairAsyncReaderWriterAdmissionGate gate, IAuthorityClock clock, IOfflinePolicyAuditTransactionFactory? auditTransactions, DisposableTestBinding profile)
-        => new(installationId, contexts, tenants, targets, auditLookup, gate, clock, auditTransactions, profile);
+    FairAsyncReaderWriterAdmissionGate gate, IAuthorityClock clock, IOfflinePolicyAuditTransactionFactory? auditTransactions, DisposableTestBinding profile,
+    IAuthorityFence? fence = null)
+        => new(installationId, contexts, tenants, targets, auditLookup, gate, clock, auditTransactions, fence, profile);
 
     public async Task<CredentialImpact?> InspectAsync(IOfflineProvisioningLease custody, ReadOnlyMemory<byte> json, CancellationToken ct = default)
     {
@@ -78,10 +88,13 @@ public sealed class OfflineCredentialCoordinator(Guid installationId, IDbContext
                 { gate.Close(); return new("unknown"); }
                 custody.RequireHeld(); return replay;
             }
-            if (!await tenants.IsActiveTenantUnderAdmissionAsync(m.TenantId, ct)) return new("denied");
-            var target = await targets.ReadTargetUnderAdmissionAsync(m.TargetId, ct); if (target is null || target.TenantId != m.TenantId) return new("denied");
             await using var tx = await iam.Database.BeginTransactionAsync(ct);
             await sec.Database.UseTransactionAsync(tx.GetDbTransaction(), ct);
+            // 12.3c (D1): fence on this root before the tenant, target and binding facts; trusted time only after the fence
+            // wait. A fence failure has not attempted a commit (unavailable below).
+            var fenceLease = await _fence.AcquireAsync(iam.Database.GetDbConnection(), tx.GetDbTransaction(), ct);
+            if (!await tenants.IsActiveTenantUnderAdmissionAsync(m.TenantId, ct)) return new("denied");
+            var target = await targets.ReadTargetUnderAdmissionAsync(m.TargetId, ct); if (target is null || target.TenantId != m.TenantId) return new("denied");
             var now = Now(); var row = await new CredentialBindingStore(sec).StageAsync(custody, m, now, ct);
             if (row is null) return new("conflict");
             var result = new CredentialOperationResult("success", row.BindingId, row.Revision, row.ReferenceId);
@@ -90,7 +103,10 @@ public sealed class OfflineCredentialCoordinator(Guid installationId, IDbContext
             var intent = Intent(m, result, occurred);
             sec.Commands.Add(new() { InstallationId = installationId, ManifestId = m.ManifestId, ContentHash = hash, ResultJson = resultJson,
                 AuditOccurredAtUtc = occurred, AuditIntentId = intent.IntentId, AuditHash = AuditIntentCanonicalizer.ComputeHash(intent) });
-            await sec.SaveChangesAsync(ct); await AuthorityClockFloorStore.StageAsync(iam, installationId, Now(), ct);
+            await sec.SaveChangesAsync(ct);
+            // 12.3c (D2): every committed bind, rotate or revoke changes the credential binding facts permits re-evaluate.
+            await fenceLease.AdvanceAsync("sec.binding", ct);
+            await AuthorityClockFloorStore.StageAsync(iam, installationId, Now(), ct);
             await using var audit = await (auditTransactions ?? (disposableTest is { } auditProfile
                 ? OfflinePolicyAuditTransactionFactory.CreateDisposableTestFactory(auditProfile) : new OfflinePolicyAuditTransactionFactory())).EnlistAsync(iam.Database.GetDbConnection(), tx.GetDbTransaction(), new Lease(custody), ct);
             if ((await audit.StageAsync(intent, ct)).Status != AuditTransactionStageStatus.Staged) return new("unavailable");

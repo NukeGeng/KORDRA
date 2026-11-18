@@ -28,24 +28,32 @@ public sealed class ApprovalMutationResult
     internal ApprovalUseTicket? Ticket { get; }
 }
 
+/// <summary>
+/// APR request/decision transaction under write admission. 12.3c-3 (D1/D3): the IAM root locks the installation authority
+/// fence (<see cref="AuthorityFence.Inactive"/> until activation) right after it begins; trusted time used for every decision
+/// on the root is read after the fence wait (the reading before the root is only an early denial). Every committed request or
+/// decision advances the epoch once; an exact replay holds the fence only to verify its receipt and commits nothing.
+/// </summary>
 public sealed class ApprovalMutationTransaction(Guid installation, IDbContextFactory<KordraIdentityDbContext> identity,
     IDbContextFactory<ReleaseDbContext> releases, ApprovalAuthorityCapture authority, StoredApprovalAuthorityReader durableAuthority,
     ApprovalSubjectReader subjects, IArtifactAuditTransactionFactory audits, IAuditMutationEvidenceReader auditEvidence,
-    FairAsyncReaderWriterAdmissionGate gate, IAuthorityClock clock)
+    FairAsyncReaderWriterAdmissionGate gate, IAuthorityClock clock, IAuthorityFence? fence = null)
 {
     private readonly DisposableTestBinding? disposableTest;
+    private readonly IAuthorityFence _fence = fence ?? AuthorityFence.Inactive;
+    public AuthorityFenceMode FenceMode => _fence.Mode;
     private ApprovalMutationTransaction(Guid installation, IDbContextFactory<KordraIdentityDbContext> identity,
     IDbContextFactory<ReleaseDbContext> releases, ApprovalAuthorityCapture authority, StoredApprovalAuthorityReader durableAuthority,
     ApprovalSubjectReader subjects, IArtifactAuditTransactionFactory audits, IAuditMutationEvidenceReader auditEvidence,
-    FairAsyncReaderWriterAdmissionGate gate, IAuthorityClock clock, DisposableTestBinding profile)
-        : this(installation, identity, releases, authority, durableAuthority, subjects, audits, auditEvidence, gate, clock) => disposableTest = profile;
+    FairAsyncReaderWriterAdmissionGate gate, IAuthorityClock clock, IAuthorityFence? fence, DisposableTestBinding profile)
+        : this(installation, identity, releases, authority, durableAuthority, subjects, audits, auditEvidence, gate, clock, fence) => disposableTest = profile;
 
     /// <summary>Explicit ADR-0025 test composition; runtime construction remains unchanged.</summary>
     public static ApprovalMutationTransaction CreateDisposableTestTransaction(Guid installation, IDbContextFactory<KordraIdentityDbContext> identity,
     IDbContextFactory<ReleaseDbContext> releases, ApprovalAuthorityCapture authority, StoredApprovalAuthorityReader durableAuthority,
     ApprovalSubjectReader subjects, IArtifactAuditTransactionFactory audits, IAuditMutationEvidenceReader auditEvidence,
-    FairAsyncReaderWriterAdmissionGate gate, IAuthorityClock clock, DisposableTestBinding profile)
-        => new(installation, identity, releases, authority, durableAuthority, subjects, audits, auditEvidence, gate, clock, profile);
+    FairAsyncReaderWriterAdmissionGate gate, IAuthorityClock clock, DisposableTestBinding profile, IAuthorityFence? fence = null)
+        => new(installation, identity, releases, authority, durableAuthority, subjects, audits, auditEvidence, gate, clock, fence, profile);
 
     private Task<ApprovalAuthorityCaptureResult?> Capture(ApprovalUseTicket ticket, CancellationToken ct) => ticket.Command.Action switch
     {
@@ -64,8 +72,8 @@ public sealed class ApprovalMutationTransaction(Guid installation, IDbContextFac
             using var budget = CancellationTokenSource.CreateLinkedTokenSource(ct); budget.CancelAfter(TimeSpan.FromSeconds(2)); var token = budget.Token;
             var original = ticket.Original; var command = ticket.Command;
             var tenant = original.Project.TenantId; var project = original.Project.ProjectId; var environment = command.EnvironmentId;
-            var current = await Capture(ticket, token); var now = clock.GetTrustedUtcNow();
-            if (!original.SameAuthorityAs(current) || !Time(now, ticket, original)) return new("denied");
+            var current = await Capture(ticket, token); var admissionTime = clock.GetTrustedUtcNow();
+            if (!original.SameAuthorityAs(current) || !Time(admissionTime, ticket, original)) return new("denied");
             var key = Convert.FromHexString(ticket.KeyHash); var body = Convert.FromHexString(command.BusinessHash);
             var intentId = ReleaseCommandHash.AuditIntentId(ticket.KeyHash);
             // Startup integrity scans use owner-specific prefixes; APR receipts must never look like orphan REL mutations.
@@ -75,6 +83,11 @@ public sealed class ApprovalMutationTransaction(Guid installation, IDbContextFac
                 IdentityAccessDbContextFactory.ValidateDisposableTestTarget(iam.Database.GetDbConnection().ConnectionString, target);
             else IdentityAccessDbContextFactory.ValidateRuntimeOrTestTransactionTarget(iam.Database.GetDbConnection().ConnectionString);
             await using var tx = await iam.Database.BeginTransactionAsync(token);
+            // 12.3c (D1): fence right after the root begins, before any owner read; trusted time only after the fence wait.
+            // A fence failure has not attempted a commit (unavailable below).
+            var fenceLease = await _fence.AcquireAsync(iam.Database.GetDbConnection(), tx.GetDbTransaction(), token);
+            var now = clock.GetTrustedUtcNow();
+            if (!Time(now, ticket, original)) return new("denied");
             await using var apr = new ApprovalDbContext(disposableTest is { } ownerProfile
                 ? ApprovalDbContextFactory.CreateDisposableEnlistedTestOptions(iam.Database.GetDbConnection(), ownerProfile)
                 : ApprovalDbContextFactory.CreateEnlistedOptions(iam.Database.GetDbConnection()));
@@ -161,6 +174,8 @@ public sealed class ApprovalMutationTransaction(Guid installation, IDbContextFac
                 original.Subject.BootGeneration, ticket.InvocationId, command.Action, key, body, intentId,
                 Convert.FromHexString(AuditIntentCanonicalizer.ComputeHash(intent)), now, token);
             await apr.SaveChangesAsync(token);
+            // 12.3c (D2): a committed request or decision changes the approval state that release use and permits re-evaluate.
+            await fenceLease.AdvanceAsync("approval.mutate", token);
             var rechecked = await Capture(ticket, token); var final = clock.GetTrustedUtcNow();
             if (!original.SameAuthorityAs(rechecked) || !Time(final, ticket, original) || final < now || expiry is { } deadline && final >= deadline) return new("denied");
             if (basis is not null)
