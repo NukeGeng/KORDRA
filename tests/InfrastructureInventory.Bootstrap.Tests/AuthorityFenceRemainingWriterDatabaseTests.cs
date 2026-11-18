@@ -192,7 +192,8 @@ public sealed class AuthorityFenceRemainingWriterDatabaseTests
         var approvals = OfflineApprovalPolicyCoordinator.CreateDisposableTestCoordinator(installation, identity, auditLookup, gate, clock, null,
             profile.OwnerBinding, fence);
         Assert.Equal(AuthorityFenceMode.Enforced, approvals.FenceMode);
-        var approvalPolicy = ApprovalPolicyBytes(installation, selection.Database, tenant.TenantId, project.Resource.Id, environment.Environment!.Id);
+        var approvalPolicy = ApprovalPolicyBytes(installation, selection.Database, tenant.TenantId, project.Resource.Id, environment.Environment!.Id,
+            environment.Environment.Revision);
         var approvalHash = ApprovalPolicyManifest.ParseDisposableTest(approvalPolicy, profile.OwnerBinding).CommandHash;
         await race.RaceAsync("approval.policy", true, async () =>
             (await approvals.ApplyAsync(lease, approvalPolicy, approvalHash, ct)).Status == "success");
@@ -310,7 +311,7 @@ public sealed class AuthorityFenceRemainingWriterDatabaseTests
     private static string Key(string prefix) => prefix + "-" + Convert.ToHexStringLower(RandomNumberGenerator.GetBytes(8));
     private static string Hex() => Convert.ToHexStringLower(RandomNumberGenerator.GetBytes(32));
 
-    private static byte[] ApprovalPolicyBytes(Guid installation, string database, Guid tenant, Guid project, Guid environment) =>
+    private static byte[] ApprovalPolicyBytes(Guid installation, string database, Guid tenant, Guid project, Guid environment, long environmentRevision) =>
         Encoding.UTF8.GetBytes(JsonSerializer.Serialize(new
         {
             schemaVersion = 1, manifestId = Guid.NewGuid().ToString("D"), installationId = installation.ToString("D"),
@@ -324,7 +325,7 @@ public sealed class AuthorityFenceRemainingWriterDatabaseTests
                     allowUnattestedProvenance = true, pendingLifetimeSeconds = 86400, grantLifetimeSeconds = 1800,
                     blockedWindowsUtc = Array.Empty<object>() } }
             },
-            bindingChanges = new[] { new { environmentId = environment.ToString("D"), expectedEnvironmentRevision = 1,
+            bindingChanges = new[] { new { environmentId = environment.ToString("D"), expectedEnvironmentRevision = environmentRevision,
                 expectedBindingId = (string?)null, expectedBindingRevision = 0 } }
         }));
 
