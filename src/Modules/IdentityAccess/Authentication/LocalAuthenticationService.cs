@@ -86,10 +86,10 @@ public sealed partial class LocalAuthenticationService : Kordra.Modules.Identity
             try { _clock.AdoptPersistedFloor(persistedFloor.AdmittedUtc); }
             catch { _admission.Close(); throw; }
         }
-        var now = GetTrustedUtcNow();
         await using var transaction = await db.Database.BeginTransactionAsync(cancellationToken);
-        // 12.3c (D1): fence before any authorization fact read on this root.
+        // 12.3c (D1): fence before any authorization fact read on this root; trusted time is read only after the fence wait.
         var fence = await AcquireFenceAsync(db, transaction, cancellationToken);
+        var now = GetTrustedUtcNow();
         var intent = CreateIntent(
             AuditIntentStage.Mutation,
             subjectId: null,
@@ -318,12 +318,12 @@ public sealed partial class LocalAuthenticationService : Kordra.Modules.Identity
         {
             using var requestDeadline = CreateRequestDeadline(cancellationToken);
             await using var lease = await _admission.AcquireWriteAsync(requestDeadline.Token);
-            var now = GetTrustedUtcNow();
             sessionHash = SHA256.HashData(reference);
             await using var db = await _contexts.CreateDbContextAsync(requestDeadline.Token);
             await using var transaction = await db.Database.BeginTransactionAsync(requestDeadline.Token);
-            // 12.3c (D1): fence before any authorization fact read on this root.
+            // 12.3c (D1): fence before any authorization fact read on this root; trusted time is read only after the fence wait.
             var fence = await AcquireFenceAsync(db, transaction, requestDeadline.Token);
+            var now = GetTrustedUtcNow();
             var session = await db.Sessions.Include(value => value.Principal)
                 .SingleOrDefaultAsync(value => value.PrincipalId == principalId &&
                     value.BootGeneration == bootGeneration && value.SessionReferenceHash == sessionHash,
@@ -386,12 +386,12 @@ public sealed partial class LocalAuthenticationService : Kordra.Modules.Identity
         {
             using var requestDeadline = CreateRequestDeadline(cancellationToken);
             await using var lease = await _admission.AcquireWriteAsync(requestDeadline.Token);
-            var now = GetTrustedUtcNow();
             sessionHash = SHA256.HashData(reference);
             await using var db = await _contexts.CreateDbContextAsync(requestDeadline.Token);
             await using var transaction = await db.Database.BeginTransactionAsync(requestDeadline.Token);
-            // 12.3c (D1): fence before any authorization fact read on this root.
+            // 12.3c (D1): fence before any authorization fact read on this root; trusted time is read only after the fence wait.
             var fence = await AcquireFenceAsync(db, transaction, requestDeadline.Token);
+            var now = GetTrustedUtcNow();
             var current = await db.Sessions.Include(value => value.Principal)
                 .SingleOrDefaultAsync(value => value.PrincipalId == principalId &&
                     value.BootGeneration == bootGeneration && value.SessionReferenceHash == sessionHash,
@@ -507,11 +507,11 @@ public sealed partial class LocalAuthenticationService : Kordra.Modules.Identity
 
             var replacementHash = _passwordHasher.HashPassword(snapshot, newPassword!);
             await using var lease = await _admission.AcquireWriteAsync(token);
-            var now = GetTrustedUtcNow();
             await using var db = await _contexts.CreateDbContextAsync(token);
             await using var transaction = await db.Database.BeginTransactionAsync(token);
-            // 12.3c (D1): fence before any authorization fact read on this root.
+            // 12.3c (D1): fence before any authorization fact read on this root; trusted time is read only after the fence wait.
             var fence = await AcquireFenceAsync(db, transaction, token);
+            var now = GetTrustedUtcNow();
             var user = await db.Principals.SingleOrDefaultAsync(value => value.Id == principalId, token);
             var session = await db.Sessions.Include(value => value.Principal)
                 .SingleOrDefaultAsync(value => value.PrincipalId == principalId &&
@@ -594,7 +594,6 @@ public sealed partial class LocalAuthenticationService : Kordra.Modules.Identity
         try
         {
             using var requestDeadline = CreateRequestDeadline(cancellationToken);
-            var now = GetTrustedUtcNow();
             var principal = new KordraIdentityUser
             {
                 UserName = userName,
@@ -610,8 +609,9 @@ public sealed partial class LocalAuthenticationService : Kordra.Modules.Identity
             await using var lease = await _admission.AcquireWriteAsync(requestDeadline.Token);
             await using var db = await _contexts.CreateDbContextAsync(requestDeadline.Token);
             await using var transaction = await db.Database.BeginTransactionAsync(requestDeadline.Token);
-            // 12.3c (D1): fence before any authorization fact read on this root.
+            // 12.3c (D1): fence before any authorization fact read on this root; trusted time is read only after the fence wait.
             var fence = await AcquireFenceAsync(db, transaction, requestDeadline.Token);
+            var now = GetTrustedUtcNow();
             if (await db.Principals.AnyAsync(user => user.NormalizedUserName == normalizedUserName, requestDeadline.Token))
             {
                 return new LocalCommandResult(LocalAuthenticationStatus.Conflict);
@@ -673,11 +673,11 @@ public sealed partial class LocalAuthenticationService : Kordra.Modules.Identity
 
             var replacementHash = _passwordHasher.HashPassword(snapshot, password!);
             await using var lease = await _admission.AcquireWriteAsync(requestDeadline.Token);
-            var now = GetTrustedUtcNow();
             await using var db = await _contexts.CreateDbContextAsync(requestDeadline.Token);
             await using var transaction = await db.Database.BeginTransactionAsync(requestDeadline.Token);
-            // 12.3c (D1): fence before any authorization fact read on this root.
+            // 12.3c (D1): fence before any authorization fact read on this root; trusted time is read only after the fence wait.
             var fence = await AcquireFenceAsync(db, transaction, requestDeadline.Token);
+            var now = GetTrustedUtcNow();
             var user = await db.Principals.SingleOrDefaultAsync(value => value.Id == principalId, requestDeadline.Token);
             if (user is null || user.Revision != snapshot.Revision || user.SecurityStamp != snapshot.SecurityStamp)
             {
@@ -730,11 +730,11 @@ public sealed partial class LocalAuthenticationService : Kordra.Modules.Identity
         {
             using var requestDeadline = CreateRequestDeadline(cancellationToken);
             await using var lease = await _admission.AcquireWriteAsync(requestDeadline.Token);
-            var now = GetTrustedUtcNow();
             await using var db = await _contexts.CreateDbContextAsync(requestDeadline.Token);
             await using var transaction = await db.Database.BeginTransactionAsync(requestDeadline.Token);
-            // 12.3c (D1): fence before any authorization fact read on this root.
+            // 12.3c (D1): fence before any authorization fact read on this root; trusted time is read only after the fence wait.
             var fence = await AcquireFenceAsync(db, transaction, requestDeadline.Token);
+            var now = GetTrustedUtcNow();
             var user = await db.Principals.SingleOrDefaultAsync(value => value.Id == principalId, requestDeadline.Token);
             if (user is null)
             {
@@ -775,11 +775,11 @@ public sealed partial class LocalAuthenticationService : Kordra.Modules.Identity
         CancellationToken cancellationToken)
     {
         await using var lease = await _admission.AcquireWriteAsync(cancellationToken);
-        now = GetTrustedUtcNow();
         await using var db = await _contexts.CreateDbContextAsync(cancellationToken);
         await using var transaction = await db.Database.BeginTransactionAsync(cancellationToken);
-        // 12.3c (D1): fence before any authorization fact read on this root.
+        // 12.3c (D1): fence before any authorization fact read on this root; trusted time is read only after the fence wait.
         var fence = await AcquireFenceAsync(db, transaction, cancellationToken);
+        now = GetTrustedUtcNow();
         var user = await db.Principals.SingleOrDefaultAsync(value => value.Id == snapshot.Id, cancellationToken);
         if (user is null || user.AccountStatus != "active" ||
             user.Revision != snapshot.Revision || user.SecurityStamp != snapshot.SecurityStamp ||
@@ -855,11 +855,11 @@ public sealed partial class LocalAuthenticationService : Kordra.Modules.Identity
         CancellationToken cancellationToken)
     {
         await using var lease = await _admission.AcquireWriteAsync(cancellationToken);
-        now = GetTrustedUtcNow();
         await using var db = await _contexts.CreateDbContextAsync(cancellationToken);
         await using var transaction = await db.Database.BeginTransactionAsync(cancellationToken);
-        // 12.3c (D1): fence before any authorization fact read on this root.
+        // 12.3c (D1): fence before any authorization fact read on this root; trusted time is read only after the fence wait.
         var fence = await AcquireFenceAsync(db, transaction, cancellationToken);
+        now = GetTrustedUtcNow();
         var user = await db.Principals.SingleOrDefaultAsync(value => value.Id == snapshot.Id, cancellationToken);
         if (user is null || user.Revision != snapshot.Revision || user.SecurityStamp != snapshot.SecurityStamp ||
             user.AccountStatus != "active")

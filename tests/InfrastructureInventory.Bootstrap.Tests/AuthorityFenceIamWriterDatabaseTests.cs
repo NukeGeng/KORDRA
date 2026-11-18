@@ -21,7 +21,8 @@ namespace Kordra.InfrastructureInventory.Bootstrap.Tests;
 /// 12.3c-1 (D4) on actual PostgreSQL (operation-gated; ADR-0025 disposable database + run-scoped roles): every IAM invalidating
 /// writer, called through its REAL entry point with the enforced fence, (a) waits while the installation fence is held, (b)
 /// advances the epoch by exactly one when it changes authority and then a permit issued before it is rejected (KD005), and
-/// (c) leaves the epoch unchanged when nothing is invalidated.
+/// (c) leaves the epoch unchanged when nothing is invalidated. (d) A session that expires while its writer waits on the fence
+/// is judged by trusted time read after the wait, so nothing commits (PR35-IAM-FENCE-TIME-001).
 /// </summary>
 public sealed class AuthorityFenceIamWriterDatabaseTests
 {
@@ -98,9 +99,9 @@ public sealed class AuthorityFenceIamWriterDatabaseTests
             var gate = new FairAsyncReaderWriterAdmissionGate();
             var configuration = new LocalAuthenticationConfiguration(installation, Guid.NewGuid());
             var fence = new PostgresAuthorityFence(installation);
-            var auth = new LocalAuthenticationService(contexts, audits, new PasswordHasher<KordraIdentityUser>(
-                Microsoft.Extensions.Options.Options.Create(new PasswordHasherOptions { IterationCount = 220_000 })),
-                configuration, gate, null, policy, fence);
+            var hasher = new PasswordHasher<KordraIdentityUser>(
+                Microsoft.Extensions.Options.Options.Create(new PasswordHasherOptions { IterationCount = 220_000 }));
+            var auth = new LocalAuthenticationService(contexts, audits, hasher, configuration, gate, null, policy, fence);
             var definitions = new RoleDefinitionStore(contexts, gate, audits, configuration, auth, fence);
             Assert.Equal(AuthorityFenceMode.Enforced, auth.FenceMode); Assert.Equal(AuthorityFenceMode.Enforced, definitions.FenceMode);
             string Password() => "Fence-Fixture-" + Convert.ToHexStringLower(RandomNumberGenerator.GetBytes(12));
@@ -155,8 +156,38 @@ public sealed class AuthorityFenceIamWriterDatabaseTests
                 published.DefinitionId, published.Revision, "Fence fixture", [new PermissionRule("release.read", "project")], true, ct)).Status == "success");
             Assert.Equal(Scenarios.Order(StringComparer.Ordinal), proven.Order(StringComparer.Ordinal));
 
-            async Task Race(string scenario, bool advances, Func<Task<bool>> writer)
+            // (d) PR35-IAM-FENCE-TIME-001: each case logs in normally, then calls the session-checking entry point through a writer
+            // composed like `auth` but on a clock the test moves past the idle lifetime only while that writer is observed waiting
+            // on the held fence. Trusted time read after the wait refuses the expired session: nothing commits and the epoch stays.
+            // A reading taken before the wait would accept the session, commit and advance.
+            var passwordC = Password();
+            var userC = (await auth.EnrollOfflineAsync("fence-user-c", passwordC, ct)).PrincipalId ?? Guid.Empty;
+            Assert.NotEqual(Guid.Empty, userC);
+            await ExpiresWhileWaiting("iam.logout", LocalAuthenticationStatus.SessionInvalid,
+                (late, reference) => late.LogoutAsync(userC, reference, configuration.BootGeneration, ct));
+            await ExpiresWhileWaiting("iam.logout-all", LocalAuthenticationStatus.SessionInvalid,
+                (late, reference) => late.LogoutAllAsync(userC, reference, configuration.BootGeneration, Key(), ct));
+            // The pre-wait recovery check still sees a valid session; the check under the fence reports the expiry as a conflict.
+            await ExpiresWhileWaiting("iam.password", LocalAuthenticationStatus.Conflict,
+                (late, reference) => late.ChangePasswordAsync(userC, reference, configuration.BootGeneration, passwordC, Password(), Key(), ct));
+
+            async Task ExpiresWhileWaiting(string scenario, LocalAuthenticationStatus expected,
+                Func<LocalAuthenticationService, string?, Task<LocalCommandResult>> write)
             {
+                var login = await auth.LoginAsync("fence-user-c", passwordC, ct);
+                Assert.Equal(LocalAuthenticationStatus.Success, login.Status);
+                var clock = new ShiftedClock();
+                var late = new LocalAuthenticationService(contexts, audits, hasher, configuration, gate, clock, policy, fence);
+                // Control: before the wait this writer still admits the session, so only time read after the wait can refuse it.
+                Assert.Equal(LocalAuthenticationStatus.Success,
+                    (await late.ResolveCurrentSessionAsync(userC, login.SessionReference, configuration.BootGeneration, ct)).Status);
+                await Race(scenario, false, async () => (await write(late, login.SessionReference)).Status == expected,
+                    whileHeld: () => clock.Shift(configuration.IdleLifetime + TimeSpan.FromMinutes(1)));
+            }
+
+            async Task Race(string scenario, bool advances, Func<Task<bool>> writer, Action? whileHeld = null)
+            {
+                var label = whileHeld is null ? scenario : scenario + " (session expires while waiting)";
                 var permit = await IssueProbe();
                 var before = await Epoch();
                 await using (var holder = new NpgsqlConnection(locator))
@@ -173,10 +204,11 @@ public sealed class AuthorityFenceIamWriterDatabaseTests
                             "AND wait_event_type = 'Lock' AND pid <> pg_backend_pid()") > 0) { waited = true; break; }
                         await Task.Delay(20, ct);
                     }
-                    Assert.True(waited, scenario + " did not wait for the held fence");
-                    Assert.False(running.IsCompleted, scenario);
+                    Assert.True(waited, label + " did not wait for the held fence");
+                    Assert.False(running.IsCompleted, label);
+                    whileHeld?.Invoke();
                     await held.RollbackAsync(ct);
-                    Assert.True(await running, scenario + " entry point failed");
+                    Assert.True(await running, label + " entry point did not return its expected result");
                 }
                 // (b)/(c) Exactly one advance for an invalidating change; none otherwise. A permit issued before is then stale.
                 Assert.Equal(before + (advances ? 1 : 0), await Epoch());
@@ -244,6 +276,19 @@ public sealed class AuthorityFenceIamWriterDatabaseTests
     }
 
     private sealed class HeldLease : IOfflineProvisioningLease { public void RequireHeld() { } }
+
+    /// <summary>
+    /// Real time plus a shift applied to wall and monotonic time alike, so the writer's trusted clock sees elapsed time,
+    /// not a jump it would reject (it tolerates at most 1 s between the two).
+    /// </summary>
+    private sealed class ShiftedClock : TimeProvider
+    {
+        private long shiftTicks;
+        internal void Shift(TimeSpan by) => Interlocked.Add(ref shiftTicks, by.Ticks);
+        private TimeSpan Current => TimeSpan.FromTicks(Interlocked.Read(ref shiftTicks));
+        public override DateTimeOffset GetUtcNow() => TimeProvider.System.GetUtcNow() + Current;
+        public override long GetTimestamp() => TimeProvider.System.GetTimestamp() + (long)(Current.TotalSeconds * TimestampFrequency);
+    }
 
     private static async Task Execute(NpgsqlConnection connection, string sql, CancellationToken ct)
     {
