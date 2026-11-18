@@ -224,4 +224,4 @@ Passed on the owner-approved disposable batch (`7e113d0`, cleanup verified): AU0
 
 Passed on the owner-approved disposable batch (`e666b37`, cleanup verified) — AU03/AU04 for the nine IAM invalidating writers: each real entry point, with the enforced fence, waits while the fence is held, advances the epoch exactly once when it changes authority (a permit issued before then fails with `KD005`) and leaves the epoch unchanged otherwise. TEN/catalog/offline administration and REL/APR writers follow in 12.3c-2/3; activation stays blocked by `RequireEnforcedCoverage()` until then.
 
-Round-1 fix (PR35-IAM-FENCE-TIME-001): the same race test adds case (d) — a session that expires while its writer waits on the fence is refused, nothing commits and the epoch stays. Evidence: pending owner-approved disposable batch.
+Round-1 fix (PR35-IAM-FENCE-TIME-001): the same race test adds case (d) — a session that expires while its writer waits on the fence is refused, nothing commits and the epoch stays. Passed on the owner-approved disposable batch (`d8d9b91`, cleanup verified); full AMR gate passed on `d8d9b91`.
