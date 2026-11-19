@@ -170,21 +170,29 @@ public sealed class AuthorityFenceRemainingWriterDatabaseTests
         var published = await resourcePolicies.ExecuteAsync(lease, Encoding.UTF8.GetString(selection.PolicyBytes(resourcePolicy)),
             selection.PolicyHash(resourcePolicy), ct);
         Assert.Equal("success", published.Status);
+        // The target is project-scoped, so its authority resolves only through a current project-level target.read binding
+        // (published as the current-authority fixtures do); without it the credential writer correctly answers denied.
+        var projectPolicy = new ResourcePolicyManifest(1, Guid.NewGuid(), installation, new(selection.Database, "kordra_test"), tenant.TenantId,
+            project.Resource.Id, "create", null, 0, new(1, "target.read", "project_without_environment", "active", now.AddMinutes(-1), null,
+                [new("NoEnvironment", "allow")]), [new(null, "project_without_environment", null, 0)]);
+        Assert.True(Outcome("success", (await resourcePolicies.ExecuteAsync(lease, Encoding.UTF8.GetString(selection.PolicyBytes(projectPolicy)),
+            selection.PolicyHash(projectPolicy), ct)).Status));
         var environment = await catalog.ExecuteEnvironmentV2Async(new EnvironmentCreateV2Command(Key("fence-environment"), tenant.TenantId,
             project.Resource.Id, "Fence staging", "Staging", new(published.PolicyId, published.Revision), Guid.NewGuid()), ct);
         Assert.Equal("success", environment.Status);
 
         // Offline credential binding, then its exact command replay, answered before the root begins (no fence, no change).
+        var targetAuthority = new CurrentTargetAuthorityReader(inventory, new CurrentProjectOwnershipReader(projects, policyReader));
+        Assert.NotNull(await targetAuthority.ReadTargetUnderAdmissionAsync(target.Resource!.TargetId, ct));
         var credentials = OfflineCredentialCoordinator.CreateDisposableTestCoordinator(installation, identity, new TenantOrganizationAuthority(tenants),
-            new CurrentTargetAuthorityReader(inventory, new CurrentProjectOwnershipReader(projects, policyReader)), auditLookup, gate, clock, null,
-            profile.OwnerBinding, fence);
+            targetAuthority, auditLookup, gate, clock, null, profile.OwnerBinding, fence);
         Assert.Equal(AuthorityFenceMode.Enforced, credentials.FenceMode);
-        var binding = new CredentialManifest(1, Guid.NewGuid(), installation, tenant.TenantId, target.Resource!.TargetId, "inventory.readonly.v1",
+        var binding = new CredentialManifest(1, Guid.NewGuid(), installation, tenant.TenantId, target.Resource.TargetId, "inventory.readonly.v1",
             "target.read", "create", null, 0, Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), now.AddMinutes(-1), now.AddMinutes(5));
         await race.RaceAsync("sec.binding", true, async () =>
-            (await credentials.ExecuteAsync(lease, binding.CanonicalBytes(), binding.Hash(), ct)).Status == "success");
+            Outcome("success", (await credentials.ExecuteAsync(lease, binding.CanonicalBytes(), binding.Hash(), ct)).Status));
         var beforeCredentialReplay = await race.EpochAsync();
-        Assert.Equal("success", (await credentials.ExecuteAsync(lease, binding.CanonicalBytes(), binding.Hash(), ct)).Status);
+        Assert.True(Outcome("success", (await credentials.ExecuteAsync(lease, binding.CanonicalBytes(), binding.Hash(), ct)).Status));
         Assert.Equal(beforeCredentialReplay, await race.EpochAsync());
 
         // Offline approval-policy publication bound to the environment, then its exact replay, which reads its receipt under
@@ -196,9 +204,12 @@ public sealed class AuthorityFenceRemainingWriterDatabaseTests
             environment.Environment.Revision);
         var approvalHash = ApprovalPolicyManifest.ParseDisposableTest(approvalPolicy, profile.OwnerBinding).CommandHash;
         await race.RaceAsync("approval.policy", true, async () =>
-            (await approvals.ApplyAsync(lease, approvalPolicy, approvalHash, ct)).Status == "success");
+            Outcome("success", (await approvals.ApplyAsync(lease, approvalPolicy, approvalHash, ct)).Status));
         await race.RaceAsync("approval.policy", false, async () =>
-            (await approvals.ApplyAsync(lease, approvalPolicy, approvalHash, ct)) is { Status: "success", Replayed: true });
+        {
+            var replay = await approvals.ApplyAsync(lease, approvalPolicy, approvalHash, ct);
+            return Outcome("success", replay.Status) && Outcome("replayed", replay.Replayed ? "replayed" : "fresh");
+        });
 
         // Release mutation (synthetic project authority, real REL/IAM/AUD owners): a draft, then its exact replay.
         var releaseContexts = new PooledDbContextFactory<ReleaseDbContext>(selection.Release());
@@ -217,9 +228,9 @@ public sealed class AuthorityFenceRemainingWriterDatabaseTests
         {
             var (status, created) = await Mutate(draft, releaseKey);
             revision = created ?? Guid.Empty;
-            return status == "durable";
+            return Outcome("durable", status);
         });
-        await race.RaceAsync("release.mutate", false, async () => (await Mutate(draft, releaseKey)).Status == "replay");
+        await race.RaceAsync("release.mutate", false, async () => Outcome("replay", (await Mutate(draft, releaseKey)).Status));
 
         // Approval request for the draft after it is frozen (setup through the same fenced writer, outside the race), then its
         // exact replay, which verifies its receipt under the fence and commits nothing.
@@ -228,7 +239,7 @@ public sealed class AuthorityFenceRemainingWriterDatabaseTests
             facts.Project, facts.Selection, facts.Now, ct);
         var freeze = ReleaseMutationCommand.Freeze(facts.Project, revision, 1, $"\"rel-v1:{revision:D}:1\"",
             ReleasePreviewHash.Compute(revision, 1, preview.Intent!.SpecHash));
-        Assert.Equal("durable", (await Mutate(freeze, Key("fence-freeze"))).Status);
+        Assert.True(Outcome("durable", (await Mutate(freeze, Key("fence-freeze"))).Status));
         var capture = new ApprovalAuthorityCapture(facts, facts, facts, facts, facts, facts, facts);
         var approvalUses = ApprovalUseAdmission.CreateDisposableTestComposition(installation, identity, capture, selection.ArtifactAudit(),
             gate, facts, profile.OwnerBinding);
@@ -241,8 +252,8 @@ public sealed class AuthorityFenceRemainingWriterDatabaseTests
         var approvalRequest = ApprovalRequestParser.Parse("request", facts.Environment.ToString("D"), null, Encoding.UTF8.GetBytes(
             $"{{\"schemaVersion\":1,\"correlationId\":\"{correlation:D}\",\"releaseRevisionId\":\"{revision:D}\"}}"), StringValues.Empty);
         var approvalKey = Key("fence-approval");
-        await race.RaceAsync("approval.mutate", true, async () => await Approve() == "durable");
-        await race.RaceAsync("approval.mutate", false, async () => await Approve() == "replay");
+        await race.RaceAsync("approval.mutate", true, async () => Outcome("durable", await Approve()));
+        await race.RaceAsync("approval.mutate", false, async () => Outcome("replay", await Approve()));
         Assert.Equal(Scenarios.Order(StringComparer.Ordinal), race.Proven.Order(StringComparer.Ordinal));
 
         async Task<(string Status, Guid? Revision)> Mutate(ReleaseMutationCommand command, string key)
@@ -306,6 +317,23 @@ public sealed class AuthorityFenceRemainingWriterDatabaseTests
             await using var db = await tenants.CreateDbContextAsync(ct);
             return await db.Memberships.AsNoTracking().SingleAsync(x => x.TenantId == tenantFor && x.PrincipalId == principal, ct);
         }
+    }
+
+    /// <summary>
+    /// Fails with letter-only <c>Expected:</c>/<c>Actual:</c> status tokens: the disposable batch runner redacts failure text
+    /// and keeps only such tokens, so an unexpected writer outcome stays identifiable from its receipt.
+    /// </summary>
+    private static bool Outcome(string expected, string? actual)
+    {
+        if (actual != expected)
+            Assert.Fail($"Unexpected writer status{Environment.NewLine}Expected: {Letters(expected)}{Environment.NewLine}Actual: {Letters(actual)}");
+        return true;
+    }
+
+    private static string Letters(string? value)
+    {
+        var letters = new string((value ?? "").Where(char.IsAsciiLetter).Take(40).ToArray());
+        return letters.Length > 0 ? letters : "none";
     }
 
     private static string Key(string prefix) => prefix + "-" + Convert.ToHexStringLower(RandomNumberGenerator.GetBytes(8));
