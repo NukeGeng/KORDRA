@@ -61,6 +61,27 @@ public sealed class AuthorityFenceRemainingWriterDatabaseTests
         File.WriteAllText(Path.Combine(directory, "iam-workflow-authority-v2.sql"), AuthorityFenceIamWriterDatabaseTests.Script(suffix));
     }
 
+    /// <summary>
+    /// Every static manifest, policy and command the database race builds after its proven steps parses offline, so an input
+    /// defect never costs another approved disposable batch.
+    /// </summary>
+    [Fact]
+    public void RaceInputsParseWithoutDatabaseAccess()
+    {
+        var run = Guid.NewGuid();
+        var profile = (RunId: run, SourceSha256: new string('a', 64), OperationManifestSha256: new string('b', 64),
+            ExpiresAtUtc: DateTimeOffset.UtcNow.AddHours(1));
+        var manifest = ApprovalPolicyManifest.ParseDisposableTest(ApprovalPolicyBytes(Guid.NewGuid(), "kordra_test_" + run.ToString("N"),
+            Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), 1), profile);
+        Assert.Contains(manifest.Policy.Rules, rule => rule.Classification == "Staging" && rule.Effect == "allow");
+        Assert.Single(manifest.BindingChanges);
+        var facts = new ReleaseFacts(Guid.NewGuid());
+        facts.AllowPilot(TimeSpan.FromMinutes(5));
+        Assert.NotNull(facts.Policy);
+        var correlation = Guid.NewGuid();
+        Assert.Equal(correlation, ApprovalRequest(facts.Environment, correlation, Guid.NewGuid()).CorrelationId);
+    }
+
     [AuthorityFenceRemainingDatabaseFact]
     public async Task RemainingWritersHoldTheFenceAndAdvanceTheEpochOnEveryCommit()
     {
@@ -249,8 +270,7 @@ public sealed class AuthorityFenceRemainingWriterDatabaseTests
             new AuditMutationEvidenceReader(audits), gate, facts, profile.OwnerBinding, fence);
         Assert.Equal(AuthorityFenceMode.Enforced, approvalMutations.FenceMode);
         var correlation = Guid.NewGuid();
-        var approvalRequest = ApprovalRequestParser.Parse("request", facts.Environment.ToString("D"), null, Encoding.UTF8.GetBytes(
-            $"{{\"schemaVersion\":1,\"correlationId\":\"{correlation:D}\",\"releaseRevisionId\":\"{revision:D}\"}}"), StringValues.Empty);
+        var approvalRequest = ApprovalRequest(facts.Environment, correlation, revision);
         var approvalKey = Key("fence-approval");
         await race.RaceAsync("approval.mutate", true, async () => Outcome("durable", await Approve()));
         await race.RaceAsync("approval.mutate", false, async () => Outcome("replay", await Approve()));
@@ -339,6 +359,10 @@ public sealed class AuthorityFenceRemainingWriterDatabaseTests
     private static string Key(string prefix) => prefix + "-" + Convert.ToHexStringLower(RandomNumberGenerator.GetBytes(8));
     private static string Hex() => Convert.ToHexStringLower(RandomNumberGenerator.GetBytes(32));
 
+    private static ParsedApprovalMutation ApprovalRequest(Guid environment, Guid correlation, Guid revision) =>
+        ApprovalRequestParser.Parse("request", environment.ToString("D"), null, Encoding.UTF8.GetBytes(
+            $"{{\"schemaVersion\":1,\"correlationId\":\"{correlation:D}\",\"releaseRevisionId\":\"{revision:D}\"}}"), StringValues.Empty);
+
     private static byte[] ApprovalPolicyBytes(Guid installation, string database, Guid tenant, Guid project, Guid environment, long environmentRevision) =>
         Encoding.UTF8.GetBytes(JsonSerializer.Serialize(new
         {
@@ -349,8 +373,9 @@ public sealed class AuthorityFenceRemainingWriterDatabaseTests
             {
                 schemaVersion = 1, purpose = "release-intent-v1", status = "active", effectiveFromUtc = "2026-01-01T00:00:00.000000Z",
                 expiresAtUtc = (string?)null,
+                // Staging (like Production) requires independent separation and attested provenance.
                 rules = new[] { new { classification = "Staging", effect = "allow", separationOfDuties = "independent",
-                    allowUnattestedProvenance = true, pendingLifetimeSeconds = 86400, grantLifetimeSeconds = 1800,
+                    allowUnattestedProvenance = false, pendingLifetimeSeconds = 86400, grantLifetimeSeconds = 1800,
                     blockedWindowsUtc = Array.Empty<object>() } }
             },
             bindingChanges = new[] { new { environmentId = environment.ToString("D"), expectedEnvironmentRevision = environmentRevision,
