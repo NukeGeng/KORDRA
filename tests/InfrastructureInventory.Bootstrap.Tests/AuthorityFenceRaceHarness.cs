@@ -31,6 +31,7 @@ internal sealed class AuthorityFenceRaceHarness : IAsyncDisposable
     }
 
     internal Guid InstallationId { get; } = Guid.NewGuid();
+    internal Guid WorkerServiceId => workerService;
     internal IReadOnlyCollection<string> Proven => proven;
 
     internal static async Task<AuthorityFenceRaceHarness> StartAsync(string locator, string suffix, string fenceScript, CancellationToken ct)

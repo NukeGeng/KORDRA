@@ -168,3 +168,5 @@ ADR-0025 regression preparation. Release persistence race and stopped recovery f
 The ADR-0025 release rollback fixture now enlists on the selected disposable database using the existing explicit test options and the same caller connection and transaction.
 
 The approved v4 disposable run passed all 23 REL tests, including the enlisted caller-transaction path. Independent cleanup verified the disposable database was absent.
+
+T12.3c-3 (2026-11-18): `ReleaseMutationTransaction` accepts an optional `IAuthorityFence` (default `Inactive`, no behavior change). With the enforced fence its IAM root locks the installation fence right after it begins, before the receipt, revision and selection reads; every trusted-time reading on the root comes after the wait. Every committed draft, freeze or retirement advances the epoch once; an exact replay verifies its receipt under the fence and commits nothing.
