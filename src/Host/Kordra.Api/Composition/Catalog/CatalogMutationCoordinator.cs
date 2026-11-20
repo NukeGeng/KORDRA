@@ -18,23 +18,30 @@ using Microsoft.EntityFrameworkCore.Storage;
 
 namespace Kordra.Api;
 
-/// <summary>Technical transaction composition only. Owners prepare and persist their own records. No HTTP registration.</summary>
+/// <summary>
+/// Technical transaction composition only. Owners prepare and persist their own records. No HTTP registration. 12.3c-2
+/// (D1/D3): the PRJ root locks the installation authority fence (<see cref="AuthorityFence.Inactive"/> until activation)
+/// before any subject, grant or owner read, and every committed catalog change advances the epoch once.
+/// </summary>
 public sealed class CatalogMutationCoordinator(IDbContextFactory<ProjectDbContext> contexts,
     ICatalogAuthority authority, IEnvironmentPolicyReader policies, FairAsyncReaderWriterAdmissionGate gate,
-    IAuthorityClock clock, ICatalogAuditTransactionFactory audits, ICatalogClockFloorWriter? clockFloor = null)
+    IAuthorityClock clock, ICatalogAuditTransactionFactory audits, ICatalogClockFloorWriter? clockFloor = null,
+    IAuthorityFence? fence = null)
 {
     private readonly DisposableTestBinding? disposableTest;
+    private readonly IAuthorityFence _fence = fence ?? AuthorityFence.Inactive;
+    public AuthorityFenceMode FenceMode => _fence.Mode;
     private CatalogMutationCoordinator(IDbContextFactory<ProjectDbContext> contexts,
         ICatalogAuthority authority, IEnvironmentPolicyReader policies, FairAsyncReaderWriterAdmissionGate gate,
         IAuthorityClock clock, ICatalogAuditTransactionFactory audits, ICatalogClockFloorWriter? clockFloor,
-        DisposableTestBinding profile) : this(contexts, authority, policies, gate, clock, audits, clockFloor)
+        IAuthorityFence? fence, DisposableTestBinding profile) : this(contexts, authority, policies, gate, clock, audits, clockFloor, fence)
         => disposableTest = profile;
 
     public static CatalogMutationCoordinator CreateDisposableTestCoordinator(IDbContextFactory<ProjectDbContext> contexts,
         ICatalogAuthority authority, IEnvironmentPolicyReader policies, FairAsyncReaderWriterAdmissionGate gate,
         IAuthorityClock clock, ICatalogAuditTransactionFactory audits, DisposableTestBinding profile,
-        ICatalogClockFloorWriter? clockFloor = null)
-        => new(contexts, authority, policies, gate, clock, audits, clockFloor, profile);
+        ICatalogClockFloorWriter? clockFloor = null, IAuthorityFence? fence = null)
+        => new(contexts, authority, policies, gate, clock, audits, clockFloor, fence, profile);
 
     private sealed record Prepared(string Status, object? Resource = null, Guid Id = default, long Revision = 0, bool Replay = false, Guid IntentId = default);
 
@@ -42,7 +49,7 @@ public sealed class CatalogMutationCoordinator(IDbContextFactory<ProjectDbContex
     {
         if (command is null) return new("invalid");
         if (clockFloor is null) return new("unavailable");
-        var result = await RunAsync(command.Key, command.TenantId, command.ProjectId, null, "project.manage", command,
+        var result = await RunAsync(command.Key, command.TenantId, command.ProjectId, null, "project.manage", "catalog.environment-v2", command,
             async (projects, _, key, hash, token) =>
             {
                 var prepared = await projects.PrepareEnvironmentV2Async(command, key, hash, token);
@@ -56,7 +63,7 @@ public sealed class CatalogMutationCoordinator(IDbContextFactory<ProjectDbContex
     {
         if (command is null) return new("invalid");
         var result = await RunAsync(command.Key, command.TenantId, command.Kind == "project" && command.Operation == "create" ? Guid.Empty : command.ProjectId,
-            null, "project.manage", command, async (prj, _, key, hash, token) =>
+            null, "project.manage", "catalog.mutate", command, async (prj, _, key, hash, token) =>
             {
                 var p = await prj.PrepareAsync(command, key, hash, token);
                 return new(p.Status, p.Resource, p.Resource?.Id ?? Guid.Empty, p.Resource?.Revision ?? 0, p.IsReplay);
@@ -67,7 +74,7 @@ public sealed class CatalogMutationCoordinator(IDbContextFactory<ProjectDbContex
     public async Task<TargetMutationResult> ExecuteAsync(TargetCommand command, CancellationToken ct = default)
     {
         if (command is null) return new("invalid");
-        var result = await RunAsync(command.Key, command.TenantId, command.ProjectId, command.EnvironmentId, "target.manage", command,
+        var result = await RunAsync(command.Key, command.TenantId, command.ProjectId, command.EnvironmentId, "target.manage", "catalog.mutate", command,
             async (prj, inv, key, hash, token) =>
             {
                 var p = await inv.PrepareAsync(command, key, hash, token);
@@ -78,20 +85,25 @@ public sealed class CatalogMutationCoordinator(IDbContextFactory<ProjectDbContex
         return new(result.Status, result.Resource as TargetMetadata);
     }
 
-    private async Task<Prepared> RunAsync(string key, Guid tenant, Guid project, Guid? environment, string permission,
+    private async Task<Prepared> RunAsync(string key, Guid tenant, Guid project, Guid? environment, string permission, string reasonCode,
         object command, Func<ProjectCatalogStore, TargetRegistryStore, string, string, CancellationToken, Task<Prepared>> prepare, CancellationToken ct)
     {
         if (tenant == Guid.Empty || key is null || key.Length is < 16 or > 128 || key.Any(c => !(char.IsAsciiLetterOrDigit(c) || c is '.' or '_' or '~' or '-'))) return new("invalid");
         await using var admission = await gate.AcquireWriteAsync(ct);
+        await using var prjContext = await contexts.CreateDbContextAsync(ct);
+        if (disposableTest is { } target)
+            ProjectDbContextFactory.ValidateDisposableTestTarget(prjContext.Database.GetDbConnection().ConnectionString, target);
+        await using var transaction = await prjContext.Database.BeginTransactionAsync(ct);
+        // 12.3c (D1): fence on this root before the subject, grant and owner reads. A fence failure has not attempted a commit
+        // (unavailable, admission stays open).
+        IAuthorityFenceLease fenceLease;
+        try { fenceLease = await _fence.AcquireAsync(prjContext.Database.GetDbConnection(), transaction.GetDbTransaction(), ct); }
+        catch (Exception error) when (error is not OperationCanceledException) { return new("unavailable"); }
         var independentSubject = authority as IAuthenticatedCatalogSubjectReader;
         var principal = independentSubject is null ? await authority.ResolvePrincipalAsync(tenant, project, environment, permission, ct)
             : await independentSubject.CurrentPrincipalUnderAdmissionAsync(ct);
         if (principal is null || principal == Guid.Empty) return new("denied");
         var contentHash = Hash(JsonSerializer.Serialize(new { principal, commandType = command.GetType().Name, command }));
-        await using var prjContext = await contexts.CreateDbContextAsync(ct);
-        if (disposableTest is { } target)
-            ProjectDbContextFactory.ValidateDisposableTestTarget(prjContext.Database.GetDbConnection().ConnectionString, target);
-        await using var transaction = await prjContext.Database.BeginTransactionAsync(ct);
         await using var invContext = new InventoryDbContext(disposableTest is { } ownerProfile
             ? InventoryDbContextFactory.CreateDisposableEnlistedTestOptions(prjContext.Database.GetDbConnection(), ownerProfile)
             : InventoryDbContextFactory.CreateEnlistedOptions(prjContext.Database.GetDbConnection()));
@@ -143,6 +155,8 @@ public sealed class CatalogMutationCoordinator(IDbContextFactory<ProjectDbContex
                     await projects.ResolveOwnershipAsync(tenant, project, targetCommand.EnvironmentId, token) is null) return false;
                 await projects.PersistAsync(token);
                 await inventory.PersistAsync(token);
+                // 12.3c (D2): every committed catalog change alters ownership, association or policy-binding facts.
+                await fenceLease.AdvanceAsync(reasonCode, token);
                 if (clockFloor is not null) await clockFloor.StageAsync(prjContext.Database.GetDbConnection(), transaction.GetDbTransaction(), token);
                 return true;
             }, ct);

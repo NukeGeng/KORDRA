@@ -385,3 +385,5 @@ ADR-0025 fixture wiring continuation: shared test-only composition captures the 
 T12.3a (2026-11-14): the shared `InfrastructureInventory.Bootstrap.Tests` project only links the three owner-function SQL artifacts/manifests as test fixtures for the cross-owner PoC case; no INV behavior or contract change.
 
 T12.3b (2026-11-15): the shared Bootstrap test project links the IAM v2, WFL functions v2 and WFL revision 7 artifacts as fixtures; no INV behavior or contract change.
+
+T12.3c-2 (2026-11-17): target registration and lifecycle commands through `CatalogMutationCoordinator` lock the installation authority fence on the PRJ root before any subject or owner read and advance the epoch once per committed change when the enforced fence is composed (default `Inactive`; no INV behavior or contract change). The shared Bootstrap test project adds the operation-gated race test for these writers.

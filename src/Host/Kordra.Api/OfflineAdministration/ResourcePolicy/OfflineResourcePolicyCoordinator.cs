@@ -19,20 +19,27 @@ namespace Kordra.Api;
 public sealed record ResourcePolicyOperationResult(string Status, Guid PolicyId = default, long Revision = 0, IReadOnlyList<PolicyBinding>? Bindings = null);
 public sealed record ResourcePolicyImpact(string ManifestHash, int ExistingBindings, IReadOnlyList<Guid> BindingIds, bool Truncated);
 
-/// <summary>Offline technical composition. No HTTP registration, automatic approval or target/provider operation.</summary>
+/// <summary>
+/// Offline technical composition. No HTTP registration, automatic approval or target/provider operation. 12.3c-2 (D1/D3): the
+/// IAM root locks the installation authority fence (<see cref="AuthorityFence.Inactive"/> until activation) before the tenant,
+/// ownership and policy reads, and every committed publication/binding advances the epoch once. Exact receipt replay reads
+/// no authority fact and commits nothing, so it does not take the fence.
+/// </summary>
 public sealed class OfflineResourcePolicyCoordinator(Guid installationId, IDbContextFactory<KordraIdentityDbContext> contexts,
     IPolicyTenantAuthority tenants, IAuditAppendPort auditLookup, FairAsyncReaderWriterAdmissionGate gate, IAuthorityClock clock,
-    IOfflinePolicyAuditTransactionFactory? auditTransactions = null)
+    IOfflinePolicyAuditTransactionFactory? auditTransactions = null, IAuthorityFence? fence = null)
 {
     private readonly DisposableTestBinding? disposableTest;
+    private readonly IAuthorityFence _fence = fence ?? AuthorityFence.Inactive;
+    public AuthorityFenceMode FenceMode => _fence.Mode;
     private OfflineResourcePolicyCoordinator(Guid installationId, IDbContextFactory<KordraIdentityDbContext> contexts,
     IPolicyTenantAuthority tenants, IAuditAppendPort auditLookup, FairAsyncReaderWriterAdmissionGate gate, IAuthorityClock clock,
-    IOfflinePolicyAuditTransactionFactory? auditTransactions, DisposableTestBinding profile)
-        : this(installationId, contexts, tenants, auditLookup, gate, clock, auditTransactions) => disposableTest = profile;
+    IOfflinePolicyAuditTransactionFactory? auditTransactions, IAuthorityFence? fence, DisposableTestBinding profile)
+        : this(installationId, contexts, tenants, auditLookup, gate, clock, auditTransactions, fence) => disposableTest = profile;
     public static OfflineResourcePolicyCoordinator CreateDisposableTestCoordinator(Guid installationId, IDbContextFactory<KordraIdentityDbContext> contexts,
     IPolicyTenantAuthority tenants, IAuditAppendPort auditLookup, FairAsyncReaderWriterAdmissionGate gate, IAuthorityClock clock,
-    IOfflinePolicyAuditTransactionFactory? auditTransactions, DisposableTestBinding profile)
-        => new(installationId, contexts, tenants, auditLookup, gate, clock, auditTransactions, profile);
+    IOfflinePolicyAuditTransactionFactory? auditTransactions, DisposableTestBinding profile, IAuthorityFence? fence = null)
+        => new(installationId, contexts, tenants, auditLookup, gate, clock, auditTransactions, fence, profile);
 
     public async Task<ResourcePolicyImpact?> InspectAsync(IOfflineProvisioningLease custody, string json, CancellationToken ct = default)
     {
@@ -83,8 +90,11 @@ public sealed class OfflineResourcePolicyCoordinator(Guid installationId, IDbCon
                 { gate.Close(); return new("unknown"); }
                 custody.RequireHeld(); return replay;
             }
-            if (!await tenants.IsActiveTenantUnderAdmissionAsync(manifest.TenantId, ct)) return new("denied");
             await using var transaction = await db.Database.BeginTransactionAsync(ct);
+            // 12.3c (D1): fence on this root before the tenant, ownership and policy facts; a fence failure has not attempted a
+            // commit (unavailable below).
+            var fenceLease = await _fence.AcquireAsync(db.Database.GetDbConnection(), transaction.GetDbTransaction(), ct);
+            if (!await tenants.IsActiveTenantUnderAdmissionAsync(manifest.TenantId, ct)) return new("denied");
             await using var projectDb = new ProjectDbContext(disposableTest is { } ownerProfile
             ? ProjectDbContextFactory.CreateDisposableEnlistedTestOptions(db.Database.GetDbConnection(), ownerProfile)
             : ProjectDbContextFactory.CreateOfflineEnlistedOptions(db.Database.GetDbConnection()));
@@ -116,6 +126,8 @@ public sealed class OfflineResourcePolicyCoordinator(Guid installationId, IDbCon
             iam.StageCommand(installationId, manifest.ManifestId, new(hash, resultJson, intent.IntentId, AuditIntentCanonicalizer.ComputeHash(intent)));
             // All preparatory owner work is reversible; failure here has not attempted a commit.
             await iam.PersistAsync(ct); await projects.PersistAsync(ct);
+            // 12.3c (D2): a committed publication or binding changes the policy facts every permit re-evaluates.
+            await fenceLease.AdvanceAsync("policy.publish-bind", ct);
             await iam.StageClockFloorAsync(installationId, TrustedUtcNow(), ct);
             await using var auditTransaction = await (auditTransactions ?? (disposableTest is { } auditProfile
                 ? OfflinePolicyAuditTransactionFactory.CreateDisposableTestFactory(auditProfile) : new OfflinePolicyAuditTransactionFactory()))

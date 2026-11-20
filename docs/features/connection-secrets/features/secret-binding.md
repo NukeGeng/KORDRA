@@ -248,3 +248,5 @@ ADR-0025 fixture wiring continuation: shared test-only composition captures the 
 The registry credential broker's disposable test read view now enlists on the same selected caller connection and transaction as its setup. The guard still validates the exact test target. The full run exposed the previous legacy-target mismatch in three broker tests.
 
 T12.3c-1 (2026-11-17): `AuthorityWriterRegistry` gained a per-writer fence race scenario and `RequireEnforcedCoverage()`; `sec.binding` stays uncovered until 12.3c-3 (no SEC behavior change).
+
+T12.3c-2 (2026-11-17): `AuthorityWriterRegistry` also records race scenarios for the TEN, catalog and resource-policy writers; `sec.binding` stays uncovered until 12.3c-3 (no SEC behavior change).
