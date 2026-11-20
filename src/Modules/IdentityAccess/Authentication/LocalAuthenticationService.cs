@@ -3,6 +3,7 @@ using System.Security.Cryptography;
 using System.Text;
 using Kordra.BuildingBlocks.Security;
 using Kordra.Modules.AuditCompliance.Contracts;
+using Kordra.Modules.IdentityAccess.Contracts;
 using Kordra.Modules.IdentityAccess.Infrastructure;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
@@ -32,6 +33,13 @@ public sealed partial class LocalAuthenticationService : Kordra.Modules.Identity
     private readonly KordraIdentityUser _dummyUser = new() { UserName = "kordra-dummy" };
     private readonly string _dummyPasswordHash;
     private readonly TrustedUtcClock _clock;
+    private readonly IAuthorityFence _fence;
+
+    public AuthorityFenceMode FenceMode => _fence.Mode;
+
+    private Task<IAuthorityFenceLease> AcquireFenceAsync(KordraIdentityDbContext db, IDbContextTransaction transaction,
+        CancellationToken cancellationToken) =>
+        _fence.AcquireAsync(db.Database.GetDbConnection(), transaction.GetDbTransaction(), cancellationToken);
 
     public LocalAuthenticationService(
         IDbContextFactory<KordraIdentityDbContext> contexts,
@@ -40,8 +48,11 @@ public sealed partial class LocalAuthenticationService : Kordra.Modules.Identity
         LocalAuthenticationConfiguration configuration,
         FairAsyncReaderWriterAdmissionGate admission,
         TimeProvider? timeProvider = null,
-        LocalPasswordPolicy? passwordPolicy = null)
+        LocalPasswordPolicy? passwordPolicy = null,
+        IAuthorityFence? fence = null)
     {
+        // 12.3c (D3): explicit pre-activation default; the enforced fence is composed only where authority is active.
+        _fence = fence ?? AuthorityFence.Inactive;
         _contexts = contexts ?? throw new ArgumentNullException(nameof(contexts));
         _auditTransactions = auditTransactions ?? throw new ArgumentNullException(nameof(auditTransactions));
         _passwordHasher = passwordHasher ?? throw new ArgumentNullException(nameof(passwordHasher));
@@ -75,8 +86,10 @@ public sealed partial class LocalAuthenticationService : Kordra.Modules.Identity
             try { _clock.AdoptPersistedFloor(persistedFloor.AdmittedUtc); }
             catch { _admission.Close(); throw; }
         }
-        var now = GetTrustedUtcNow();
         await using var transaction = await db.Database.BeginTransactionAsync(cancellationToken);
+        // 12.3c (D1): fence before any authorization fact read on this root; trusted time is read only after the fence wait.
+        var fence = await AcquireFenceAsync(db, transaction, cancellationToken);
+        var now = GetTrustedUtcNow();
         var intent = CreateIntent(
             AuditIntentStage.Mutation,
             subjectId: null,
@@ -96,7 +109,7 @@ public sealed partial class LocalAuthenticationService : Kordra.Modules.Identity
                     .SetProperty(session => session.RevokedAtUtc, now)
                     .SetProperty(session => session.RevocationReason, "api-restart"), token);
             await db.SaveChangesAsync(token);
-        }, cancellationToken);
+        }, cancellationToken, fence: fence, advanceReason: "iam.boot");
 
         if (outcome.Status != AuditAppendStatus.Durable)
         {
@@ -305,10 +318,12 @@ public sealed partial class LocalAuthenticationService : Kordra.Modules.Identity
         {
             using var requestDeadline = CreateRequestDeadline(cancellationToken);
             await using var lease = await _admission.AcquireWriteAsync(requestDeadline.Token);
-            var now = GetTrustedUtcNow();
             sessionHash = SHA256.HashData(reference);
             await using var db = await _contexts.CreateDbContextAsync(requestDeadline.Token);
             await using var transaction = await db.Database.BeginTransactionAsync(requestDeadline.Token);
+            // 12.3c (D1): fence before any authorization fact read on this root; trusted time is read only after the fence wait.
+            var fence = await AcquireFenceAsync(db, transaction, requestDeadline.Token);
+            var now = GetTrustedUtcNow();
             var session = await db.Sessions.Include(value => value.Principal)
                 .SingleOrDefaultAsync(value => value.PrincipalId == principalId &&
                     value.BootGeneration == bootGeneration && value.SessionReferenceHash == sessionHash,
@@ -324,7 +339,7 @@ public sealed partial class LocalAuthenticationService : Kordra.Modules.Identity
             var intent = CreateIntent(AuditIntentStage.Mutation, principalId, "principal", principalId,
                 "iam.logout", "logout", session.PrincipalRevision, now);
             var outcome = await CommitWithAuditAsync(db, transaction, intent,
-                token => db.SaveChangesAsync(token), requestDeadline.Token);
+                token => db.SaveChangesAsync(token), requestDeadline.Token, fence: fence, advanceReason: "iam.logout");
             return outcome.Status == AuditAppendStatus.Durable
                 ? new LocalCommandResult(LocalAuthenticationStatus.Success, principalId, intent.CorrelationId)
                 : new LocalCommandResult(LocalAuthenticationStatus.AuthorityUnavailable);
@@ -371,10 +386,12 @@ public sealed partial class LocalAuthenticationService : Kordra.Modules.Identity
         {
             using var requestDeadline = CreateRequestDeadline(cancellationToken);
             await using var lease = await _admission.AcquireWriteAsync(requestDeadline.Token);
-            var now = GetTrustedUtcNow();
             sessionHash = SHA256.HashData(reference);
             await using var db = await _contexts.CreateDbContextAsync(requestDeadline.Token);
             await using var transaction = await db.Database.BeginTransactionAsync(requestDeadline.Token);
+            // 12.3c (D1): fence before any authorization fact read on this root; trusted time is read only after the fence wait.
+            var fence = await AcquireFenceAsync(db, transaction, requestDeadline.Token);
+            var now = GetTrustedUtcNow();
             var current = await db.Sessions.Include(value => value.Principal)
                 .SingleOrDefaultAsync(value => value.PrincipalId == principalId &&
                     value.BootGeneration == bootGeneration && value.SessionReferenceHash == sessionHash,
@@ -402,7 +419,7 @@ public sealed partial class LocalAuthenticationService : Kordra.Modules.Identity
             var intent = CreateIntent(AuditIntentStage.Mutation, principalId, "principal", principalId,
                 "iam.logout-all", "logout-all", current!.PrincipalRevision, now);
             var outcome = await CommitWithAuditAsync(db, transaction, intent,
-                token => db.SaveChangesAsync(token), requestDeadline.Token);
+                token => db.SaveChangesAsync(token), requestDeadline.Token, fence: fence, advanceReason: "iam.logout-all");
             return outcome.Status == AuditAppendStatus.Durable
                 ? new LocalCommandResult(LocalAuthenticationStatus.Success, principalId, intent.CorrelationId)
                 : new LocalCommandResult(LocalAuthenticationStatus.AuthorityUnavailable);
@@ -490,9 +507,11 @@ public sealed partial class LocalAuthenticationService : Kordra.Modules.Identity
 
             var replacementHash = _passwordHasher.HashPassword(snapshot, newPassword!);
             await using var lease = await _admission.AcquireWriteAsync(token);
-            var now = GetTrustedUtcNow();
             await using var db = await _contexts.CreateDbContextAsync(token);
             await using var transaction = await db.Database.BeginTransactionAsync(token);
+            // 12.3c (D1): fence before any authorization fact read on this root; trusted time is read only after the fence wait.
+            var fence = await AcquireFenceAsync(db, transaction, token);
+            var now = GetTrustedUtcNow();
             var user = await db.Principals.SingleOrDefaultAsync(value => value.Id == principalId, token);
             var session = await db.Sessions.Include(value => value.Principal)
                 .SingleOrDefaultAsync(value => value.PrincipalId == principalId &&
@@ -528,7 +547,7 @@ public sealed partial class LocalAuthenticationService : Kordra.Modules.Identity
             var intent = CreateIntent(AuditIntentStage.Mutation, principalId, "principal", principalId,
                 "iam.password-change", "password-change", user.Revision, now);
             var outcome = await CommitWithAuditAsync(db, transaction, intent,
-                ct => db.SaveChangesAsync(ct), token);
+                ct => db.SaveChangesAsync(ct), token, fence: fence, advanceReason: "iam.password");
             return outcome.Status == AuditAppendStatus.Durable
                 ? new LocalCommandResult(LocalAuthenticationStatus.Success, principalId, intent.CorrelationId)
                 : new LocalCommandResult(LocalAuthenticationStatus.AuthorityUnavailable);
@@ -575,7 +594,6 @@ public sealed partial class LocalAuthenticationService : Kordra.Modules.Identity
         try
         {
             using var requestDeadline = CreateRequestDeadline(cancellationToken);
-            var now = GetTrustedUtcNow();
             var principal = new KordraIdentityUser
             {
                 UserName = userName,
@@ -591,6 +609,9 @@ public sealed partial class LocalAuthenticationService : Kordra.Modules.Identity
             await using var lease = await _admission.AcquireWriteAsync(requestDeadline.Token);
             await using var db = await _contexts.CreateDbContextAsync(requestDeadline.Token);
             await using var transaction = await db.Database.BeginTransactionAsync(requestDeadline.Token);
+            // 12.3c (D1): fence before any authorization fact read on this root; trusted time is read only after the fence wait.
+            var fence = await AcquireFenceAsync(db, transaction, requestDeadline.Token);
+            var now = GetTrustedUtcNow();
             if (await db.Principals.AnyAsync(user => user.NormalizedUserName == normalizedUserName, requestDeadline.Token))
             {
                 return new LocalCommandResult(LocalAuthenticationStatus.Conflict);
@@ -599,8 +620,9 @@ public sealed partial class LocalAuthenticationService : Kordra.Modules.Identity
             db.Principals.Add(principal);
             var intent = CreateIntent(AuditIntentStage.Mutation, principal.Id, "principal", principal.Id,
                 "iam.enroll-user", "offline-enrollment", principal.Revision, now);
+            // D2: a new principal invalidates nothing; the fence is held for ordering only.
             var outcome = await CommitWithAuditAsync(db, transaction, intent,
-                token => db.SaveChangesAsync(token), requestDeadline.Token);
+                token => db.SaveChangesAsync(token), requestDeadline.Token, fence: fence);
             return outcome.Status == AuditAppendStatus.Durable
                 ? new LocalCommandResult(LocalAuthenticationStatus.Success, principal.Id, intent.CorrelationId)
                 : new LocalCommandResult(LocalAuthenticationStatus.AuthorityUnavailable);
@@ -651,9 +673,11 @@ public sealed partial class LocalAuthenticationService : Kordra.Modules.Identity
 
             var replacementHash = _passwordHasher.HashPassword(snapshot, password!);
             await using var lease = await _admission.AcquireWriteAsync(requestDeadline.Token);
-            var now = GetTrustedUtcNow();
             await using var db = await _contexts.CreateDbContextAsync(requestDeadline.Token);
             await using var transaction = await db.Database.BeginTransactionAsync(requestDeadline.Token);
+            // 12.3c (D1): fence before any authorization fact read on this root; trusted time is read only after the fence wait.
+            var fence = await AcquireFenceAsync(db, transaction, requestDeadline.Token);
+            var now = GetTrustedUtcNow();
             var user = await db.Principals.SingleOrDefaultAsync(value => value.Id == principalId, requestDeadline.Token);
             if (user is null || user.Revision != snapshot.Revision || user.SecurityStamp != snapshot.SecurityStamp)
             {
@@ -670,7 +694,7 @@ public sealed partial class LocalAuthenticationService : Kordra.Modules.Identity
             var intent = CreateIntent(AuditIntentStage.Mutation, principalId, "principal", principalId,
                 "iam.recover-user", "offline-recovery", user.Revision, now);
             var outcome = await CommitWithAuditAsync(db, transaction, intent,
-                token => db.SaveChangesAsync(token), requestDeadline.Token);
+                token => db.SaveChangesAsync(token), requestDeadline.Token, fence: fence, advanceReason: "iam.recover");
             return outcome.Status == AuditAppendStatus.Durable
                 ? new LocalCommandResult(LocalAuthenticationStatus.Success, principalId, intent.CorrelationId)
                 : new LocalCommandResult(LocalAuthenticationStatus.AuthorityUnavailable);
@@ -706,9 +730,11 @@ public sealed partial class LocalAuthenticationService : Kordra.Modules.Identity
         {
             using var requestDeadline = CreateRequestDeadline(cancellationToken);
             await using var lease = await _admission.AcquireWriteAsync(requestDeadline.Token);
-            var now = GetTrustedUtcNow();
             await using var db = await _contexts.CreateDbContextAsync(requestDeadline.Token);
             await using var transaction = await db.Database.BeginTransactionAsync(requestDeadline.Token);
+            // 12.3c (D1): fence before any authorization fact read on this root; trusted time is read only after the fence wait.
+            var fence = await AcquireFenceAsync(db, transaction, requestDeadline.Token);
+            var now = GetTrustedUtcNow();
             var user = await db.Principals.SingleOrDefaultAsync(value => value.Id == principalId, requestDeadline.Token);
             if (user is null)
             {
@@ -727,7 +753,7 @@ public sealed partial class LocalAuthenticationService : Kordra.Modules.Identity
             var intent = CreateIntent(AuditIntentStage.Mutation, principalId, "principal", principalId,
                 "iam.disable-user", "offline-disable", user.Revision, now);
             var outcome = await CommitWithAuditAsync(db, transaction, intent,
-                token => db.SaveChangesAsync(token), requestDeadline.Token);
+                token => db.SaveChangesAsync(token), requestDeadline.Token, fence: fence, advanceReason: "iam.disable");
             return outcome.Status == AuditAppendStatus.Durable
                 ? new LocalCommandResult(LocalAuthenticationStatus.Success, principalId, intent.CorrelationId)
                 : new LocalCommandResult(LocalAuthenticationStatus.AuthorityUnavailable);
@@ -749,9 +775,11 @@ public sealed partial class LocalAuthenticationService : Kordra.Modules.Identity
         CancellationToken cancellationToken)
     {
         await using var lease = await _admission.AcquireWriteAsync(cancellationToken);
-        now = GetTrustedUtcNow();
         await using var db = await _contexts.CreateDbContextAsync(cancellationToken);
         await using var transaction = await db.Database.BeginTransactionAsync(cancellationToken);
+        // 12.3c (D1): fence before any authorization fact read on this root; trusted time is read only after the fence wait.
+        var fence = await AcquireFenceAsync(db, transaction, cancellationToken);
+        now = GetTrustedUtcNow();
         var user = await db.Principals.SingleOrDefaultAsync(value => value.Id == snapshot.Id, cancellationToken);
         if (user is null || user.AccountStatus != "active" ||
             user.Revision != snapshot.Revision || user.SecurityStamp != snapshot.SecurityStamp ||
@@ -798,8 +826,9 @@ public sealed partial class LocalAuthenticationService : Kordra.Modules.Identity
 
             var intent = CreateIntent(AuditIntentStage.Mutation, user.Id, "principal", user.Id,
                 "iam.authenticate", "login-succeeded", user.Revision, now);
+            // D2: a new session invalidates nothing; the fence is held for ordering only.
             var outcome = await CommitWithAuditAsync(db, transaction, intent,
-                token => db.SaveChangesAsync(token), cancellationToken);
+                token => db.SaveChangesAsync(token), cancellationToken, fence: fence);
             if (outcome.Status != AuditAppendStatus.Durable)
             {
                 return new LocalLoginResult(LocalAuthenticationStatus.AuthorityUnavailable);
@@ -826,9 +855,11 @@ public sealed partial class LocalAuthenticationService : Kordra.Modules.Identity
         CancellationToken cancellationToken)
     {
         await using var lease = await _admission.AcquireWriteAsync(cancellationToken);
-        now = GetTrustedUtcNow();
         await using var db = await _contexts.CreateDbContextAsync(cancellationToken);
         await using var transaction = await db.Database.BeginTransactionAsync(cancellationToken);
+        // 12.3c (D1): fence before any authorization fact read on this root; trusted time is read only after the fence wait.
+        var fence = await AcquireFenceAsync(db, transaction, cancellationToken);
+        now = GetTrustedUtcNow();
         var user = await db.Principals.SingleOrDefaultAsync(value => value.Id == snapshot.Id, cancellationToken);
         if (user is null || user.Revision != snapshot.Revision || user.SecurityStamp != snapshot.SecurityStamp ||
             user.AccountStatus != "active")
@@ -841,17 +872,20 @@ public sealed partial class LocalAuthenticationService : Kordra.Modules.Identity
             return AuditAppendStatus.Durable;
         }
 
+        var lockoutStarted = false;
         if (++user.AccessFailedCount >= FailedAttemptsBeforeLockout)
         {
             user.AccessFailedCount = 0;
             user.LockoutEnd = now + LockoutDuration;
+            lockoutStarted = true;
         }
 
         user.ConcurrencyStamp = Guid.NewGuid().ToString("N");
         var intent = CreateIntent(AuditIntentStage.Outcome, user.Id, "principal", user.Id,
             "iam.authenticate", "login-denied", user.Revision, now, AuditActionOutcome.Denied);
+        // D2: only the attempt that starts a lockout changes authority; a counter increment alone does not.
         var outcome = await CommitWithAuditAsync(db, transaction, intent,
-            token => db.SaveChangesAsync(token), cancellationToken);
+            token => db.SaveChangesAsync(token), cancellationToken, fence: fence, advanceReason: lockoutStarted ? "iam.lockout" : null);
         return outcome.Status;
     }
 
@@ -910,8 +944,11 @@ public sealed partial class LocalAuthenticationService : Kordra.Modules.Identity
         IDbContextTransaction transaction,
         AuditIntent intent,
         Func<CancellationToken, Task> saveOwnerMutationAsync,
-        CancellationToken cancellationToken, Action? protocolStarted = null)
+        CancellationToken cancellationToken, Action? protocolStarted = null,
+        IAuthorityFenceLease? fence = null, string? advanceReason = null)
     {
+        if (advanceReason is not null && fence is null)
+            throw new InvalidOperationException("An authority advance needs the fence lease of this root.");
         // Enlistment only prepares the audit context: no owner mutation or commit can
         // have started if setup fails, including cancellation of best-effort denial audit.
         await using var audit = await _auditTransactions.EnlistAsync(
@@ -922,6 +959,7 @@ public sealed partial class LocalAuthenticationService : Kordra.Modules.Identity
             var outcome = await audit.CommitWithOwnerMutationAsync(intent, async token =>
             {
                 await saveOwnerMutationAsync(token);
+                if (advanceReason is not null) await fence!.AdvanceAsync(advanceReason, token);
                 await PersistClockFloorAsync(db, GetTrustedUtcNow(), token);
             }, cancellationToken);
             if (outcome.Status == AuditAppendStatus.Unknown)

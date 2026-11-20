@@ -16,8 +16,13 @@ public sealed record DefinitionWriteResult(string Status, Guid DefinitionId = de
 public sealed class RoleDefinitionStore(
     IDbContextFactory<KordraIdentityDbContext> contexts,
     FairAsyncReaderWriterAdmissionGate gate,
-    IIdentityAuditTransactionFactory audits, LocalAuthenticationConfiguration? configuration = null, IAuthorityClock? clock = null) : IRoleDefinitionReader, IDurableRoleEvidenceReader
+    IIdentityAuditTransactionFactory audits, LocalAuthenticationConfiguration? configuration = null, IAuthorityClock? clock = null,
+    IAuthorityFence? fence = null) : IRoleDefinitionReader, IDurableRoleEvidenceReader
 {
+    // 12.3c (D3): explicit pre-activation default; the enforced fence is composed only where authority is active.
+    private readonly IAuthorityFence _fence = fence ?? AuthorityFence.Inactive;
+    public AuthorityFenceMode FenceMode => _fence.Mode;
+
     public async Task<DurableRoleEvidence> ReadExactUnderAdmissionAsync(Guid definitionId, long revision, CancellationToken cancellationToken = default)
     {
         if (definitionId == Guid.Empty || revision <= 0) return new(DurableRoleEvidenceStatus.Unavailable);
@@ -72,6 +77,8 @@ public sealed class RoleDefinitionStore(
         offline.RequireHeld();
         await using var db = await contexts.CreateDbContextAsync(cancellationToken);
         await using var tx = await db.Database.BeginTransactionAsync(cancellationToken);
+        // 12.3c (D1): fence before any authorization fact read on this root.
+        var fenceLease = await _fence.AcquireAsync(db.Database.GetDbConnection(), tx.GetDbTransaction(), cancellationToken);
         var replay = await db.RoleDefinitions.AsNoTracking().SingleOrDefaultAsync(x => x.ManifestId == manifestId, cancellationToken);
         if (replay is not null) return replay.ContentHash == hash ? new("success", replay.DefinitionId, replay.Revision) : new("conflict");
         var previous = definitionId == Guid.Empty ? null : await db.RoleDefinitions.AsNoTracking().Where(x => x.DefinitionId == definitionId)
@@ -92,6 +99,8 @@ public sealed class RoleDefinitionStore(
             var result = await audit.CommitWithOwnerMutationAsync(intent, async ct =>
             {
                 offline.RequireHeld(); await db.SaveChangesAsync(ct);
+                // D2: a new revision or retirement of an existing definition changes current grants; a brand-new one does not.
+                if (expectedRevision > 0) await fenceLease.AdvanceAsync("iam.definition", ct);
                 if (configuration is not null && clock is not null) await AuthorityClockFloorStore.StageAsync(db, configuration.InstallationId, clock.GetTrustedUtcNow(), ct);
             }, cancellationToken);
             if (result.Status == AuditAppendStatus.Unknown) gate.Close();
