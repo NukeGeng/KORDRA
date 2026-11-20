@@ -94,10 +94,14 @@ public sealed class AuthorityFenceTests
         // D6: installation restore has no entry point; it keeps activation blocked until its runbook step is accepted.
         var restore = Assert.Single(AuthorityWriterRegistry.Operations);
         Assert.Equal(("installation.restore", "docs/operations/backup-restore-runbook.md", false), (restore.Id, restore.Runbook, restore.RunbookStepAccepted));
-        // Every writer now has its race scenario; activation still refuses, naming only the restore step.
+        // Every fenced writer has its race scenario. The artifact-registry credential writer stays registered without one until its
+        // inventory decision (PR37-SEC-REGISTRY-FENCE-001), so activation refuses, naming it and the restore step.
+        var registryCredentials = Assert.Single(AuthorityWriterRegistry.Entries, x => x.FenceRaceScenario is null);
+        Assert.Equal(("sec.registry-binding", typeof(OfflineRegistryCredentialCoordinator), nameof(OfflineRegistryCredentialCoordinator.ExecuteAsync), true),
+            (registryCredentials.Id, registryCredentials.Owner, registryCredentials.Method, registryCredentials.OfflineOnly));
         var error = Assert.Throws<InvalidOperationException>(AuthorityWriterRegistry.RequireEnforcedCoverage);
         var uncovered = AuthorityWriterRegistry.Entries.Where(x => x.FenceRaceScenario is null).Select(x => x.Id).Append(restore.Id).ToArray();
-        Assert.Equal(["installation.restore"], uncovered);
+        Assert.Equal(["sec.registry-binding", "installation.restore"], uncovered);
         Assert.EndsWith(string.Join(", ", uncovered), error.Message);
     }
 

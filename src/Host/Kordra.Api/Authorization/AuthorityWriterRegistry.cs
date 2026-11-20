@@ -39,6 +39,10 @@ public static class AuthorityWriterRegistry
         new("catalog.mutate", typeof(CatalogMutationCoordinator), nameof(CatalogMutationCoordinator.ExecuteAsync), false, "catalog.mutate"),
         new("catalog.environment-v2", typeof(CatalogMutationCoordinator), nameof(CatalogMutationCoordinator.ExecuteEnvironmentV2Async), false, "catalog.environment-v2"),
         new("sec.binding", typeof(OfflineCredentialCoordinator), nameof(OfflineCredentialCoordinator.ExecuteAsync), true, "sec.binding"),
+        // Artifact-registry credential binding writes SEC state that artifact authority and the credential broker read; whether it is
+        // a permit fact is an open owner decision (12.3c scope inventory [NEEDS-DECISION], finding PR37-SEC-REGISTRY-FENCE-001). It is
+        // registered without a race scenario so activation stays blocked until it is fenced with a race proof or explicitly ruled out.
+        new("sec.registry-binding", typeof(OfflineRegistryCredentialCoordinator), nameof(OfflineRegistryCredentialCoordinator.ExecuteAsync), true),
         new("policy.publish-bind", typeof(OfflineResourcePolicyCoordinator), nameof(OfflineResourcePolicyCoordinator.ExecuteAsync), true, "policy.publish-bind"),
         new("approval.policy", typeof(OfflineApprovalPolicyCoordinator), nameof(OfflineApprovalPolicyCoordinator.ApplyAsync), true, "approval.policy"),
         new("release.mutate", typeof(ReleaseMutationTransaction), nameof(ReleaseMutationTransaction.ExecuteAsync), false, "release.mutate"),
