@@ -49,6 +49,19 @@ public sealed record WorkflowServiceManifest(string ManifestSha256, string Kind,
 public sealed record WorkflowServiceManifestApplied(long Generation, long AuthorityEpoch, bool Duplicate);
 
 /// <summary>
+/// 12.3c-3: the 12.3b function-port methods that lock the authority fence and advance the epoch themselves, declared by IAM for
+/// the Host authority writer registry. Inventory only: nothing here composes, registers or activates the port.
+/// </summary>
+public static class IamAuthorityFunctionWriters
+{
+    public static IReadOnlyList<(string Id, Type Owner, string Method, bool OfflineOnly)> Entries { get; } =
+    [
+        ("iam.delegation-revoke", typeof(WorkflowAuthorityFunctionPort), nameof(WorkflowAuthorityFunctionPort.RevokeDelegationAsync), false),
+        ("iam.service-manifest", typeof(WorkflowAuthorityFunctionPort), nameof(WorkflowAuthorityFunctionPort.ApplyServiceManifestAsync), true)
+    ];
+}
+
+/// <summary>
 /// T12.3a/12.3b (inactive, no DI registration): calls the IAM owner functions of <c>iam-workflow-authority-v1/v2.sql</c> on the
 /// caller-owned root connection/transaction. Never opens, commits or rolls back; identity comes from the session login only.
 /// Owner errors surface as <see cref="PostgresException"/> with a Kordra <c>KD…</c> SQLSTATE.
