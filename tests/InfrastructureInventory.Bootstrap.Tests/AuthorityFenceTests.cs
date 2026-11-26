@@ -12,7 +12,7 @@ using Xunit;
 
 namespace Kordra.InfrastructureInventory.Bootstrap.Tests;
 
-/// <summary>12.3c-1/2 offline: fence port modes, enforced-fence guards and registry coverage (no database access).</summary>
+/// <summary>12.3c-1/2/3 offline: fence port modes, enforced-fence guards and registry coverage (no database access).</summary>
 public sealed class AuthorityFenceTests
 {
     [Fact]
@@ -63,19 +63,46 @@ public sealed class AuthorityFenceTests
     }
 
     [Fact]
+    public void CredentialApprovalAndReleaseWritersDefaultToTheExplicitInactiveFence()
+    {
+        var gate = new FairAsyncReaderWriterAdmissionGate();
+        Assert.Equal(AuthorityFenceMode.Inactive, new OfflineCredentialCoordinator(Guid.NewGuid(), null!, null!, null!, null!, gate, null!).FenceMode);
+        Assert.Equal(AuthorityFenceMode.Inactive, new OfflineApprovalPolicyCoordinator(Guid.NewGuid(), null!, null!, gate, null!).FenceMode);
+        Assert.Equal(AuthorityFenceMode.Inactive, new ReleaseMutationTransaction(Guid.NewGuid(), null!, null!, null!, null!, null!, gate, null!).FenceMode);
+        Assert.Equal(AuthorityFenceMode.Inactive,
+            new ApprovalMutationTransaction(Guid.NewGuid(), null!, null!, null!, null!, null!, null!, null!, gate, null!).FenceMode);
+        var fence = new PostgresAuthorityFence(Guid.NewGuid());
+        Assert.Equal(AuthorityFenceMode.Enforced, new OfflineCredentialCoordinator(Guid.NewGuid(), null!, null!, null!, null!, gate, null!, null, fence).FenceMode);
+        Assert.Equal(AuthorityFenceMode.Enforced, new OfflineApprovalPolicyCoordinator(Guid.NewGuid(), null!, null!, gate, null!, null, fence).FenceMode);
+        Assert.Equal(AuthorityFenceMode.Enforced, new ReleaseMutationTransaction(Guid.NewGuid(), null!, null!, null!, null!, null!, gate, null!, fence).FenceMode);
+        Assert.Equal(AuthorityFenceMode.Enforced,
+            new ApprovalMutationTransaction(Guid.NewGuid(), null!, null!, null!, null!, null!, null!, null!, gate, null!, fence).FenceMode);
+    }
+
+    [Fact]
     public void RegistryCoverageMatchesTheRaceScenariosAndBlocksActivationWhileIncomplete()
     {
         AuthorityWriterRegistry.Validate();
         var covered = AuthorityWriterRegistry.Entries.Where(x => x.FenceRaceScenario is not null).ToArray();
-        // Every declared scenario is proven by a race test class: 12.3c-1 the nine IAM writers, 12.3c-2 TEN/catalog/policy.
-        var proven = AuthorityFenceIamWriterDatabaseTests.Scenarios.Concat(AuthorityFenceTenantCatalogWriterDatabaseTests.Scenarios).ToArray();
+        // Every declared scenario is proven by a race test class: 12.3c-1 the nine IAM writers, 12.3c-2 TEN/catalog/policy,
+        // 12.3c-3 the 12.3b IAM functions, offline credential/approval-policy and release writers.
+        var proven = AuthorityFenceIamWriterDatabaseTests.Scenarios.Concat(AuthorityFenceTenantCatalogWriterDatabaseTests.Scenarios)
+            .Concat(AuthorityFenceRemainingWriterDatabaseTests.Scenarios).ToArray();
         Assert.Equal(proven.Length, proven.Distinct(StringComparer.Ordinal).Count());
         Assert.Equal(proven.Order(StringComparer.Ordinal), covered.Select(x => x.FenceRaceScenario!).Distinct().Order(StringComparer.Ordinal));
         Assert.All(covered, x => Assert.Equal(x.Id, x.FenceRaceScenario));
-        // Offline SEC/approval-policy and REL/APR writers are 12.3c-3: activation must still refuse, naming only those.
+        // D6: installation restore has no entry point; it keeps activation blocked until its runbook step is accepted.
+        var restore = Assert.Single(AuthorityWriterRegistry.Operations);
+        Assert.Equal(("installation.restore", "docs/operations/backup-restore-runbook.md", false), (restore.Id, restore.Runbook, restore.RunbookStepAccepted));
+        // Every fenced writer has its race scenario. The artifact-registry credential writer stays registered without one until its
+        // inventory decision (PR37-SEC-REGISTRY-FENCE-001), so activation refuses, naming it and the restore step.
+        var registryCredentials = Assert.Single(AuthorityWriterRegistry.Entries, x => x.FenceRaceScenario is null);
+        Assert.Equal(("sec.registry-binding", typeof(OfflineRegistryCredentialCoordinator), nameof(OfflineRegistryCredentialCoordinator.ExecuteAsync), true),
+            (registryCredentials.Id, registryCredentials.Owner, registryCredentials.Method, registryCredentials.OfflineOnly));
         var error = Assert.Throws<InvalidOperationException>(AuthorityWriterRegistry.RequireEnforcedCoverage);
-        Assert.Contains("sec.binding", error.Message);
-        foreach (var prefix in new[] { "iam.", "ten.", "catalog.", "policy.publish-bind" }) Assert.DoesNotContain(prefix, error.Message);
+        var uncovered = AuthorityWriterRegistry.Entries.Where(x => x.FenceRaceScenario is null).Select(x => x.Id).Append(restore.Id).ToArray();
+        Assert.Equal(["sec.registry-binding", "installation.restore"], uncovered);
+        Assert.EndsWith(string.Join(", ", uncovered), error.Message);
     }
 
     private sealed class NoContexts : IDbContextFactory<KordraIdentityDbContext>

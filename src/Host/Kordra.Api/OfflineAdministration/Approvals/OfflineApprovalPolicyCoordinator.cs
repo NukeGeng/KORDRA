@@ -26,20 +26,27 @@ public sealed record ApprovalPolicyInspectResult(int SchemaVersion, string Manif
 public sealed record ApprovalPolicyApplyResult(string Status, int SchemaVersion = 1, Guid ManifestId = default,
     Guid PolicyId = default, long PolicyRevision = 0, string? PayloadHash = null, Guid CommandId = default, bool Replayed = false);
 
-/// <summary>Exact stopped policy publication; Host owns one enlisted owner/audit/floor transaction.</summary>
+/// <summary>
+/// Exact stopped policy publication; Host owns one enlisted owner/audit/floor transaction. 12.3c-3 (D1/D3): the root locks the
+/// installation authority fence (<see cref="AuthorityFence.Inactive"/> until activation) right after it begins, before the
+/// command, tenant, project and environment reads, and every committed publication advances the epoch once. An exact replay
+/// holds the fence only to read its receipt and commits nothing.
+/// </summary>
 public sealed class OfflineApprovalPolicyCoordinator(Guid installationId, IDbContextFactory<KordraIdentityDbContext> identities,
     IAuditAppendPort auditLookup, FairAsyncReaderWriterAdmissionGate gate, IAuthorityClock clock,
-    IOfflinePolicyAuditTransactionFactory? auditTransactions = null)
+    IOfflinePolicyAuditTransactionFactory? auditTransactions = null, IAuthorityFence? fence = null)
 {
     private readonly DisposableTestBinding? disposableTest;
+    private readonly IAuthorityFence _fence = fence ?? AuthorityFence.Inactive;
+    public AuthorityFenceMode FenceMode => _fence.Mode;
     private OfflineApprovalPolicyCoordinator(Guid installationId, IDbContextFactory<KordraIdentityDbContext> identities,
     IAuditAppendPort auditLookup, FairAsyncReaderWriterAdmissionGate gate, IAuthorityClock clock,
-    IOfflinePolicyAuditTransactionFactory? auditTransactions, DisposableTestBinding profile)
-        : this(installationId, identities, auditLookup, gate, clock, auditTransactions) => disposableTest = profile;
+    IOfflinePolicyAuditTransactionFactory? auditTransactions, IAuthorityFence? fence, DisposableTestBinding profile)
+        : this(installationId, identities, auditLookup, gate, clock, auditTransactions, fence) => disposableTest = profile;
     public static OfflineApprovalPolicyCoordinator CreateDisposableTestCoordinator(Guid installationId, IDbContextFactory<KordraIdentityDbContext> identities,
     IAuditAppendPort auditLookup, FairAsyncReaderWriterAdmissionGate gate, IAuthorityClock clock,
-    IOfflinePolicyAuditTransactionFactory? auditTransactions, DisposableTestBinding profile)
-        => new(installationId, identities, auditLookup, gate, clock, auditTransactions, profile);
+    IOfflinePolicyAuditTransactionFactory? auditTransactions, DisposableTestBinding profile, IAuthorityFence? fence = null)
+        => new(installationId, identities, auditLookup, gate, clock, auditTransactions, fence, profile);
 
     public async Task<ApprovalPolicyInspectResult?> InspectAsync(IOfflineProvisioningLease custody, ReadOnlyMemory<byte> input,
         CancellationToken cancellationToken = default)
@@ -97,6 +104,9 @@ public sealed class OfflineApprovalPolicyCoordinator(Guid installationId, IDbCon
             if (!MatchesDatabase(identity, manifest)) return new("denied");
             await using var transaction = await identity.Database.BeginTransactionAsync(budget.Token);
             var connection = identity.Database.GetDbConnection(); var dbTransaction = transaction.GetDbTransaction();
+            // 12.3c (D1): fence right after the root begins, before any owner read; trusted time only after the fence wait. A
+            // fence failure has not attempted a commit (unavailable below).
+            var fenceLease = await _fence.AcquireAsync(connection, dbTransaction, budget.Token);
             await using var apr = new ApprovalDbContext(disposableTest is { } approvalProfile
             ? ApprovalDbContextFactory.CreateDisposableEnlistedTestOptions(connection, approvalProfile)
             : ApprovalDbContextFactory.CreateOfflineEnlistedOptions(connection));
@@ -147,6 +157,8 @@ public sealed class OfflineApprovalPolicyCoordinator(Guid installationId, IDbCon
             var intent = CreateIntent(manifest, commandId, now);
             store.StageCommand(new ApprovalLease(custody), manifest, commandId, intent.IntentId, AuditIntentCanonicalizer.ComputeHash(intent), now);
             await apr.SaveChangesAsync(budget.Token);
+            // 12.3c (D2): a committed publication changes the approval policy and binding facts permits re-evaluate.
+            await fenceLease.AdvanceAsync("approval.policy", budget.Token);
             await AuthorityClockFloorStore.StageAsync(identity, installationId, Now(), budget.Token);
             await using var auditTransaction = await (auditTransactions ?? (disposableTest is { } auditProfile
                 ? OfflinePolicyAuditTransactionFactory.CreateDisposableTestFactory(auditProfile) : new OfflinePolicyAuditTransactionFactory()))

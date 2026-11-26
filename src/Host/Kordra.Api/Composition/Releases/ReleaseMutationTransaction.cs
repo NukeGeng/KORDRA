@@ -28,25 +28,31 @@ public sealed class ReleaseMutationResult
 /// Bounded REL/AUD/floor mutation under write admission; not registered as a public endpoint. The outer
 /// Requires a one-use ticket from durable U audit; the outer coordinator still owns fresh D authorization and caller-bound disclosure.
 /// An exact owner/AUD match yields only a replay candidate; disclosure still requires a fresh D admission.
+/// 12.3c-3 (D1/D3): the IAM root locks the installation authority fence (<see cref="AuthorityFence.Inactive"/> until
+/// activation) right after it begins; every trusted-time reading used on the root comes after the fence wait (the reading
+/// before the root is only an early denial). Every committed mutation advances the epoch once; an exact replay holds the
+/// fence only to verify its receipt and commits nothing.
 /// </summary>
 public sealed class ReleaseMutationTransaction(Guid installationId, IDbContextFactory<KordraIdentityDbContext> identity,
     ReleaseProjectAuthorityReader authority, ReleaseSelectionReader selections, IArtifactAuditTransactionFactory audits,
     IAuditMutationEvidenceReader auditEvidence,
-    FairAsyncReaderWriterAdmissionGate gate, IAuthorityClock clock)
+    FairAsyncReaderWriterAdmissionGate gate, IAuthorityClock clock, IAuthorityFence? fence = null)
 {
     private readonly DisposableTestBinding? disposableTest;
+    private readonly IAuthorityFence _fence = fence ?? AuthorityFence.Inactive;
+    public AuthorityFenceMode FenceMode => _fence.Mode;
     private ReleaseMutationTransaction(Guid installationId, IDbContextFactory<KordraIdentityDbContext> identity,
     ReleaseProjectAuthorityReader authority, ReleaseSelectionReader selections, IArtifactAuditTransactionFactory audits,
     IAuditMutationEvidenceReader auditEvidence,
-    FairAsyncReaderWriterAdmissionGate gate, IAuthorityClock clock, DisposableTestBinding profile)
-        : this(installationId, identity, authority, selections, audits, auditEvidence, gate, clock) => disposableTest = profile;
+    FairAsyncReaderWriterAdmissionGate gate, IAuthorityClock clock, IAuthorityFence? fence, DisposableTestBinding profile)
+        : this(installationId, identity, authority, selections, audits, auditEvidence, gate, clock, fence) => disposableTest = profile;
 
     /// <summary>Explicit ADR-0025 test composition; runtime construction remains unchanged.</summary>
     public static ReleaseMutationTransaction CreateDisposableTestTransaction(Guid installationId, IDbContextFactory<KordraIdentityDbContext> identity,
     ReleaseProjectAuthorityReader authority, ReleaseSelectionReader selections, IArtifactAuditTransactionFactory audits,
     IAuditMutationEvidenceReader auditEvidence,
-    FairAsyncReaderWriterAdmissionGate gate, IAuthorityClock clock, DisposableTestBinding profile)
-        => new(installationId, identity, authority, selections, audits, auditEvidence, gate, clock, profile);
+    FairAsyncReaderWriterAdmissionGate gate, IAuthorityClock clock, DisposableTestBinding profile, IAuthorityFence? fence = null)
+        => new(installationId, identity, authority, selections, audits, auditEvidence, gate, clock, fence, profile);
 
     public async Task<ReleaseMutationResult> ExecuteAsync(ReleaseUseTicket ticket, CancellationToken ct = default)
     {
@@ -76,6 +82,9 @@ public sealed class ReleaseMutationTransaction(Guid installationId, IDbContextFa
                 IdentityAccessDbContextFactory.ValidateDisposableTestTarget(iam.Database.GetDbConnection().ConnectionString, target);
             else IdentityAccessDbContextFactory.ValidateRuntimeOrTestTransactionTarget(iam.Database.GetDbConnection().ConnectionString);
             await using var tx = await iam.Database.BeginTransactionAsync(token);
+            // 12.3c (D1): fence right after the root begins, before any owner read; trusted time only after the fence wait.
+            // A fence failure has not attempted a commit (unavailable below).
+            var fenceLease = await _fence.AcquireAsync(iam.Database.GetDbConnection(), tx.GetDbTransaction(), token);
             await using var rel = new ReleaseDbContext(disposableTest is { } ownerProfile
                 ? ReleaseDbContextFactory.CreateDisposableEnlistedTestOptions(iam.Database.GetDbConnection(), ownerProfile)
                 : ReleaseDbContextFactory.CreateEnlistedOptions(iam.Database.GetDbConnection()));
@@ -191,6 +200,8 @@ public sealed class ReleaseMutationTransaction(Guid installationId, IDbContextFa
             receipts.Stage(Guid.NewGuid(), installationId, tenant, command.ProjectId, original.Subject.PrincipalId, revisionId, original.Subject.BootGeneration, invocation,
                 command.Action, key, body, intentId, auditHash, now);
             await rel.SaveChangesAsync(token);
+            // 12.3c (D2): a committed draft, freeze or retirement changes the release state that use and permits re-evaluate.
+            await fenceLease.AdvanceAsync("release.mutate", token);
             await AuthorityClockFloorStore.StageAsync(iam, installationId, clock.GetTrustedUtcNow(), token);
             var rechecked = await authority.ReadCurrentUnderAdmissionAsync(subject, command.ProjectId, command.Permission, invocation, token);
             var finalTime = clock.GetTrustedUtcNow();
