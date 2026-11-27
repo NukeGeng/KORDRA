@@ -222,3 +222,5 @@ ADR-0025 fixture wiring continuation: shared test-only composition captures the 
 ### Disposable regression composition — 2026-11-10
 
 The full-solution disposable run identified legacy target checks inside the ART registration store and readiness composition. The explicitly selected test profile now reaches both checks, the ART/AUD owner root and stopped recovery. Legacy and runtime callers still use their original target rules. The revised live tests remain pending.
+
+T12.3d-1 (2026-11-27): `Program.cs` adds the offline `service inspect|apply|spki` command ([12.3d scope](../../../engineering/t12-3d-internal-permit-scope.vi.md)); no ART behavior change.

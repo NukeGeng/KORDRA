@@ -264,3 +264,5 @@ Accepted design: [12.3a scope](../../../engineering/t12-3a-owner-function-poc-sc
 Implementation notes against §8 (owner informed): existing owner tables keep their migration owner and the owner function role receives exact table rights only (AUD owner: SELECT/INSERT); `app.aud_append_bound_intent` also takes `operation_id`/`specification_hash` because `require_consumed` binds them; an ownership transfer grants schema CREATE to the owner role and revokes it in the same artifact.
 
 T12.3b (2026-11-15): no AUD contract or function change; `aud-bound-append-v1.sql` runs unchanged against IAM v2 (`require_consumed` returns extra columns only). Shared Bootstrap fixtures (`IsolatedWorkflowFixture`, `OwnerFunctionPoc`, `OwnerFunctionPocArtifactTests`) gained 12.3b helpers/guards.
+
+T12.3d-1 (2026-11-27): no AUD contract or function change. The offline service CLI stages one Mutation intent per applied manifest (`iam.service-manifest`, scope `installation`, no tenant) on the IAM root ([12.3d scope](../../../engineering/t12-3d-internal-permit-scope.vi.md)). The owner-function test plumbing (`OwnerFunctionPoc`) adds the IAM v3 baseline and the D7 role placeholder.
