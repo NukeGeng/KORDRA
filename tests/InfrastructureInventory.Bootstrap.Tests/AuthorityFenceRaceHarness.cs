@@ -23,6 +23,8 @@ internal sealed class AuthorityFenceRaceHarness : IAsyncDisposable
     private readonly CancellationToken ct;
     private readonly Guid workerService = Guid.NewGuid(), tenant = Guid.NewGuid(), environment = Guid.NewGuid(), probeInstance = Guid.NewGuid();
     private readonly string specHash = new('a', 64);
+    // 12.3d D3: the worker's registered certificate pin, presented with every probe permit.
+    private readonly string workerPin = Convert.ToHexStringLower(RandomNumberGenerator.GetBytes(32));
     private readonly HashSet<string> proven = new(StringComparer.Ordinal);
 
     private AuthorityFenceRaceHarness(string locator, string workerLogin, NpgsqlConnection setup, CancellationToken ct)
@@ -32,6 +34,10 @@ internal sealed class AuthorityFenceRaceHarness : IAsyncDisposable
 
     internal Guid InstallationId { get; } = Guid.NewGuid();
     internal Guid WorkerServiceId => workerService;
+    /// <summary>12.3d: the registered worker pin and the binding scope (tenant, environment) every probe uses.</summary>
+    internal string WorkerPin => workerPin;
+    internal Guid TenantId => tenant;
+    internal Guid EnvironmentId => environment;
     internal IReadOnlyCollection<string> Proven => proven;
 
     internal static async Task<AuthorityFenceRaceHarness> StartAsync(string locator, string suffix, string fenceScript, CancellationToken ct)
@@ -92,6 +98,23 @@ internal sealed class AuthorityFenceRaceHarness : IAsyncDisposable
         proven.Add(scenario);
     }
 
+    /// <summary>12.3d: issues a probe permit for <paramref name="service"/> presenting <paramref name="spki"/>; the IAM code of a
+    /// refusal, or null when a permit was issued.</summary>
+    internal async Task<string?> TryIssueAsync(Guid service, string spki)
+    {
+        try
+        {
+            await InApiRootAsync(async (connection, root) => await new WorkflowAuthorityFunctionPort(connection, root).IssuePermitAsync(new(
+                Guid.NewGuid(), service, tenant, probeInstance, Guid.NewGuid(), Guid.NewGuid(), 1, specHash, WorkflowSpecification.TemplateHash,
+                "admit", InstallationId, 0, spki), ct));
+            return null;
+        }
+        catch (PostgresException error) { return error.SqlState; }
+    }
+
+    /// <summary>12.3d: one catalog fact on the setup connection (privileges, function presence).</summary>
+    internal Task<T> QueryScalarAsync<T>(string sql) => Scalar<T>(sql);
+
     private async Task ManifestAsync(Guid service, string kind, string login, string bindings)
     {
         await using var command = new NpgsqlCommand("SELECT * FROM iam_workflow.apply_service_manifest(@sha, 'bootstrap', @installation, " +
@@ -99,7 +122,7 @@ internal sealed class AuthorityFenceRaceHarness : IAsyncDisposable
         command.Parameters.AddWithValue("sha", Convert.ToHexStringLower(RandomNumberGenerator.GetBytes(32)));
         command.Parameters.AddWithValue("installation", InstallationId); command.Parameters.AddWithValue("service", service);
         command.Parameters.AddWithValue("kind", kind); command.Parameters.AddWithValue("login", login);
-        command.Parameters.AddWithValue("pin", Convert.ToHexStringLower(RandomNumberGenerator.GetBytes(32)));
+        command.Parameters.AddWithValue("pin", service == workerService ? workerPin : Convert.ToHexStringLower(RandomNumberGenerator.GetBytes(32)));
         command.Parameters.AddWithValue("bindings", bindings); command.Parameters.AddWithValue("audit", Guid.NewGuid());
         await command.ExecuteNonQueryAsync(ct);
     }
@@ -118,7 +141,7 @@ internal sealed class AuthorityFenceRaceHarness : IAsyncDisposable
         var operation = Guid.NewGuid(); var permit = Guid.NewGuid();
         await InApiRootAsync(async (connection, root) => await new WorkflowAuthorityFunctionPort(connection, root).IssuePermitAsync(new(permit,
             workerService, tenant, probeInstance, Guid.NewGuid(), operation, 1, specHash, WorkflowSpecification.TemplateHash, "admit",
-            InstallationId, 0), ct));
+            InstallationId, 0, workerPin), ct));
         return (permit, operation);
     }
 

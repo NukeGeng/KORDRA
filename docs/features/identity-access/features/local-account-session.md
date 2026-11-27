@@ -229,3 +229,5 @@ ADR-0025 fixture wiring continuation: shared test-only composition captures the 
 The disposable fault-injection fixtures now pass the selected profile into the actual AUD enlistment adapter before injecting an authentication fault. The full regression also found a test initialization order error in the ART owner fixture. Its selection now precedes construction of the owner factories.
 
 T12.3c-1 (2026-11-17): `LocalAuthenticationService` accepts an optional `IAuthorityFence` (default `Inactive`, no behavior change). With the enforced fence its writers lock the authority fence before reading facts and advance the epoch only when authority changes; see FEAT-IAM-001 and the [12.3c scope](../../../engineering/t12-3c-writer-coverage-scope.vi.md). Trusted time is read only after the fence wait, so session expiry, lockout and session/audit stamps reflect the moment the writer holds the fence (PR #35 round-1 fix, PR35-IAM-FENCE-TIME-001).
+
+T12.3d-1 (2026-11-27): `Program.cs` adds the offline `service inspect|apply|spki` command ([12.3d scope](../../../engineering/t12-3d-internal-permit-scope.vi.md)); no local account and session behavior change.

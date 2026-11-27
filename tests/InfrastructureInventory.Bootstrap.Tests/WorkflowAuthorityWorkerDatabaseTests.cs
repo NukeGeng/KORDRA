@@ -29,7 +29,7 @@ public sealed class WorkflowAuthorityWorkerDatabaseTests
     public void ExportWorkerAuthoritySqlWithoutDatabaseAccess()
     {
         var scripts = Scripts("0123456789ab");
-        Assert.Equal(["baseline-wfl.sql", "baseline-aud.sql", "iam-workflow-authority-v2.sql", "wfl-owner-functions-v2.sql",
+        Assert.Equal(["baseline-wfl.sql", "baseline-aud.sql", "iam-workflow-authority-v3.sql", "wfl-owner-functions-v2.sql",
             "aud-bound-append-v1.sql", "cleanup.sql"], scripts.Select(x => x.Name));
         Assert.Contains("generation = 1 AND expected_version = 0 AND resulting_version = 1", scripts[0].Sql);
         Assert.All(scripts.Skip(2).Take(3), x => Assert.Contains("_r0123456789ab", x.Sql));
@@ -73,6 +73,8 @@ public sealed class WorkflowAuthorityWorkerDatabaseTests
             }
             var installation = Guid.NewGuid(); var tenant = Guid.NewGuid(); var environment = Guid.NewGuid();
             var apiService = Guid.NewGuid(); var workerService = Guid.NewGuid(); var boot = Guid.NewGuid(); var actor = Guid.NewGuid();
+            // 12.3d D3: the worker's registered certificate pin, presented with every permit request.
+            var workerPin = Convert.ToHexStringLower(RandomNumberGenerator.GetBytes(32));
             Assert.False(await Manifest("bootstrap", apiService, "api", apiRole, "[]"));
             Assert.False(await Manifest("bootstrap", workerService, "worker", workerRole, JsonSerializer.Serialize(new[] { new Dictionary<string, object> {
                 ["tenant_id"] = tenant, ["environment_id"] = environment, ["template_id"] = WorkflowSpecification.TemplateId,
@@ -154,7 +156,7 @@ public sealed class WorkflowAuthorityWorkerDatabaseTests
                     $"'{actor}', '{actor}', '{actor}', 1, '{new string('a', 64)}', 'pilot.checkpoint.v1', 1, '{new string('a', 64)}', ARRAY['admit'], '\\x7b7d', sha256('\\x7b7d'), now() + interval '1 minute')",
                 $"SELECT * FROM iam_workflow.revoke_delegation('{third.Delegation}', 'probe')",
                 $"SELECT * FROM iam_workflow.read_current_delegation('{tenant}', '{third.Identity.InstanceId}')",
-                $"SELECT * FROM iam_workflow.issue_permit('{Guid.NewGuid()}', '{workerService}', '{tenant}', '{fourth.Identity.InstanceId}', '{fourth.Step}', '{Guid.NewGuid()}', 1, '{fourth.Hash}', '{WorkflowSpecification.TemplateHash}', 'admit', '{boot}', 0)",
+                $"SELECT * FROM iam_workflow.issue_permit('{Guid.NewGuid()}', '{workerService}', '{tenant}', '{fourth.Identity.InstanceId}', '{fourth.Step}', '{Guid.NewGuid()}', 1, '{fourth.Hash}', '{WorkflowSpecification.TemplateHash}', 'admit', '{boot}', 0, '{workerPin}')",
                 $"SELECT iam_workflow.advance_epoch('{installation}', 'probe')",
                 $"SELECT * FROM iam_workflow.apply_service_manifest('{new string('f', 64)}', 'retire', '{installation}', '{workerService}', NULL, NULL, NULL, NULL, NULL, '[]'::jsonb, '{Guid.NewGuid()}')" })
                 Assert.Equal("42501", await Denied(worker, sql));
@@ -189,7 +191,7 @@ public sealed class WorkflowAuthorityWorkerDatabaseTests
                 command.Parameters.AddWithValue("service", service);
                 command.Parameters.AddWithValue("service_kind", (object?)serviceKind ?? DBNull.Value);
                 command.Parameters.AddWithValue("login", (object?)login ?? DBNull.Value);
-                command.Parameters.AddWithValue("pin", Convert.ToHexStringLower(RandomNumberGenerator.GetBytes(32)));
+                command.Parameters.AddWithValue("pin", kind == "bootstrap" && service == workerService ? workerPin : Convert.ToHexStringLower(RandomNumberGenerator.GetBytes(32)));
                 command.Parameters.AddWithValue("bindings", bindings); command.Parameters.AddWithValue("audit", Guid.NewGuid());
                 return (bool)(await command.ExecuteScalarAsync(ct))!;
             }
@@ -245,7 +247,7 @@ public sealed class WorkflowAuthorityWorkerDatabaseTests
             }
 
             WorkflowPermitRequest Request(Seeded seeded) => new(Guid.NewGuid(), workerService, tenant, seeded.Identity.InstanceId, seeded.Step,
-                seeded.Operation, 1, seeded.Hash, WorkflowSpecification.TemplateHash, "admit", boot, 0);
+                seeded.Operation, 1, seeded.Hash, WorkflowSpecification.TemplateHash, "admit", boot, 0, workerPin);
 
             async Task<WorkflowPermitIssued> Issue(WorkflowPermitRequest request)
             {
@@ -322,7 +324,7 @@ public sealed class WorkflowAuthorityWorkerDatabaseTests
         return [
             ("baseline-wfl.sql", wfl.Database.GenerateCreateScript()),
             ("baseline-aud.sql", aud.Database.GenerateCreateScript() + "\n" + OwnerFunctionPoc.IamFloorTable),
-            ("iam-workflow-authority-v2.sql", OwnerFunctionPoc.ForRun(OwnerFunctionPoc.Sql("iam-workflow-authority-v2"), suffix)),
+            ("iam-workflow-authority-v3.sql", OwnerFunctionPoc.ForRun(OwnerFunctionPoc.Sql("iam-workflow-authority-v3"), suffix)),
             ("wfl-owner-functions-v2.sql", OwnerFunctionPoc.ForRun(OwnerFunctionPoc.Sql("wfl-owner-functions-v2"), suffix)),
             ("aud-bound-append-v1.sql", OwnerFunctionPoc.ForRun(OwnerFunctionPoc.Sql("aud-bound-append-v1"), suffix)),
             ("cleanup.sql", "DROP SCHEMA wfl CASCADE;\nDROP SCHEMA iam_workflow CASCADE;\nDROP SCHEMA app CASCADE;\n")

@@ -85,9 +85,9 @@ public sealed class AuthorityFenceTests
         AuthorityWriterRegistry.Validate();
         var covered = AuthorityWriterRegistry.Entries.Where(x => x.FenceRaceScenario is not null).ToArray();
         // Every declared scenario is proven by a race test class: 12.3c-1 the nine IAM writers, 12.3c-2 TEN/catalog/policy,
-        // 12.3c-3 the 12.3b IAM functions, offline credential/approval-policy and release writers.
+        // 12.3c-3 the 12.3b IAM functions, offline credential/approval-policy and release writers; 12.3d-1 the offline service CLI.
         var proven = AuthorityFenceIamWriterDatabaseTests.Scenarios.Concat(AuthorityFenceTenantCatalogWriterDatabaseTests.Scenarios)
-            .Concat(AuthorityFenceRemainingWriterDatabaseTests.Scenarios).ToArray();
+            .Concat(AuthorityFenceRemainingWriterDatabaseTests.Scenarios).Concat(AuthorityFenceServiceCliDatabaseTests.Scenarios).ToArray();
         Assert.Equal(proven.Length, proven.Distinct(StringComparer.Ordinal).Count());
         Assert.Equal(proven.Order(StringComparer.Ordinal), covered.Select(x => x.FenceRaceScenario!).Distinct().Order(StringComparer.Ordinal));
         Assert.All(covered, x => Assert.Equal(x.Id, x.FenceRaceScenario));

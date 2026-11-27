@@ -195,6 +195,9 @@ public sealed class OwnerFunctionPocArtifactTests
                 Assert.DoesNotContain(type, text);
             }
             Assert.DoesNotMatch(new Regex(@"Add(Singleton|Scoped|Transient)<[^>]*(FunctionPort|PermitIssuer|DelegationReissuer)"), text);
+            // 12.3d (D6): IAM's offline service-manifest writer is used only by the offline service CLI and never registered.
+            if (Path.GetFileName(file) != "OfflineServiceCoordinator.cs") Assert.DoesNotContain("IamServiceManifestWriter", text);
+            Assert.DoesNotMatch(new Regex(@"Add(Singleton|Scoped|Transient)<[^>]*ServiceManifestWriter"), text);
         }
         Assert.DoesNotContain(nameof(WorkflowTransitionFunctionPort), string.Concat(allowed.Select(name =>
             Directory.EnumerateFiles(host, name, SearchOption.AllDirectories).Select(File.ReadAllText).FirstOrDefault() ?? "")));

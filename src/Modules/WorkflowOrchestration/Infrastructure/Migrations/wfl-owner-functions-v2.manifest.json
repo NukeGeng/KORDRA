@@ -4,7 +4,7 @@
   "artifact": "wfl-owner-functions-v2.sql",
   "requires": [
     "wfl-v7-original-binding.sql",
-    "iam-workflow-authority-v2.sql"
+    "iam-workflow-authority-v3.sql"
   ],
   "replaces": "wfl-owner-functions-v1.sql (12.3a PoC, never deployed)",
   "scope": "12.3b: wfl.state_edges and wfl.stage_transition (worker kind admit) requiring the permit's delegation to match the current authority generation (KD109); offline artifact only",

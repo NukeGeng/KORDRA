@@ -13,20 +13,24 @@ internal static partial class OwnerFunctionPoc
     internal static readonly string[] Artifacts = ["iam-workflow-authority-v1", "wfl-owner-functions-v1", "aud-bound-append-v1"];
     /// <summary>12.3b replacement baselines (D1); applied with the unchanged AUD v1 function.</summary>
     internal static readonly string[] V2Artifacts = ["iam-workflow-authority-v2", "wfl-owner-functions-v2"];
+    /// <summary>12.3d current baselines: IAM v3 (pinned permits, D3/D7) with the unchanged WFL v2 functions.</summary>
+    internal static readonly string[] CurrentArtifacts = ["iam-workflow-authority-v3", "wfl-owner-functions-v2"];
     internal static readonly string[] Roles = ["kordra_iam_owner", "kordra_wfl_owner", "kordra_aud_owner", "kordra_worker_runtime", "kordra_api_runtime"];
+    /// <summary>12.3d roles of the current baselines: the PoC roles plus the D7 NOLOGIN service-manifest role.</summary>
+    internal static readonly string[] CurrentRoles = [.. Roles, "kordra_iam_service_admin"];
 
     internal static string Directory => Path.Combine(AppContext.BaseDirectory, "Fixtures", "OwnerFunctions");
     internal static string Sql(string artifact) => File.ReadAllText(Path.Combine(Directory, artifact + ".sql"));
     internal static byte[] SqlBytes(string artifact) => File.ReadAllBytes(Path.Combine(Directory, artifact + ".sql"));
     internal static string Manifest(string artifact) => File.ReadAllText(Path.Combine(Directory, artifact + ".manifest.json"));
 
-    [GeneratedRegex("\\b(kordra_(?:iam_owner|wfl_owner|aud_owner|worker_runtime|api_runtime))\\b")]
+    [GeneratedRegex("\\b(kordra_(?:iam_owner|wfl_owner|aud_owner|worker_runtime|api_runtime|iam_service_admin))\\b")]
     private static partial Regex RolePattern();
 
     [GeneratedRegex("^[0-9a-f]{12}$")]
     private static partial Regex SuffixPattern();
 
-    /// <summary>Run-scoped role names (D4): only the five placeholder identifiers receive the run suffix.</summary>
+    /// <summary>Run-scoped role names (D4): only the placeholder role identifiers receive the run suffix.</summary>
     internal static string ForRun(string sql, string suffix)
     {
         if (!SuffixPattern().IsMatch(suffix)) throw new ArgumentException("Run suffix must be 12 lowercase hex characters.");

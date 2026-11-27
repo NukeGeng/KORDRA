@@ -39,7 +39,7 @@ public sealed class WorkflowAuthorityStartDatabaseTests
         Assert.Equal(14, scripts.Count);
         Assert.Contains("CREATE TABLE " + Schema + ".authority_bindings", scripts["wfl.sql"]);
         Assert.Contains("generation = 1 AND expected_version = 0 AND resulting_version = 1", scripts["wfl.sql"]);
-        Assert.Contains("CREATE SCHEMA iam_workflow AUTHORIZATION kordra_iam_owner_r0123456789ab", scripts["iam-workflow-authority-v2.sql"]);
+        Assert.Contains("CREATE SCHEMA iam_workflow AUTHORIZATION kordra_iam_owner_r0123456789ab", scripts["iam-workflow-authority-v3.sql"]);
         if (Environment.GetEnvironmentVariable("KORDRA_WFL_AUTHORITY_EXPORT") is not { Length: > 0 } directory) return;
         var suffix = Environment.GetEnvironmentVariable("KORDRA_WFL_AUTHORITY_SUFFIX") ?? throw new InvalidOperationException("Run suffix required.");
         Directory.CreateDirectory(directory);
@@ -212,7 +212,7 @@ public sealed class WorkflowAuthorityStartDatabaseTests
         scripts["msg-native.sql"] = WorkflowTransactionSchemaTests.StableNativeScript(
             Assert.IsAssignableFrom<IDatabase>(host.Services.GetRequiredService<IMessageStore>()), Schema);
         scripts["app-floor.sql"] = "CREATE SCHEMA app;\n" + OwnerFunctionPoc.IamFloorTable;
-        scripts["iam-workflow-authority-v2.sql"] = OwnerFunctionPoc.ForRun(OwnerFunctionPoc.Sql("iam-workflow-authority-v2"), suffix);
+        scripts["iam-workflow-authority-v3.sql"] = OwnerFunctionPoc.ForRun(OwnerFunctionPoc.Sql("iam-workflow-authority-v3"), suffix);
         scripts["cleanup.sql"] = $"DROP SCHEMA {Schema} CASCADE;\nDROP SCHEMA iam_workflow CASCADE;\nDROP SCHEMA app CASCADE;\n";
         return scripts;
     }

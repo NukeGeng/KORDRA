@@ -32,9 +32,13 @@ public sealed record WorkflowCurrentDelegation(Guid DelegationId, long Generatio
     DateTimeOffset ValidUntilUtc, bool Revoked);
 
 /// <summary>12.3b (D5): one permit attempt for an authenticated worker service; identity values are compared, never trusted.</summary>
+/// <summary>
+/// One permit attempt. <paramref name="ServiceId"/> and <paramref name="SpkiSha256"/> come only from the authenticated worker
+/// certificate (12.3d D2/D3), never from a request body; IAM checks the pin under the fence.
+/// </summary>
 public sealed record WorkflowPermitRequest(Guid PermitId, Guid ServiceId, Guid TenantId, Guid InstanceId, Guid StepId,
     Guid OperationId, long ExpectedVersion, string SpecificationHash, string TemplateHash, string TransitionKind, Guid BootId,
-    long CustodyEpoch);
+    long CustodyEpoch, string SpkiSha256);
 
 public sealed record WorkflowPermitIssued(Guid PermitId, int Attempt, long AuthorityEpoch, DateTimeOffset IssuedAtUtc,
     DateTimeOffset ExpiresAtUtc, bool Duplicate);
@@ -47,6 +51,17 @@ public sealed record WorkflowServiceManifest(string ManifestSha256, string Kind,
     IReadOnlyList<WorkflowServiceBinding> Bindings, Guid AuditIntentId);
 
 public sealed record WorkflowServiceManifestApplied(long Generation, long AuthorityEpoch, bool Duplicate);
+
+/// <summary>
+/// 12.3d (D6): IAM's offline service-manifest writer for the Host <c>service</c> CLI, so the Host never composes the function port
+/// itself. Applies one manifest on the caller's IAM root; the function locks the fence and advances the epoch.
+/// </summary>
+public static class IamServiceManifestWriter
+{
+    public static Task<WorkflowServiceManifestApplied> ApplyAsync(NpgsqlConnection connection, NpgsqlTransaction root,
+        WorkflowServiceManifest manifest, CancellationToken ct = default) =>
+        new WorkflowAuthorityFunctionPort(connection, root).ApplyServiceManifestAsync(manifest, ct);
+}
 
 /// <summary>
 /// 12.3c-3: the 12.3b function-port methods that lock the authority fence and advance the epoch themselves, declared by IAM for
@@ -186,12 +201,13 @@ public sealed class WorkflowAuthorityFunctionPort
         ArgumentNullException.ThrowIfNull(request);
         await using var command = Command("SELECT permit_id, attempt, authority_epoch, issued_at, expires_at, duplicate FROM " +
             "iam_workflow.issue_permit(@id, @service, @tenant, @instance, @step, @operation, @version, @hash, @template_hash, @kind, " +
-            "@boot, @custody)");
+            "@boot, @custody, @spki)");
         Uuid(command, "id", request.PermitId); Uuid(command, "service", request.ServiceId); Uuid(command, "tenant", request.TenantId);
         Uuid(command, "instance", request.InstanceId); Uuid(command, "step", request.StepId); Uuid(command, "operation", request.OperationId);
         Bigint(command, "version", request.ExpectedVersion); Text(command, "hash", request.SpecificationHash);
         Text(command, "template_hash", request.TemplateHash); Text(command, "kind", request.TransitionKind);
         Uuid(command, "boot", request.BootId); Bigint(command, "custody", request.CustodyEpoch);
+        Text(command, "spki", request.SpkiSha256);
         await using var reader = await command.ExecuteReaderAsync(ct);
         if (!await reader.ReadAsync(ct)) throw new InvalidOperationException("Permit issuance returned no receipt.");
         return new(reader.GetGuid(0), reader.GetInt32(1), reader.GetInt64(2), Utc(reader.GetFieldValue<DateTime>(3)),

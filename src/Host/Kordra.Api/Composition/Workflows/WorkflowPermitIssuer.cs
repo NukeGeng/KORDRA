@@ -18,13 +18,16 @@ public sealed record WorkflowPermitIssuance(WorkflowPermitIssued? Permit, string
 /// authenticated worker service). On the caller's API root it takes the authority fence BEFORE reading any authorization
 /// fact, then re-evaluates the current delegation without a browser session: delegation current and unexpired, captured
 /// principal/grants/roles still current, originating session not revoked, release/approval/classification still eligible
-/// and the environment workflow.start policy still allows. Only then <c>iam_workflow.issue_permit</c>. Never holds the root
-/// across network I/O; any missing fact fails closed.
+/// and the environment workflow.start policy still allows. Only then <c>iam_workflow.issue_permit</c>, which (12.3d D3) checks
+/// the authenticated certificate pin of the worker service under the same fence. Never holds the root across network I/O;
+/// any missing fact fails closed.
 /// </summary>
 public sealed class WorkflowPermitIssuer(Guid installationId, DurableWorkflowDelegationAuthorityReader authority,
     WorkflowDelegationSessionReader sessions, WorkflowStartEligibilityReader resources, WorkflowActionPolicyReader policies,
     IWorkflowReleaseRevisionResolver revisions, IAuthorityClock clock)
 {
+    private static bool IsPin(string? value) => value is { Length: 64 } && value.All(char.IsAsciiHexDigitLower);
+
     public async Task<WorkflowPermitIssuance> IssueUnderFenceAsync(NpgsqlConnection connection, NpgsqlTransaction root,
         WorkflowSpecification specification, WorkflowPermitRequest request, CancellationToken ct = default)
     {
@@ -33,7 +36,7 @@ public sealed class WorkflowPermitIssuer(Guid installationId, DurableWorkflowDel
         if (installationId == Guid.Empty || specification.InstallationId != installationId ||
             specification.TenantId != request.TenantId || specification.InstanceId != request.InstanceId ||
             specification.SpecificationHash != request.SpecificationHash || request.TemplateHash != WorkflowSpecification.TemplateHash ||
-            !WorkflowDelegationAuthority.PilotKinds.Contains(request.TransitionKind))
+            !WorkflowDelegationAuthority.PilotKinds.Contains(request.TransitionKind) || !IsPin(request.SpkiSha256))
             return WorkflowPermitIssuance.Denied("request_invalid");
         var iam = new WorkflowAuthorityFunctionPort(connection, root);
         try

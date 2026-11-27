@@ -58,7 +58,7 @@ public sealed class AuthorityFenceRemainingWriterDatabaseTests
         if (Environment.GetEnvironmentVariable("KORDRA_FENCE_REMAINING_EXPORT") is not { Length: > 0 } directory) return;
         var suffix = Environment.GetEnvironmentVariable("KORDRA_FENCE_REMAINING_SUFFIX") ?? throw new InvalidOperationException("Run suffix required.");
         Directory.CreateDirectory(directory);
-        File.WriteAllText(Path.Combine(directory, "iam-workflow-authority-v2.sql"), AuthorityFenceIamWriterDatabaseTests.Script(suffix));
+        File.WriteAllText(Path.Combine(directory, "iam-workflow-authority-v3.sql"), AuthorityFenceIamWriterDatabaseTests.Script(suffix));
     }
 
     /// <summary>
@@ -91,7 +91,7 @@ public sealed class AuthorityFenceRemainingWriterDatabaseTests
         Assert.Equal("approved_for_execution", approval.RootElement.GetProperty("status").GetString());
         var suffix = approval.RootElement.GetProperty("suffix").GetString()!;
         var script = AuthorityFenceIamWriterDatabaseTests.Script(suffix);
-        Assert.Equal(approval.RootElement.GetProperty("sha256").GetProperty("iam-workflow-authority-v2.sql").GetString(), OwnerFunctionPoc.Sha256(script));
+        Assert.Equal(approval.RootElement.GetProperty("sha256").GetProperty("iam-workflow-authority-v3.sql").GetString(), OwnerFunctionPoc.Sha256(script));
         var profile = RegressionPostgreSqlSelection.LoadRunnerProfile() ?? throw new InvalidOperationException("Disposable runner profile required.");
         var locator = Environment.GetEnvironmentVariable(LocatorVariable) ?? throw new InvalidOperationException("Approved fixture locator required.");
         var selection = new ProductPostgreSqlFixtureSelection(locator, profile);
