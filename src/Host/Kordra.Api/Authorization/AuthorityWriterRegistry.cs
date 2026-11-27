@@ -49,7 +49,10 @@ public static class AuthorityWriterRegistry
         new("approval.mutate", typeof(ApprovalMutationTransaction), nameof(ApprovalMutationTransaction.ExecuteAsync), false, "approval.mutate"),
         // 12.3b IAM functions that lock the fence and advance the epoch themselves (registered by 12.3c-3): the reissue entry
         // names the delegation port, whose only implementation is the IAM reissuer; IAM declares its revoke and manifest methods.
-        new("iam.delegation-reissue", typeof(IWorkflowDelegationReissuer), nameof(IWorkflowDelegationReissuer.StageReissueAsync), false, "iam.delegation-reissue")
+        new("iam.delegation-reissue", typeof(IWorkflowDelegationReissuer), nameof(IWorkflowDelegationReissuer.StageReissueAsync), false, "iam.delegation-reissue"),
+        // 12.3d (D6): the offline service CLI applies bootstrap/rotate/retire/revoke manifests; the IAM function locks the fence and
+        // advances the epoch, and the coordinator reads trusted time only after it.
+        new("iam.service-cli", typeof(OfflineServiceCoordinator), nameof(OfflineServiceCoordinator.ApplyAsync), true, "iam.service-cli")
     }.Concat(IamAuthorityFunctionWriters.Entries.Select(x => new AuthorityWriter(x.Id, x.Owner, x.Method, x.OfflineOnly, x.Id))).ToArray());
 
     /// <summary>12.3c (D6) operations without an entry point; see <see cref="AuthorityOperation"/>.</summary>

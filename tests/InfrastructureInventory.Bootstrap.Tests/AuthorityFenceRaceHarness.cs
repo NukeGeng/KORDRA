@@ -34,6 +34,10 @@ internal sealed class AuthorityFenceRaceHarness : IAsyncDisposable
 
     internal Guid InstallationId { get; } = Guid.NewGuid();
     internal Guid WorkerServiceId => workerService;
+    /// <summary>12.3d: the registered worker pin and the binding scope (tenant, environment) every probe uses.</summary>
+    internal string WorkerPin => workerPin;
+    internal Guid TenantId => tenant;
+    internal Guid EnvironmentId => environment;
     internal IReadOnlyCollection<string> Proven => proven;
 
     internal static async Task<AuthorityFenceRaceHarness> StartAsync(string locator, string suffix, string fenceScript, CancellationToken ct)
@@ -93,6 +97,23 @@ internal sealed class AuthorityFenceRaceHarness : IAsyncDisposable
         if (advances) Assert.Equal("KD005", consumed); else Assert.NotEqual("KD005", consumed);
         proven.Add(scenario);
     }
+
+    /// <summary>12.3d: issues a probe permit for <paramref name="service"/> presenting <paramref name="spki"/>; the IAM code of a
+    /// refusal, or null when a permit was issued.</summary>
+    internal async Task<string?> TryIssueAsync(Guid service, string spki)
+    {
+        try
+        {
+            await InApiRootAsync(async (connection, root) => await new WorkflowAuthorityFunctionPort(connection, root).IssuePermitAsync(new(
+                Guid.NewGuid(), service, tenant, probeInstance, Guid.NewGuid(), Guid.NewGuid(), 1, specHash, WorkflowSpecification.TemplateHash,
+                "admit", InstallationId, 0, spki), ct));
+            return null;
+        }
+        catch (PostgresException error) { return error.SqlState; }
+    }
+
+    /// <summary>12.3d: one catalog fact on the setup connection (privileges, function presence).</summary>
+    internal Task<T> QueryScalarAsync<T>(string sql) => Scalar<T>(sql);
 
     private async Task ManifestAsync(Guid service, string kind, string login, string bindings)
     {

@@ -57,6 +57,14 @@ public static class Program
                 return await LocalApprovalPolicyCommand.RunAsync(args[1..]);
             }
 
+            if (args is ["service", "spki", _]) return LocalServiceCommand.Spki(args[2]);
+
+            if (args is ["service", "inspect", _, _] || args is ["service", "apply", _, _, _])
+            {
+                using var options = LocalPilotHostOptions.LoadInstalled();
+                return await LocalServiceCommand.RunAsync(args[1..], options);
+            }
+
             if (args is ["artifact-recovery", "inspect", _, _] || args is ["artifact-recovery", "apply", _, _, _])
             {
                 return await LocalArtifactRecoveryCommand.RunAsync(args[1..]);

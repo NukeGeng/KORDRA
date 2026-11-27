@@ -53,6 +53,17 @@ public sealed record WorkflowServiceManifest(string ManifestSha256, string Kind,
 public sealed record WorkflowServiceManifestApplied(long Generation, long AuthorityEpoch, bool Duplicate);
 
 /// <summary>
+/// 12.3d (D6): IAM's offline service-manifest writer for the Host <c>service</c> CLI, so the Host never composes the function port
+/// itself. Applies one manifest on the caller's IAM root; the function locks the fence and advances the epoch.
+/// </summary>
+public static class IamServiceManifestWriter
+{
+    public static Task<WorkflowServiceManifestApplied> ApplyAsync(NpgsqlConnection connection, NpgsqlTransaction root,
+        WorkflowServiceManifest manifest, CancellationToken ct = default) =>
+        new WorkflowAuthorityFunctionPort(connection, root).ApplyServiceManifestAsync(manifest, ct);
+}
+
+/// <summary>
 /// 12.3c-3: the 12.3b function-port methods that lock the authority fence and advance the epoch themselves, declared by IAM for
 /// the Host authority writer registry. Inventory only: nothing here composes, registers or activates the port.
 /// </summary>
