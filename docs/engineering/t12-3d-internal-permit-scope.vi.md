@@ -1,13 +1,13 @@
 ---
 id: ENG-T12-3D-INTERNAL-PERMIT-SCOPE
-status: proposed
+status: accepted
 owner: NukeGeng
 last_reviewed: 2026-11-27
 ---
 
 # T12.3d — listener mTLS nội bộ, RPC cấp permit và CLI `service`: phạm vi và thiết kế chi tiết
 
-> **Proposed**: bản nháp chờ chủ dự án duyệt đúng nội dung. Tài liệu hiện thực phần còn lại của [Worker Authority v1](../contracts/worker-authority-v1.md) ở hai mục *Service identity và internal listener* và *Delegation, permits và wire*, theo thiết kế T12 đã accepted ngày 2026-10-31 ([ADR-0022](../decisions/0022-controlworker-authority.md)) và bảng chia slice của [12.3b](t12-3b-iam-authority-scope.vi.md). Không đổi ADR hay nội dung contract. Không cấp quyền DB, role, CA, cert, listener, activation hay merge.
+> **Accepted scoped design ngày 2026-11-27** (D1–D11; D7, D8, D9 theo phương án (a)); xem *Exact scoped acceptance* ở cuối file. Chưa có implementation. Tài liệu hiện thực phần còn lại của [Worker Authority v1](../contracts/worker-authority-v1.md) ở hai mục *Service identity và internal listener* và *Delegation, permits và wire*, theo thiết kế T12 đã accepted ngày 2026-10-31 ([ADR-0022](../decisions/0022-controlworker-authority.md)) và bảng chia slice của [12.3b](t12-3b-iam-authority-scope.vi.md). Không đổi ADR hay nội dung contract. Không cấp quyền DB, role, CA, cert, listener, activation hay merge.
 
 ## 1. Mục tiêu
 
@@ -61,9 +61,9 @@ Mọi thành phần đều inactive. Fixture chỉ dùng CA và cert test.
 | D4 | Wire RPC schemaVersion 1 | Body có đúng các trường `schemaVersion`, `requestId` (= `permitId`), `tenantId`, `instanceId`, `stepId`, `operationId`, `expectedVersion`, `specificationHash`, `transitionKind`, `bootId`, `custodyEpoch`; trường lạ bị từ chối. Body **không** chứa `serviceId`, actor, grant hay epoch, vì service lấy từ mTLS. Giới hạn theo contract: request ≤ 16 KiB, depth ≤ 8, deadline 2 s, response ≤ 8 KiB, tối đa 16 request đang xử lý cộng hàng đợi 16 (vượt thì trả `unavailable` ngay), không redirect. Response là `issued` kèm `permitId`, `attempt`, `authorityEpoch`, `expiresAtUtc`, hoặc `denied`/`unavailable` kèm `reasonCode` cố định. Không có cookie, token hay evidence. Retry cùng `requestId` trả đúng permit cũ (duplicate) hoặc conflict. |
 | D5 | Thứ tự root phía API | Read lease của admission gate → root `READ COMMITTED` → issuer lấy fence → đọc spec WFL theo installation/tenant/instance và đòi hash khớp → đánh giá lại fact → `issue_permit` (pin kiểm dưới fence) → AUD intent "permit issued" cùng root → clock floor → commit. Bất kỳ lỗi nào trước commit trả `unavailable`, không ghi nửa chừng. Kết quả chỉ được trả sau commit. |
 | D6 | CLI `service` | `service inspect <manifest> <admin-locator>`, `service apply <manifest> <admin-locator> <approved-sha256>` và `service spki <certificate.pem>`. Lệnh `spki` in SPKI SHA-256 của chứng chỉ công khai và không đọc private key. Mỗi file manifest chỉ một loại (bootstrap, rotate, retire hoặc revoke), gồm database và role mong đợi, installation, service, kind, login, pin (spki, notBefore, notAfter) và binding. Hash tính trên dạng canonical. API phải dừng (offline lease như các lệnh khác). AUD intent ghi cùng root với `apply_service_manifest`; replay trả từ receipt của manifest. |
-| D7 | Danh tính chạy `apply_service_manifest` offline | `[NEEDS-DECISION]` (a) **Đề xuất:** artifact v3 tạo một role NOLOGIN chỉ có EXECUTE trên `apply_service_manifest`; provisioning cấp role này cho login admin offline. (b) CLI dùng locator riêng của owner IAM, nhưng owner có quyền DDL trên toàn schema, rộng hơn mức cần. Theo cả hai cách, không role runtime nào có quyền này. |
-| D8 | File credential và client phía worker | `[NEEDS-DECISION]` (a) **Đề xuất, đúng bảng chia slice:** 12.3d thêm vào WFL Infrastructure một loader file credential và một client RPC inactive. Loader đòi thư mục 0700 và file 0600 thuộc tài khoản service; file chứa cert/key PEM, CA, pin SPKI của server API, endpoint và installation/service id; không đọc env hay args, không ghi log. Client trust CA riêng cộng pin server, không qua proxy, không redirect, deadline 2 s. (b) Dời client sang 12.3e; 12.3d chỉ có loader và một test client. |
-| D9 | Audit permit bị từ chối | `[NEEDS-DECISION]` (a) **Đề xuất:** chỉ audit permit được cấp, bằng AUD intent trong root cấp. Denial trả mã cố định cộng một bộ đếm không định danh, không ghi AUD. (b) Ghi thêm sự kiện AUD cho denial; cách này cần ghi AUD ngoài một root thành công và gây nhiều nhiễu hơn. |
+| D7 | Danh tính chạy `apply_service_manifest` offline | **Đã chốt (a), 2026-11-27:** artifact v3 tạo một role NOLOGIN chỉ có EXECUTE trên `apply_service_manifest`; provisioning cấp role này cho login admin offline. Không chọn (b): CLI dùng locator riêng của owner IAM, vì owner có quyền DDL trên toàn schema, rộng hơn mức cần. Theo cả hai cách, không role runtime nào có quyền này. |
+| D8 | File credential và client phía worker | **Đã chốt (a), 2026-11-27, đúng bảng chia slice:** 12.3d thêm vào WFL Infrastructure một loader file credential và một client RPC inactive. Loader đòi thư mục 0700 và file 0600 thuộc tài khoản service; file chứa cert/key PEM, CA, pin SPKI của server API, endpoint và installation/service id; không đọc env hay args, không ghi log. Client trust CA riêng cộng pin server, không qua proxy, không redirect, deadline 2 s. Không chọn (b): dời client sang 12.3e, để 12.3d chỉ có loader và một test client. |
+| D9 | Audit permit bị từ chối | **Đã chốt (a), 2026-11-27:** chỉ audit permit được cấp, bằng AUD intent trong root cấp. Denial trả mã cố định cộng một bộ đếm không định danh, không ghi AUD. Không chọn (b): ghi thêm sự kiện AUD cho denial, vì cách này cần ghi AUD ngoài một root thành công và gây nhiều nhiễu hơn. |
 | D10 | Test PKI | CA và cert sinh ngay trong test (`CertificateRequest`, ECDSA P-256, hạn ngắn). Không ghi vào repo; file tạm có quyền 0600. Không dùng CA, cert hay listener thật. |
 | D11 | Chia PR | **12.3d-1:** artifact IAM v3, port, CLI `service` và test DB. **12.3d-2:** listener, xác thực TLS, RPC, loader và client (tùy D8), ma trận TLS âm và test DB end-to-end qua loopback. |
 
@@ -124,8 +124,14 @@ Scope này (phần evidence), FEAT-IAM-001, FEAT-WFL-001, traceability, change h
 - mTLS và pin thêm gánh vận hành (giữ CA, rotate). Tạo CA và cert thật là một thao tác riêng, cần duyệt.
 - Kiểm pin dưới fence ở mỗi request thêm độ trễ nhưng vẫn trong ngân sách 2 s. Fence toàn installation có thể khiến request phải chờ (≤ 1 s lock timeout), đúng như trade-off đã chấp nhận ở ADR-0022.
 - Đồng hồ host API (dùng cho hạn TLS) và DB (`clock_timestamp()`, dùng cho hạn pin) có thể lệch nhau. Khi đó handshake qua nhưng pin bị từ chối; đây là fail-closed, chấp nhận được.
-- Nếu chọn D8(b), phần worker xác thực server chưa có test cho tới 12.3e.
+- D8 đã chọn (a), nên phần worker xác thực server có test ngay trong 12.3d-2.
 
 ## 7. Bước tiếp theo
 
-Chủ dự án duyệt đúng nội dung, gồm D1–D11 và lựa chọn cho D7–D9 → 12.3d-1 → batch DB và gate → PR → 12.3d-2 → batch DB và gate → PR.
+Thiết kế đã được duyệt. 12.3d-1 (IAM v3, port, CLI `service`) → batch DB và gate → PR → 12.3d-2 (listener, RPC, phần worker) → batch DB và gate → PR.
+
+## Exact scoped acceptance — 2026-11-27
+
+NukeGeng đã trả lời **"Duyệt thiết kế"** cho đúng nội dung tài liệu này (D1–D11, với phương án đề xuất (a) cho D7, D8 và D9), trình với SHA-256 trước annotation `4889c66ad2ea21a23cec81bc90252180dd43b6e58083bcfbd33a06d82c4d4f95`. Bằng chứng riêng tại `.amr-local/t12-integration/t12-3d-design-acceptance/`.
+
+Accepted chỉ cho thiết kế slice 12.3d (hai PR 12.3d-1 và 12.3d-2). Không cấp quyền DB, role, CA, cert, listener, operation, activation hay merge; mỗi batch PostgreSQL cần manifest và approval riêng. Quyền push và mở PR khi gate local qua vẫn áp dụng như các slice 12.3 trước.
