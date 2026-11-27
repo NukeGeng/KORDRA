@@ -40,10 +40,10 @@ public sealed class AuthorityFenceIamWriterDatabaseTests
         if (Environment.GetEnvironmentVariable("KORDRA_FENCE_IAM_EXPORT") is not { Length: > 0 } directory) return;
         var suffix = Environment.GetEnvironmentVariable("KORDRA_FENCE_IAM_SUFFIX") ?? throw new InvalidOperationException("Run suffix required.");
         Directory.CreateDirectory(directory);
-        File.WriteAllText(Path.Combine(directory, "iam-workflow-authority-v2.sql"), Script(suffix));
+        File.WriteAllText(Path.Combine(directory, "iam-workflow-authority-v3.sql"), Script(suffix));
     }
 
-    internal static string Script(string suffix) => OwnerFunctionPoc.ForRun(OwnerFunctionPoc.Sql("iam-workflow-authority-v2"), suffix);
+    internal static string Script(string suffix) => OwnerFunctionPoc.ForRun(OwnerFunctionPoc.Sql("iam-workflow-authority-v3"), suffix);
 
     [AuthorityFenceIamDatabaseFact]
     public async Task IamWritersHoldTheFenceAndAdvanceTheEpochOnlyWhenAuthorityChanges()
@@ -53,7 +53,7 @@ public sealed class AuthorityFenceIamWriterDatabaseTests
         using var approval = JsonDocument.Parse(File.ReadAllBytes(Environment.GetEnvironmentVariable(ManifestVariable)!));
         Assert.Equal("approved_for_execution", approval.RootElement.GetProperty("status").GetString());
         var suffix = approval.RootElement.GetProperty("suffix").GetString()!;
-        Assert.Equal(approval.RootElement.GetProperty("sha256").GetProperty("iam-workflow-authority-v2.sql").GetString(),
+        Assert.Equal(approval.RootElement.GetProperty("sha256").GetProperty("iam-workflow-authority-v3.sql").GetString(),
             OwnerFunctionPoc.Sha256(Script(suffix)));
         var profile = RegressionPostgreSqlSelection.LoadRunnerProfile() ?? throw new InvalidOperationException("Disposable runner profile required.");
         var locator = Environment.GetEnvironmentVariable(LocatorVariable) ?? throw new InvalidOperationException("Approved fixture locator required.");
@@ -72,6 +72,7 @@ public sealed class AuthorityFenceIamWriterDatabaseTests
 
         var installation = Guid.NewGuid(); var tenant = Guid.NewGuid(); var environment = Guid.NewGuid();
         var workerService = Guid.NewGuid();
+        var workerPin = Convert.ToHexStringLower(RandomNumberGenerator.GetBytes(32)); // 12.3d D3: presented with every probe permit
         await Manifest(Guid.NewGuid(), "api", "kordra_test", "[]");
         await Manifest(workerService, "worker", OwnerFunctionPoc.Role("kordra_worker_runtime", suffix), JsonSerializer.Serialize(new[] {
             new Dictionary<string, object> { ["tenant_id"] = tenant, ["environment_id"] = environment, ["template_id"] = WorkflowSpecification.TemplateId,
@@ -228,7 +229,7 @@ public sealed class AuthorityFenceIamWriterDatabaseTests
             command.Parameters.AddWithValue("sha", Convert.ToHexStringLower(RandomNumberGenerator.GetBytes(32)));
             command.Parameters.AddWithValue("installation", installation); command.Parameters.AddWithValue("service", service);
             command.Parameters.AddWithValue("kind", kind); command.Parameters.AddWithValue("login", login);
-            command.Parameters.AddWithValue("pin", Convert.ToHexStringLower(RandomNumberGenerator.GetBytes(32)));
+            command.Parameters.AddWithValue("pin", service == workerService ? workerPin : Convert.ToHexStringLower(RandomNumberGenerator.GetBytes(32)));
             command.Parameters.AddWithValue("bindings", bindings); command.Parameters.AddWithValue("audit", Guid.NewGuid());
             await command.ExecuteNonQueryAsync(ct);
         }
@@ -247,7 +248,7 @@ public sealed class AuthorityFenceIamWriterDatabaseTests
             var operation = Guid.NewGuid(); var permit = Guid.NewGuid();
             await InApiRoot(async (connection, root) => await new WorkflowAuthorityFunctionPort(connection, root).IssuePermitAsync(new(permit,
                 workerService, tenant, probeInstance, Guid.NewGuid(), operation, 1, specHash, WorkflowSpecification.TemplateHash, "admit",
-                installation, 0), ct));
+                installation, 0, workerPin), ct));
             return (permit, operation);
         }
 

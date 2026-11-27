@@ -23,6 +23,8 @@ internal sealed class AuthorityFenceRaceHarness : IAsyncDisposable
     private readonly CancellationToken ct;
     private readonly Guid workerService = Guid.NewGuid(), tenant = Guid.NewGuid(), environment = Guid.NewGuid(), probeInstance = Guid.NewGuid();
     private readonly string specHash = new('a', 64);
+    // 12.3d D3: the worker's registered certificate pin, presented with every probe permit.
+    private readonly string workerPin = Convert.ToHexStringLower(RandomNumberGenerator.GetBytes(32));
     private readonly HashSet<string> proven = new(StringComparer.Ordinal);
 
     private AuthorityFenceRaceHarness(string locator, string workerLogin, NpgsqlConnection setup, CancellationToken ct)
@@ -99,7 +101,7 @@ internal sealed class AuthorityFenceRaceHarness : IAsyncDisposable
         command.Parameters.AddWithValue("sha", Convert.ToHexStringLower(RandomNumberGenerator.GetBytes(32)));
         command.Parameters.AddWithValue("installation", InstallationId); command.Parameters.AddWithValue("service", service);
         command.Parameters.AddWithValue("kind", kind); command.Parameters.AddWithValue("login", login);
-        command.Parameters.AddWithValue("pin", Convert.ToHexStringLower(RandomNumberGenerator.GetBytes(32)));
+        command.Parameters.AddWithValue("pin", service == workerService ? workerPin : Convert.ToHexStringLower(RandomNumberGenerator.GetBytes(32)));
         command.Parameters.AddWithValue("bindings", bindings); command.Parameters.AddWithValue("audit", Guid.NewGuid());
         await command.ExecuteNonQueryAsync(ct);
     }
@@ -118,7 +120,7 @@ internal sealed class AuthorityFenceRaceHarness : IAsyncDisposable
         var operation = Guid.NewGuid(); var permit = Guid.NewGuid();
         await InApiRootAsync(async (connection, root) => await new WorkflowAuthorityFunctionPort(connection, root).IssuePermitAsync(new(permit,
             workerService, tenant, probeInstance, Guid.NewGuid(), operation, 1, specHash, WorkflowSpecification.TemplateHash, "admit",
-            InstallationId, 0), ct));
+            InstallationId, 0, workerPin), ct));
         return (permit, operation);
     }
 

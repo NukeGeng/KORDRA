@@ -54,10 +54,11 @@ public sealed class WorkflowDelegationAuthorityTests
             Guid.NewGuid(), Guid.NewGuid(), 1, new string('a', 64), WorkflowEnvironment.Test, now, now.AddHours(1), now.AddMinutes(3));
         var issuer = new WorkflowPermitIssuer(installation, null!, null!, null!, null!, null!, null!);
         var request = new WorkflowPermitRequest(Guid.NewGuid(), Guid.NewGuid(), Tenant, spec.InstanceId, Guid.NewGuid(), Guid.NewGuid(), 1,
-            spec.SpecificationHash, WorkflowSpecification.TemplateHash, "admit", Guid.NewGuid(), 0);
+            spec.SpecificationHash, WorkflowSpecification.TemplateHash, "admit", Guid.NewGuid(), 0, new string('d', 64));
         foreach (var bad in new[] { request with { TenantId = Guid.NewGuid() }, request with { InstanceId = Guid.NewGuid() },
                      request with { SpecificationHash = new string('f', 64) }, request with { TemplateHash = new string('e', 64) },
-                     request with { TransitionKind = "deploy" } })
+                     request with { TransitionKind = "deploy" }, request with { SpkiSha256 = "not-a-pin" },
+                     request with { SpkiSha256 = new string('D', 64) } })
             Assert.Equal("request_invalid", (await issuer.IssueUnderFenceAsync(connection, null!, spec, bad)).DenyReason);
         Assert.Equal("request_invalid", (await new WorkflowPermitIssuer(Guid.NewGuid(), null!, null!, null!, null!, null!, null!)
             .IssueUnderFenceAsync(connection, null!, spec, request)).DenyReason);

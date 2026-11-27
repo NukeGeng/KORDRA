@@ -28,6 +28,8 @@
     <None Include="../../src/Modules/AuditCompliance/Infrastructure/Migrations/aud-bound-append-v1.manifest.json" Link="Fixtures/OwnerFunctions/aud-bound-append-v1.manifest.json" CopyToOutputDirectory="PreserveNewest" />
     <None Include="../../src/Modules/IdentityAccess/Infrastructure/Migrations/iam-workflow-authority-v2.sql" Link="Fixtures/OwnerFunctions/iam-workflow-authority-v2.sql" CopyToOutputDirectory="PreserveNewest" />
     <None Include="../../src/Modules/IdentityAccess/Infrastructure/Migrations/iam-workflow-authority-v2.manifest.json" Link="Fixtures/OwnerFunctions/iam-workflow-authority-v2.manifest.json" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="../../src/Modules/IdentityAccess/Infrastructure/Migrations/iam-workflow-authority-v3.sql" Link="Fixtures/OwnerFunctions/iam-workflow-authority-v3.sql" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="../../src/Modules/IdentityAccess/Infrastructure/Migrations/iam-workflow-authority-v3.manifest.json" Link="Fixtures/OwnerFunctions/iam-workflow-authority-v3.manifest.json" CopyToOutputDirectory="PreserveNewest" />
     <None Include="../../src/Modules/WorkflowOrchestration/Infrastructure/Migrations/wfl-owner-functions-v2.sql" Link="Fixtures/OwnerFunctions/wfl-owner-functions-v2.sql" CopyToOutputDirectory="PreserveNewest" />
     <None Include="../../src/Modules/WorkflowOrchestration/Infrastructure/Migrations/wfl-owner-functions-v2.manifest.json" Link="Fixtures/OwnerFunctions/wfl-owner-functions-v2.manifest.json" CopyToOutputDirectory="PreserveNewest" />
     <None Include="../../src/Modules/WorkflowOrchestration/Infrastructure/Migrations/wfl-v7-original-binding.sql" Link="Fixtures/OwnerFunctions/wfl-v7-original-binding.sql" CopyToOutputDirectory="PreserveNewest" />
